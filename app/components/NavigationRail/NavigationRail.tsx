@@ -29,14 +29,14 @@ import Inventory2Icon from '@mui/icons-material/Inventory2';
 const navItems = [
   { icon: <DashboardIcon />, label: 'Dashboard', path: '/' },
   { icon: <InventoryIcon />, label: 'Produtos', path: '/products' },
-  { icon: <LocalShippingIcon />, label: 'Recebimento', path: '/stock-movements' },
+  { icon: <LocalShippingIcon />, label: 'Recebimento', path: '/receiving' },
   { icon: <ScaleIcon />, label: 'Porcionamento', path: '/portionings' },
-  { icon: <SwapHorizIcon />, label: 'Movimentacoes', path: '/stock-movements' },
-  { icon: <ReceiptIcon />, label: 'Entradas / Saidas', path: '/stock-movements' },
+  { icon: <SwapHorizIcon />, label: 'Movimentações', path: '/movements' },
+  { icon: <ReceiptIcon />, label: 'Entradas / Saídas', path: '/history' },
   { icon: <QrCodeScannerIcon />, label: 'Estoque', path: '/stock' },
-  { icon: <BarChartIcon />, label: 'Relatorios', path: '/' },
+  { icon: <BarChartIcon />, label: 'Relatórios', path: '/reports' },
   { icon: <EventNoteIcon />, label: 'Agenda', path: '/agenda' },
-  { icon: <PeopleIcon />, label: 'Funcionarios', path: '/employees' },
+  { icon: <PeopleIcon />, label: 'Funcionários', path: '/employees' },
 ];
 
 export default function NavigationRail() {

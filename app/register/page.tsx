@@ -13,12 +13,12 @@ import {
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { loginSchema } from '@/lib/validation';
-import { useLogin } from '@/lib/queries';
+import { registerSchema } from '@/lib/validation';
+import { useRegister } from '@/lib/queries';
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
-  const login = useLogin();
+  const registerMutation = useRegister();
   const [error, setError] = useState('');
 
   const {
@@ -26,18 +26,24 @@ export default function LoginPage() {
     handleSubmit,
     formState: { errors },
   } = useForm({
-    resolver: zodResolver(loginSchema),
+    resolver: zodResolver(registerSchema),
   });
 
-  const onSubmit = async (data: { username: string; password: string }) => {
+  const onSubmit = async (data: {
+    name: string;
+    username: string;
+    password: string;
+  }) => {
     try {
       setError('');
-      const result = await login.mutateAsync(data);
+      const result = await registerMutation.mutateAsync(data);
       localStorage.setItem('token', result.access_token);
       localStorage.setItem('accessToken', result.access_token);
       router.push('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Credenciais invalidas');
+      setError(
+        err.response?.data?.message || 'Nao foi possivel criar a conta',
+      );
     }
   };
 
@@ -56,13 +62,33 @@ export default function LoginPage() {
           <Typography variant="h4" align="center" fontWeight="bold" gutterBottom>
             Restaurante
           </Typography>
-          <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
-            Faca login para continuar
+          <Typography
+            variant="body2"
+            align="center"
+            color="text.secondary"
+            sx={{ mb: 3 }}
+          >
+            Crie sua conta para continuar
           </Typography>
 
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box
+            component="form"
+            onSubmit={handleSubmit(onSubmit)}
+            sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+          >
+            <TextField
+              label="Nome"
+              {...register('name')}
+              error={!!errors.name}
+              helperText={errors.name?.message}
+              fullWidth
+            />
             <TextField
               label="Usuario"
               {...register('username')}
@@ -83,16 +109,16 @@ export default function LoginPage() {
               variant="contained"
               fullWidth
               size="large"
-              disabled={login.isPending}
+              disabled={registerMutation.isPending}
             >
-              {login.isPending ? 'Entrando...' : 'Entrar'}
+              {registerMutation.isPending ? 'Criando conta...' : 'Cadastrar'}
             </Button>
             <Button
-              variant="outlined"
+              variant="text"
               fullWidth
-              onClick={() => router.push('/register')}
+              onClick={() => router.push('/login')}
             >
-              Criar conta
+              Ja tem uma conta? Entrar
             </Button>
           </Box>
         </CardContent>

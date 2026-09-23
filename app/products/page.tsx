@@ -28,6 +28,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
+import CloseIcon from '@mui/icons-material/Close';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { productSchema } from '@/lib/validation';
@@ -52,6 +53,15 @@ const storageBg: Record<string, string> = {
   'Camara Fria': '#e8eaf6',
 };
 
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
+      {children}
+      {required && ' *'}
+    </Typography>
+  );
+}
+
 export default function ProductsPage() {
   const [search, setSearch] = useState('');
   const { data: products, isLoading } = useProducts();
@@ -69,10 +79,10 @@ export default function ProductsPage() {
       name: '',
       group: '',
       storageMethod: '',
-      shelfLifeDays: 0,
-      minQuantity: 0,
-      minPortionedQuantity: 0,
-      consumeAfterOpeningDays: 0,
+      shelfLifeDays: undefined,
+      minQuantity: undefined,
+      minPortionedQuantity: undefined,
+      consumeAfterOpeningDays: undefined,
     },
   });
 
@@ -88,10 +98,10 @@ export default function ProductsPage() {
       name: '',
       group: '',
       storageMethod: '',
-      shelfLifeDays: 0,
-      minQuantity: 0,
-      minPortionedQuantity: 0,
-      consumeAfterOpeningDays: 0,
+      shelfLifeDays: undefined,
+      minQuantity: undefined,
+      minPortionedQuantity: undefined,
+      consumeAfterOpeningDays: undefined,
     });
     setDialogOpen(true);
   };
@@ -103,9 +113,9 @@ export default function ProductsPage() {
       group: p.group,
       storageMethod: p.storageMethod,
       shelfLifeDays: p.shelfLifeDays,
-      minQuantity: p.minQuantity,
-      minPortionedQuantity: p.minPortionedQuantity,
-      consumeAfterOpeningDays: p.consumeAfterOpeningDays,
+      minQuantity: p.minQuantity || undefined,
+      minPortionedQuantity: p.minPortionedQuantity || undefined,
+      consumeAfterOpeningDays: p.consumeAfterOpeningDays || undefined,
     });
     setDialogOpen(true);
   };
@@ -236,70 +246,179 @@ export default function ProductsPage() {
       )}
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>{editing ? 'Editar Produto' : 'Novo Produto'}</DialogTitle>
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pb: 1,
+          }}
+        >
+          {editing ? 'Editar Produto' : 'Novo Produto'}
+          <IconButton
+            aria-label="fechar"
+            onClick={() => setDialogOpen(false)}
+            size="small"
+            sx={{ color: '#666', mr: -1 }}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            <TextField
-              label="Nome"
-              {...form.register('name')}
-              error={!!form.formState.errors.name}
-              helperText={form.formState.errors.name?.message}
-              fullWidth
-            />
-            <TextField
-              select
-              label="Grupo"
-              {...form.register('group')}
-              error={!!form.formState.errors.group}
-              helperText={form.formState.errors.group?.message}
-              fullWidth
-            >
-              {groups.map((g) => (
-                <MenuItem key={g} value={g}>{g}</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              label="Armazenamento"
-              {...form.register('storageMethod')}
-              error={!!form.formState.errors.storageMethod}
-              helperText={form.formState.errors.storageMethod?.message}
-              fullWidth
-            >
-              {storageMethods.map((s) => (
-                <MenuItem key={s} value={s}>{s}</MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              type="number"
-              label="Validade (dias)"
-              {...form.register('shelfLifeDays', { valueAsNumber: true })}
-              fullWidth
-            />
-            <TextField
-              type="number"
-              label="Quantidade Minima em Estoque"
-              {...form.register('minQuantity', { valueAsNumber: true })}
-              fullWidth
-            />
-            <TextField
-              type="number"
-              label="Minimo Porcionadas (etiquetas)"
-              {...form.register('minPortionedQuantity', { valueAsNumber: true })}
-              fullWidth
-            />
-            <TextField
-              type="number"
-              label="Dias Apos Aberto"
-              {...form.register('consumeAfterOpeningDays', { valueAsNumber: true })}
-              fullWidth
-            />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
+            <Box>
+              <FieldLabel required>Nome do Produto</FieldLabel>
+              <TextField
+                {...form.register('name')}
+                error={!!form.formState.errors.name}
+                helperText={form.formState.errors.name?.message}
+                fullWidth
+              />
+            </Box>
+
+            <Box>
+              <FieldLabel required>Grupo</FieldLabel>
+              <TextField
+                select
+                {...form.register('group')}
+                error={!!form.formState.errors.group}
+                helperText={form.formState.errors.group?.message}
+                fullWidth
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (value) =>
+                    value === '' ? (
+                      <Box component="span" sx={{ color: 'text.disabled' }}>
+                        Selecione o grupo
+                      </Box>
+                    ) : (
+                      String(value)
+                    ),
+                }}
+              >
+                <MenuItem value="" disabled>
+                  Selecione o grupo
+                </MenuItem>
+                {groups.map((g) => (
+                  <MenuItem key={g} value={g}>{g}</MenuItem>
+                ))}
+              </TextField>
+            </Box>
+
+            <Box>
+              <FieldLabel required>Armazenamento</FieldLabel>
+              <TextField
+                select
+                {...form.register('storageMethod')}
+                error={!!form.formState.errors.storageMethod}
+                helperText={form.formState.errors.storageMethod?.message}
+                fullWidth
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (value) =>
+                    value === '' ? (
+                      <Box component="span" sx={{ color: 'text.disabled' }}>
+                        Forma de armazenamento
+                      </Box>
+                    ) : (
+                      String(value)
+                    ),
+                }}
+              >
+                <MenuItem value="" disabled>
+                  Forma de armazenamento
+                </MenuItem>
+                {storageMethods.map((s) => (
+                  <MenuItem key={s} value={s}>{s}</MenuItem>
+                ))}
+              </TextField>
+            </Box>
+
+            <Box>
+              <FieldLabel required>Validade pós manipulação (dias)</FieldLabel>
+              <TextField
+                type="number"
+                placeholder="Ex: 7"
+                {...form.register('shelfLifeDays', { valueAsNumber: true })}
+                error={!!form.formState.errors.shelfLifeDays}
+                helperText={form.formState.errors.shelfLifeDays?.message}
+                fullWidth
+              />
+            </Box>
+
+            <Box>
+              <FieldLabel>Peso/Volume Mínimo em Estoque (g ou ml)</FieldLabel>
+              <TextField
+                type="number"
+                placeholder="Ex: 2000 (= 2kg)"
+                {...form.register('minQuantity', { valueAsNumber: true })}
+                error={!!form.formState.errors.minQuantity}
+                helperText={form.formState.errors.minQuantity?.message}
+                fullWidth
+              />
+            </Box>
+
+            <Box>
+              <FieldLabel>Quantidade Minima Porcionadas (etiquetas)</FieldLabel>
+              <TextField
+                type="number"
+                placeholder="Ex: 10"
+                {...form.register('minPortionedQuantity', { valueAsNumber: true })}
+                error={!!form.formState.errors.minPortionedQuantity}
+                helperText={
+                  form.formState.errors.minPortionedQuantity
+                    ? form.formState.errors.minPortionedQuantity.message
+                    : 'Alerta na aba Produção quando o nº de etiquetas porcionadas em estoque cair abaixo deste valor.'
+                }
+                fullWidth
+              />
+            </Box>
+
+            <Box>
+              <FieldLabel>Depois de aberto ou retirado do congelamento, consumir em (dias)</FieldLabel>
+              <TextField
+                type="number"
+                placeholder="Ex: 30"
+                {...form.register('consumeAfterOpeningDays', { valueAsNumber: true })}
+                error={!!form.formState.errors.consumeAfterOpeningDays}
+                helperText={
+                  form.formState.errors.consumeAfterOpeningDays
+                    ? form.formState.errors.consumeAfterOpeningDays.message
+                    : 'Será impresso na etiqueta abaixo de "Data de retirada".'
+                }
+                fullWidth
+              />
+            </Box>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-          <Button onClick={form.handleSubmit(onSubmit)} variant="contained">
-            {editing ? 'Salvar' : 'Criar'}
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
+          <Button
+            onClick={() => setDialogOpen(false)}
+            variant="outlined"
+            sx={{
+              textTransform: 'none',
+              color: '#444',
+              borderColor: '#e0e0e0',
+              bgcolor: '#fff',
+              borderRadius: 1.5,
+              px: 2.5,
+              '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={form.handleSubmit(onSubmit)}
+            variant="contained"
+            sx={{
+              textTransform: 'none',
+              bgcolor: '#2196F3',
+              borderRadius: 1.5,
+              px: 2.5,
+              '&:hover': { bgcolor: '#1e88e5' },
+            }}
+          >
+            {editing ? 'Salvar' : 'Cadastrar'}
           </Button>
         </DialogActions>
       </Dialog>
