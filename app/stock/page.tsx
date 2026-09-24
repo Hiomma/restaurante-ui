@@ -268,6 +268,7 @@ export default function StockPage() {
 
           <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
             <TextField
+              size="small"
               placeholder="Buscar produto..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -282,6 +283,7 @@ export default function StockPage() {
             />
             <TextField
               select
+              size="small"
               value={groupFilter}
               onChange={(e) => setGroupFilter(e.target.value)}
               sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: 200 }}
@@ -295,6 +297,7 @@ export default function StockPage() {
             </TextField>
             <TextField
               select
+              size="small"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: 200 }}

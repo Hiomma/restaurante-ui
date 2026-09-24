@@ -172,7 +172,7 @@ export default function EmployeesPage() {
           </Box>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
-          + Novo Funcionário
+          Novo Funcionário
         </Button>
       </Box>
 
@@ -314,6 +314,8 @@ export default function EmployeesPage() {
                 error={!!form.formState.errors.name}
                 helperText={form.formState.errors.name?.message}
                 fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
               />
             </Box>
             <Box>
@@ -324,6 +326,8 @@ export default function EmployeesPage() {
                 error={!!form.formState.errors.username}
                 helperText={form.formState.errors.username?.message}
                 fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
               />
             </Box>
             <Box>
@@ -335,6 +339,8 @@ export default function EmployeesPage() {
                 error={!!form.formState.errors.password}
                 helperText={form.formState.errors.password?.message}
                 fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
                 slotProps={{
                   input: {
                     endAdornment: (
@@ -359,7 +365,7 @@ export default function EmployeesPage() {
             </Box>
             <Box>
               <FieldLabel>Perfil</FieldLabel>
-              <TextField select {...form.register('role')} fullWidth>
+              <TextField select value={form.watch('role') || ''} {...form.register('role')} fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}>
                 <MenuItem value="employee">Funcionário</MenuItem>
                 <MenuItem value="admin">Admin</MenuItem>
               </TextField>

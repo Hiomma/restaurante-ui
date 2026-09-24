@@ -1,1 +1,43 @@
 @import "tailwindcss";
+
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+  .etiquetas-print-area,
+  .etiquetas-print-area * {
+    visibility: visible;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .etiquetas-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin: 0;
+    padding: 0;
+    display: block !important;
+    width: 58mm;
+  }
+  .etiqueta-print {
+    position: static !important;
+    width: 58mm !important;
+    max-width: 58mm !important;
+    box-sizing: border-box;
+    margin: 0 !important;
+    padding: 2mm !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+  }
+  .etiqueta-print:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

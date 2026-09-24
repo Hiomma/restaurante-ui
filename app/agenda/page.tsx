@@ -43,6 +43,7 @@ import { agendaStatus, daysUntil, formatDate, toInputDate, todayISODate } from '
 import type { AgendaItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
+import BrDateField from '../components/BrDateField/BrDateField';
 
 type AgendaFormValues = z.infer<typeof agendaItemSchema>;
 
@@ -227,12 +228,13 @@ export default function AgendaPage() {
           </Box>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
-          + Novo Item
+          Novo Item
         </Button>
       </Box>
 
       <TextField
         fullWidth
+        size="small"
         placeholder="Buscar por nome, observação ou data..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -255,6 +257,7 @@ export default function AgendaPage() {
           <Table>
             <TableHead>
               <TableRow sx={{ bgcolor: '#f5f7fa' }}>
+                <TableCell sx={{ fontWeight: 700, color: '#333', width: 48 }} />
                 <TableCell sx={{ fontWeight: 700, color: '#333' }}>Nome</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }}>Data Realizado</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }}>Data de Validade</TableCell>
@@ -377,6 +380,7 @@ export default function AgendaPage() {
                               </Typography>
                               <TextField
                                 fullWidth
+                                size="small"
                                 multiline
                                 minRows={2}
                                 value={item.observations || ''}
@@ -432,6 +436,8 @@ export default function AgendaPage() {
                 error={!!form.formState.errors.name}
                 helperText={form.formState.errors.name?.message}
                 fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
               />
             </Box>
             <Box
@@ -443,22 +449,20 @@ export default function AgendaPage() {
             >
               <Box>
                 <FieldLabel required>Data que foi realizado</FieldLabel>
-                <TextField
-                  type="date"
-                  {...form.register('datePerformed')}
+                <BrDateField
+                  value={form.watch('datePerformed')}
+                  onChange={(v) => form.setValue('datePerformed', v, { shouldValidate: true })}
                   error={!!form.formState.errors.datePerformed}
                   helperText={form.formState.errors.datePerformed?.message}
-                  fullWidth
                 />
               </Box>
               <Box>
                 <FieldLabel required>Data de Validade</FieldLabel>
-                <TextField
-                  type="date"
-                  {...form.register('expiryDate')}
+                <BrDateField
+                  value={form.watch('expiryDate')}
+                  onChange={(v) => form.setValue('expiryDate', v, { shouldValidate: true })}
                   error={!!form.formState.errors.expiryDate}
                   helperText={form.formState.errors.expiryDate?.message}
-                  fullWidth
                 />
               </Box>
             </Box>
@@ -470,6 +474,7 @@ export default function AgendaPage() {
                 error={!!form.formState.errors.observations}
                 helperText={form.formState.errors.observations?.message}
                 fullWidth
+                size="small"
                 multiline
                 minRows={3}
               />

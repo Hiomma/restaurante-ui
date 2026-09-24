@@ -69,6 +69,7 @@ export default function LoginPage() {
               error={!!errors.username}
               helperText={errors.username?.message}
               fullWidth
+              size="small"
             />
             <TextField
               label="Senha"
@@ -77,6 +78,7 @@ export default function LoginPage() {
               error={!!errors.password}
               helperText={errors.password?.message}
               fullWidth
+              size="small"
             />
             <Button
               type="submit"

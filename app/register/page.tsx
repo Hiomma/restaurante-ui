@@ -88,6 +88,7 @@ export default function RegisterPage() {
               error={!!errors.name}
               helperText={errors.name?.message}
               fullWidth
+              size="small"
             />
             <TextField
               label="Usuario"
@@ -95,6 +96,7 @@ export default function RegisterPage() {
               error={!!errors.username}
               helperText={errors.username?.message}
               fullWidth
+              size="small"
             />
             <TextField
               label="Senha"
@@ -103,6 +105,7 @@ export default function RegisterPage() {
               error={!!errors.password}
               helperText={errors.password?.message}
               fullWidth
+              size="small"
             />
             <Button
               type="submit"

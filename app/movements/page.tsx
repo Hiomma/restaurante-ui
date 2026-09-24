@@ -334,6 +334,8 @@ export default function MovementsPage() {
             <Box sx={{ display: 'flex', gap: 1.5 }}>
               <TextField
                 fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
                 placeholder="Ex: AB1234"
                 value={qrInput}
                 inputRef={qrRef}
@@ -404,6 +406,8 @@ export default function MovementsPage() {
               <TextField
                 select
                 fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
                 value={destino}
                 onChange={(e) => setDestino(e.target.value)}
                 SelectProps={{
@@ -432,6 +436,8 @@ export default function MovementsPage() {
                 <FieldLabel>Observação</FieldLabel>
                 <TextField
                   fullWidth
+                  size="small"
+                  sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
                   placeholder="Ex: Retirado para o salão"
                   value={obs}
                   onChange={(e) => setObs(e.target.value)}
@@ -528,6 +534,8 @@ export default function MovementsPage() {
               <TextField
                 select
                 fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
                 value={countProductId}
                 onChange={(e) => setCountProductId(e.target.value)}
                 SelectProps={{
@@ -635,7 +643,7 @@ export default function MovementsPage() {
               onClick={() => setDialogOpen(true)}
               sx={primaryBtnSx}
             >
-              + Novo Destino
+              Novo Destino
             </Button>
           </Box>
 
@@ -738,6 +746,8 @@ export default function MovementsPage() {
             <FieldLabel required>Nome do Destino</FieldLabel>
             <TextField
               fullWidth
+              size="small"
+              sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
               placeholder="Ex: Freezer 2"
               value={destName}
               onChange={(e) => setDestName(e.target.value)}

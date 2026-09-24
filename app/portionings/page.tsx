@@ -42,6 +42,13 @@ import api from '@/lib/api';
 import type { Portioning, StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
+import BrDateField from '../components/BrDateField/BrDateField';
+
+const fieldSx = {
+  '& .MuiOutlinedInput-root': {
+    height: 44,
+  },
+} as const;
 
 const containedSx = {
   textTransform: 'none',
@@ -117,6 +124,7 @@ export default function PortioningsPage() {
 
   const totalGrams = scanned.reduce((sum, item) => sum + item.weightGrams, 0);
   const limpo = Number(cleanWeight) || 0;
+  const limpoExcedeBruto = limpo > totalGrams;
   const perda = Math.max(0, totalGrams - limpo);
   const perdaPct = totalGrams > 0 ? (perda / totalGrams) * 100 : 0;
   const product = products?.find((p) => p._id === scanned[0]?.product.productId);
@@ -176,6 +184,10 @@ export default function PortioningsPage() {
     const n = parseInt(portionsCount, 10);
     if (!limpo || limpo <= 0) {
       enqueueSnackbar('Informe o Peso Limpo (g).', { variant: 'error' });
+      return;
+    }
+    if (limpo > totalGrams) {
+      enqueueSnackbar('Peso Limpo não pode ser maior que o Peso Bruto.', { variant: 'error' });
       return;
     }
     if (!n || n < 1) {
@@ -302,7 +314,7 @@ export default function PortioningsPage() {
           </Box>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
-          + Novo Porcionamento
+          Novo Porcionamento
         </Button>
       </Box>
 
@@ -418,6 +430,8 @@ export default function PortioningsPage() {
                 <TextField
                   autoFocus
                   fullWidth
+                  size="small"
+                  sx={fieldSx}
                   placeholder="Escaneie o QR ou digite o código (6 dígitos)..."
                   value={scanInput}
                   onChange={(e) => setScanInput(e.target.value.toUpperCase())}
@@ -513,6 +527,14 @@ export default function PortioningsPage() {
                       value={cleanWeight}
                       onChange={(e) => setCleanWeight(e.target.value)}
                       fullWidth
+                      size="small"
+                      error={limpoExcedeBruto}
+                      helperText={
+                        limpoExcedeBruto
+                          ? `Máx. ${totalGrams}g (peso bruto)`
+                          : undefined
+                      }
+                      sx={fieldSx}
                     />
                   </Box>
                   <Box>
@@ -523,6 +545,8 @@ export default function PortioningsPage() {
                       value={portionsCount}
                       onChange={(e) => setPortionsCount(e.target.value)}
                       fullWidth
+                      size="small"
+                      sx={fieldSx}
                     />
                   </Box>
                   <Box>
@@ -532,6 +556,8 @@ export default function PortioningsPage() {
                       value={lote}
                       onChange={(e) => setLote(e.target.value)}
                       fullWidth
+                      size="small"
+                      sx={fieldSx}
                     />
                   </Box>
                   <Box>
@@ -541,15 +567,15 @@ export default function PortioningsPage() {
                       value={employeeName}
                       onChange={(e) => setEmployeeName(e.target.value)}
                       fullWidth
+                      size="small"
+                      sx={fieldSx}
                     />
                   </Box>
                   <Box>
                     <FieldLabel>Data</FieldLabel>
-                    <TextField
-                      type="date"
+                    <BrDateField
                       value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      fullWidth
+                      onChange={setDate}
                     />
                   </Box>
                 </Box>
@@ -557,7 +583,7 @@ export default function PortioningsPage() {
                   <Typography variant="body2" sx={{ color: '#888' }}>
                     Peso bruto: {totalGrams}g
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#888' }}>
+                  <Typography variant="body2" sx={{ color: limpoExcedeBruto ? '#d32f2f' : '#888' }}>
                     Perda: {perda}g ({perdaPct.toFixed(1)}%)
                   </Typography>
                 </Box>
@@ -572,7 +598,7 @@ export default function PortioningsPage() {
           <Button
             onClick={() => void handleSubmit()}
             variant="contained"
-            disabled={submitting || scanned.length === 0}
+            disabled={submitting || scanned.length === 0 || limpoExcedeBruto}
             sx={containedSx}
           >
             Gerar Porcionamento

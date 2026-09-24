@@ -47,7 +47,6 @@ import {
   lifeStatus,
   downloadCsv,
   printReport,
-  todayISODate,
 } from '@/lib/utils';
 import {
   useProducts,
@@ -57,6 +56,7 @@ import {
 } from '@/lib/queries';
 import type { Product, StockItem, StockMovement, Portioning } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
+import BrDateField from '../components/BrDateField/BrDateField';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -237,6 +237,19 @@ function KpiCard({
 }) {
   return (
     <Box sx={{ ...cardSx, p: 2, display: 'flex', alignItems: 'center', gap: 1.75 }}>
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography variant="body2" color="text.secondary" noWrap>
+          {label}
+        </Typography>
+        <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.25 }}>
+          {value}
+        </Typography>
+        {caption && (
+          <Typography variant="caption" color="text.secondary">
+            {caption}
+          </Typography>
+        )}
+      </Box>
       <Box
         sx={{
           width: 44,
@@ -252,19 +265,6 @@ function KpiCard({
       >
         {icon}
       </Box>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2" color="text.secondary" noWrap>
-          {label}
-        </Typography>
-        <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.25 }}>
-          {value}
-        </Typography>
-        {caption && (
-          <Typography variant="caption" color="text.secondary">
-            {caption}
-          </Typography>
-        )}
-      </Box>
     </Box>
   );
 }
@@ -276,6 +276,13 @@ function ExportButtons({
   onExcel: () => void;
   onPdf?: () => void;
 }) {
+  const neutralSx = {
+    color: '#495057',
+    borderColor: '#CED4DA',
+    textTransform: 'none',
+    borderRadius: 1.5,
+    '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5', color: '#212529' },
+  } as const;
   return (
     <Box sx={{ display: 'flex', gap: 1 }}>
       <Button
@@ -283,13 +290,7 @@ function ExportButtons({
         size="small"
         startIcon={<DownloadIcon fontSize="small" />}
         onClick={onExcel}
-        sx={{
-          color: '#1976D2',
-          borderColor: '#90CAF9',
-          textTransform: 'none',
-          borderRadius: 1.5,
-          '&:hover': { borderColor: '#1565C0', bgcolor: '#E3F2FD', color: '#1565C0' },
-        }}
+        sx={neutralSx}
       >
         Excel
       </Button>
@@ -299,13 +300,7 @@ function ExportButtons({
           size="small"
           startIcon={<PictureAsPdfIcon fontSize="small" />}
           onClick={onPdf}
-          sx={{
-            color: '#C62828',
-            borderColor: '#EF9A9A',
-            textTransform: 'none',
-            borderRadius: 1.5,
-            '&:hover': { borderColor: '#C62828', bgcolor: '#FFEBEE', color: '#C62828' },
-          }}
+          sx={neutralSx}
         >
           PDF
         </Button>
@@ -384,6 +379,10 @@ function SelectFilter({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       sx={{ minWidth }}
+      SelectProps={{
+        displayEmpty: true,
+        renderValue: (v) => options.find((o) => o.value === v)?.label ?? '',
+      }}
     >
       {options.map((o) => (
         <MenuItem key={o.value} value={o.value}>
@@ -408,24 +407,18 @@ function DateRangeField({
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <CalendarTodayIcon sx={{ color: '#1976D2', fontSize: 18 }} />
-      <TextField
-        type="date"
-        size="small"
+      <BrDateField
         value={from}
-        onChange={(e) => onFrom(e.target.value)}
-        sx={{ width: 158 }}
-        inputProps={{ max: todayISODate() }}
+        onChange={onFrom}
+        fullWidth={false}
       />
       <Typography variant="body2" color="text.secondary">
         até
       </Typography>
-      <TextField
-        type="date"
-        size="small"
+      <BrDateField
         value={to}
-        onChange={(e) => onTo(e.target.value)}
-        sx={{ width: 158 }}
-        inputProps={{ max: todayISODate() }}
+        onChange={onTo}
+        fullWidth={false}
       />
     </Box>
   );
@@ -847,25 +840,25 @@ export default function ReportsPage() {
         sx={{
           bgcolor: '#f1f3f5',
           borderRadius: 2,
-          padding: 4,
-          minHeight: 48,
+          padding: '6px 8px',
+          minHeight: 40,
           mb: 3,
-          '& .MuiTabs-flexContainer': { gap: 1 },
+          '& .MuiTabs-flexContainer': { gap: 0.5 },
           '& .MuiTabs-indicator': { display: 'none' },
           '& .MuiTab-root': {
             textTransform: 'none',
             color: '#495057',
-            minHeight: 44,
-            py: 1,
-            px: 2,
+            minHeight: 36,
+            py: 0.75,
+            px: 1.5,
             borderRadius: 1.5,
-            mx: 0.5,
-            fontSize: '0.9rem',
+            mx: 0.25,
+            fontSize: '0.875rem',
             '&.Mui-selected': {
               bgcolor: '#fff',
               color: '#1976D2',
               fontWeight: 600,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
             },
           },
         }}
@@ -984,6 +977,7 @@ export default function ReportsPage() {
                 ) : (
                   <BarChart
                     height={300}
+                    hideLegend
                     series={[
                       {
                         data: groupLossRows.map((r) => r.loss),
@@ -994,7 +988,19 @@ export default function ReportsPage() {
                     xAxis={[
                       { scaleType: 'band', data: groupLossRows.map((r) => r.group) },
                     ]}
-                    margin={{ top: 10, right: 16, bottom: 30, left: 50 }}
+                    yAxis={[
+                      {
+                        valueFormatter: (v: number) =>
+                          `${new Intl.NumberFormat('pt-BR').format(v)}g`,
+                      },
+                    ]}
+                    grid={{ horizontal: true, vertical: false }}
+                    margin={{ top: 10, right: 16, bottom: 30, left: 56 }}
+                    sx={{
+                      '& .MuiChartsGrid-line': {
+                        strokeDasharray: '4 4',
+                      },
+                    }}
                   />
                 )}
               </Box>

@@ -53,6 +53,12 @@ const storageBg: Record<string, string> = {
   'Camara Fria': '#e8eaf6',
 };
 
+const fieldSx = {
+  '& .MuiOutlinedInput-root': {
+    height: 44,
+  },
+} as const;
+
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
     <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
@@ -153,21 +159,27 @@ export default function ProductsPage() {
         </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="body2" color="text.secondary">
-            Gerencie seus produtos e suas configuracoes
+            Gerencie seus produtos e suas configurações
           </Typography>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={openCreate}
-            sx={{ bgcolor: '#1a2332', '&:hover': { bgcolor: '#243447' }, borderRadius: 2, textTransform: 'none' }}
+            sx={{
+              bgcolor: '#2196F3',
+              '&:hover': { bgcolor: '#1e88e5' },
+              borderRadius: 2,
+              textTransform: 'none',
+            }}
           >
-            + Novo Produto
+            Novo Produto
           </Button>
         </Box>
       </Box>
 
       <TextField
         fullWidth
+        size="small"
         placeholder="Buscar por nome ou grupo..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -192,9 +204,9 @@ export default function ProductsPage() {
                 <TableCell sx={{ fontWeight: 700, color: '#333' }}>Grupo</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }}>Armazenamento</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Validade (dias)</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Minimo em Estoque</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Mínimo em Estoque</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Min. Porcionadas</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="center">Acoes</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="center">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -269,10 +281,12 @@ export default function ProductsPage() {
             <Box>
               <FieldLabel required>Nome do Produto</FieldLabel>
               <TextField
+                size="small"
                 {...form.register('name')}
                 error={!!form.formState.errors.name}
                 helperText={form.formState.errors.name?.message}
                 fullWidth
+                sx={fieldSx}
               />
             </Box>
 
@@ -280,14 +294,17 @@ export default function ProductsPage() {
               <FieldLabel required>Grupo</FieldLabel>
               <TextField
                 select
+                size="small"
+                value={form.watch('group') || ''}
                 {...form.register('group')}
                 error={!!form.formState.errors.group}
                 helperText={form.formState.errors.group?.message}
                 fullWidth
+                sx={fieldSx}
                 SelectProps={{
                   displayEmpty: true,
                   renderValue: (value) =>
-                    value === '' ? (
+                    !value ? (
                       <Box component="span" sx={{ color: 'text.disabled' }}>
                         Selecione o grupo
                       </Box>
@@ -309,14 +326,17 @@ export default function ProductsPage() {
               <FieldLabel required>Armazenamento</FieldLabel>
               <TextField
                 select
+                size="small"
+                value={form.watch('storageMethod') || ''}
                 {...form.register('storageMethod')}
                 error={!!form.formState.errors.storageMethod}
                 helperText={form.formState.errors.storageMethod?.message}
                 fullWidth
+                sx={fieldSx}
                 SelectProps={{
                   displayEmpty: true,
                   renderValue: (value) =>
-                    value === '' ? (
+                    !value ? (
                       <Box component="span" sx={{ color: 'text.disabled' }}>
                         Forma de armazenamento
                       </Box>
@@ -337,30 +357,35 @@ export default function ProductsPage() {
             <Box>
               <FieldLabel required>Validade pós manipulação (dias)</FieldLabel>
               <TextField
+                size="small"
                 type="number"
                 placeholder="Ex: 7"
                 {...form.register('shelfLifeDays', { valueAsNumber: true })}
                 error={!!form.formState.errors.shelfLifeDays}
                 helperText={form.formState.errors.shelfLifeDays?.message}
                 fullWidth
+                sx={fieldSx}
               />
             </Box>
 
             <Box>
               <FieldLabel>Peso/Volume Mínimo em Estoque (g ou ml)</FieldLabel>
               <TextField
+                size="small"
                 type="number"
                 placeholder="Ex: 2000 (= 2kg)"
                 {...form.register('minQuantity', { valueAsNumber: true })}
                 error={!!form.formState.errors.minQuantity}
                 helperText={form.formState.errors.minQuantity?.message}
                 fullWidth
+                sx={fieldSx}
               />
             </Box>
 
             <Box>
-              <FieldLabel>Quantidade Minima Porcionadas (etiquetas)</FieldLabel>
+              <FieldLabel>Quantidade Mínima Porcionadas (etiquetas)</FieldLabel>
               <TextField
+                size="small"
                 type="number"
                 placeholder="Ex: 10"
                 {...form.register('minPortionedQuantity', { valueAsNumber: true })}
@@ -371,12 +396,14 @@ export default function ProductsPage() {
                     : 'Alerta na aba Produção quando o nº de etiquetas porcionadas em estoque cair abaixo deste valor.'
                 }
                 fullWidth
+                sx={fieldSx}
               />
             </Box>
 
             <Box>
               <FieldLabel>Depois de aberto ou retirado do congelamento, consumir em (dias)</FieldLabel>
               <TextField
+                size="small"
                 type="number"
                 placeholder="Ex: 30"
                 {...form.register('consumeAfterOpeningDays', { valueAsNumber: true })}
@@ -387,6 +414,7 @@ export default function ProductsPage() {
                     : 'Será impresso na etiqueta abaixo de "Data de retirada".'
                 }
                 fullWidth
+                sx={fieldSx}
               />
             </Box>
           </Box>

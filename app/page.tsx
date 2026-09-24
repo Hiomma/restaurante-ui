@@ -194,8 +194,8 @@ export default function DashboardPage() {
             Dashboard
           </Typography>
         </Box>
-        <Typography variant="body2" sx={{ color: '#666', ml: 6.5 }}>
-          Visão geral do sistema — {new Date().toLocaleDateString('pt-BR')}
+        <Typography variant="body2" sx={{ color: '#666', ml: 6.5 }} suppressHydrationWarning>
+          Visão geral do sistema — {new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
         </Typography>
       </Box>
 

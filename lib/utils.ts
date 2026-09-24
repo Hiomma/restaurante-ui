@@ -1,3 +1,43 @@
+const BR_TZ = 'America/Sao_Paulo';
+
+function isDateOnly(iso: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso);
+}
+
+function isCalendarDate(iso: string): boolean {
+  return isDateOnly(iso) || /T00:00:00(\.000)?Z$/i.test(iso);
+}
+
+function parseDate(iso?: string | null): Date | null {
+  if (!iso) return null;
+  if (isDateOnly(iso)) {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 12));
+  }
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function calendarDayMs(d: Date): number {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function brDateParts(d: Date): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BR_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return { year: get('year'), month: get('month'), day: get('day') };
+}
+
+function brStartOfDayMs(): number {
+  const { year, month, day } = brDateParts(new Date());
+  return Date.UTC(year, month - 1, day);
+}
+
 export function formatWeight(grams?: number | null): string {
   if (grams === undefined || grams === null || Number.isNaN(grams)) return '—';
   if (grams >= 1000) return `${grams}g / ${(grams / 1000).toFixed(2)}kg`;
@@ -11,32 +51,45 @@ export function formatKg(grams?: number | null): string {
 
 export function formatDate(iso?: string | null): string {
   if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('pt-BR');
+  if (isCalendarDate(iso)) {
+    const d = parseDate(iso);
+    if (!d) return '—';
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    return `${day}/${month}/${d.getUTCFullYear()}`;
+  }
+  const d = parseDate(iso);
+  if (!d) return '—';
+  return d.toLocaleDateString('pt-BR', { timeZone: BR_TZ });
 }
 
 export function toInputDate(iso?: string | null): string {
   if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${month}-${day}`;
+  if (isDateOnly(iso)) return iso;
+  const d = parseDate(iso);
+  if (!d) return '';
+  if (isCalendarDate(iso)) {
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
+  const { year, month, day } = brDateParts(d);
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 export function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return new Date(brStartOfDayMs());
 }
 
 export function daysUntil(iso?: string | null): number | null {
   if (!iso) return null;
-  const target = new Date(iso);
-  if (Number.isNaN(target.getTime())) return null;
-  target.setHours(0, 0, 0, 0);
-  return Math.round((target.getTime() - startOfToday().getTime()) / 86400000);
+  const d = parseDate(iso);
+  if (!d) return null;
+  const targetMs = isCalendarDate(iso)
+    ? calendarDayMs(d)
+    : (() => {
+        const { year, month, day } = brDateParts(d);
+        return Date.UTC(year, month - 1, day);
+      })();
+  return Math.round((targetMs - brStartOfDayMs()) / 86400000);
 }
 
 export type LifeStatus = 'expired' | 'expiring' | 'ok';
@@ -65,7 +118,7 @@ export function agendaStatus(expiryDate: string): 'Vencido' | 'No prazo' {
 }
 
 export function todayISODate(): string {
-  return new Date().toISOString().split('T')[0];
+  return toInputDate(new Date().toISOString());
 }
 
 export function formatPercent(value?: number | null): string {
