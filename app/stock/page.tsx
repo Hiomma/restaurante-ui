@@ -28,7 +28,12 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { useProducts, useStockItems, useDeleteStockItem } from '@/lib/queries';
+import {
+  useProducts,
+  useStockItems,
+  useDeleteStockItem,
+  useMovementDestinations,
+} from '@/lib/queries';
 import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus } from '@/lib/utils';
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
@@ -79,17 +84,24 @@ function DaysChip({ expiryDate }: { expiryDate: string }) {
 export default function StockPage() {
   const { data: products, isLoading: loadingProducts } = useProducts();
   const { data: items, isLoading: loadingItems } = useStockItems();
+  const { data: destinations } = useMovementDestinations();
   const deleteItem = useDeleteStockItem();
 
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [destFilter, setDestFilter] = useState('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const isLoading = loadingProducts || loadingItems;
   const allItems = items ?? [];
-  const inStock = allItems.filter((i) => i.status === 'in_stock');
+  const inStock = allItems.filter((i) => {
+    if (i.status !== 'in_stock') return false;
+    if (destFilter === 'all') return true;
+    if (destFilter === 'none') return !i.destination;
+    return i.destination === destFilter;
+  });
 
   const rawItems = inStock.filter((i) => i.type === 'raw');
   const portionedItems = inStock.filter((i) => i.type === 'portioned');
@@ -298,6 +310,21 @@ export default function StockPage() {
             <TextField
               select
               size="small"
+              value={destFilter}
+              onChange={(e) => setDestFilter(e.target.value)}
+              sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: 200 }}
+            >
+              <MenuItem value="all">Todos os locais</MenuItem>
+              <MenuItem value="none">Sem destino</MenuItem>
+              {(destinations ?? []).map((d) => (
+                <MenuItem key={d._id} value={d.name}>
+                  {d.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: 200 }}
@@ -426,6 +453,7 @@ export default function StockPage() {
                             <TableRow sx={{ bgcolor: '#f5f7fa' }}>
                               <TableCell sx={thSx}>Tipo</TableCell>
                               <TableCell sx={thSx}>Peso</TableCell>
+                              <TableCell sx={thSx}>Local</TableCell>
                               <TableCell sx={thSx}>Lote</TableCell>
                               <TableCell sx={thSx}>NF</TableCell>
                               <TableCell sx={thSx}>Recebimento</TableCell>
@@ -448,6 +476,13 @@ export default function StockPage() {
                                   />
                                 </TableCell>
                                 <TableCell>{formatWeight(item.weightGrams)}</TableCell>
+                                <TableCell>
+                                  {item.destination ? (
+                                    <Chip label={item.destination} size="small" sx={chipGray} />
+                                  ) : (
+                                    '—'
+                                  )}
+                                </TableCell>
                                 <TableCell>{item.lote || '—'}</TableCell>
                                 <TableCell>{item.nf || '—'}</TableCell>
                                 <TableCell>{formatDate(item.manipulationDate)}</TableCell>

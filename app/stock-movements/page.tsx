@@ -60,7 +60,23 @@ export default function StockMovementsPage() {
                   <Box>
                     <Typography variant="h6" fontWeight="bold">{m.product.productName}</Typography>
                     <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
-                      <Chip label={m.movementType === 'entry' ? 'Entrada' : 'Saída'} color={m.movementType === 'entry' ? 'success' : 'error'} size="small" />
+                      <Chip
+                        label={
+                          m.movementType === 'entry'
+                            ? 'Entrada'
+                            : m.movementType === 'move'
+                              ? 'Mover'
+                              : 'Saída'
+                        }
+                        color={
+                          m.movementType === 'entry'
+                            ? 'success'
+                            : m.movementType === 'move'
+                              ? 'info'
+                              : 'error'
+                        }
+                        size="small"
+                      />
                       <Chip label={`Qtd: ${m.quantity}`} size="small" />
                       {m.weightGrams && <Chip label={`${m.weightGrams}g`} size="small" />}
                       {m.itemType && <Chip label={m.itemType === 'raw' ? 'Bruto' : 'Porcionado'} size="small" />}
@@ -91,6 +107,7 @@ export default function StockMovementsPage() {
             <TextField select label="Tipo" value={form.watch('movementType') || ''} {...form.register('movementType')} fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}>
               <MenuItem value="entry">Entrada</MenuItem>
               <MenuItem value="exit">Saída</MenuItem>
+              <MenuItem value="move">Mover</MenuItem>
             </TextField>
             <TextField type="number" label="Quantidade" {...form.register('quantity', { valueAsNumber: true })} fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { height: 44 } }} />
             <TextField type="number" label="Peso (g)" {...form.register('weightGrams', { valueAsNumber: true })} fullWidth size="small" sx={{ '& .MuiOutlinedInput-root': { height: 44 } }} />

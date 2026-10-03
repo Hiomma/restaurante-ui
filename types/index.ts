@@ -2,6 +2,8 @@ export interface User {
   _id: string;
   name: string;
   username: string;
+  role?: 'admin' | 'user';
+  isEmployee?: boolean;
   imagePath?: string;
   company?: {
     name?: string;
@@ -32,6 +34,7 @@ export interface Employee {
 export interface MovementDestination {
   _id: string;
   name: string;
+  type?: 'move' | 'writeoff';
   active: boolean;
   createdAt: string;
 }
@@ -40,6 +43,7 @@ export interface Product {
   _id: string;
   name: string;
   group: string;
+  category?: 'Materia Prima' | 'Porcionado';
   storageMethod: string;
   shelfLifeDays: number;
   minQuantity: number;
@@ -48,12 +52,20 @@ export interface Product {
   createdAt: string;
 }
 
+export interface PortioningOutput {
+  productId: string;
+  productName: string;
+  portionsCount: number;
+  portionWeightGrams?: number;
+}
+
 export interface Portioning {
   _id: string;
   product: {
     productId: string;
     productName: string;
   };
+  outputs?: PortioningOutput[];
   rawWeightGrams: number;
   cleanWeightGrams: number;
   lossGrams: number;
@@ -82,6 +94,7 @@ export interface StockItem {
   qrCode: string;
   status: 'in_stock' | 'used' | 'discarded' | 'expired';
   batchId?: string;
+  destination?: string;
   lote?: string;
   nf?: string;
   employeeName?: string;
@@ -94,7 +107,7 @@ export interface StockMovement {
     productId: string;
     productName: string;
   };
-  movementType: 'entry' | 'exit';
+  movementType: 'entry' | 'exit' | 'move';
   quantity: number;
   weightGrams?: number;
   itemType?: 'raw' | 'portioned';

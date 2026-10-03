@@ -48,6 +48,13 @@ export function useUsers() {
   });
 }
 
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (data: { currentPassword: string; newPassword: string }) =>
+      api.put('/users/me/password', data).then((res) => res.data),
+  });
+}
+
 // Agenda Items
 export function useAgendaItems() {
   return useQuery({
@@ -154,6 +161,15 @@ export function useDeleteMovementDestination() {
   });
 }
 
+export function useUpdateMovementDestination() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      api.put(`/movement-destinations/${id}`, data).then((res) => res.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['movement-destinations'] }),
+  });
+}
+
 // Products
 export function useProducts(search?: string) {
   return useQuery({
@@ -221,7 +237,7 @@ export function useDeletePortioning() {
 }
 
 // Stock Items
-export function useStockItems(query?: { status?: string; productId?: string; type?: string }) {
+export function useStockItems(query?: { status?: string; productId?: string; type?: string; destination?: string }) {
   return useQuery({
     queryKey: ['stock-items', query],
     queryFn: () =>

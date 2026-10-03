@@ -147,6 +147,7 @@ const movTypeOptions = [
   { value: '', label: 'Todos os tipos' },
   { value: 'entry', label: 'Entrada' },
   { value: 'exit', label: 'Saída' },
+  { value: 'move', label: 'Mover' },
 ];
 
 const estStatusOptions = [
@@ -180,6 +181,7 @@ function recvStatusChip(status: StockItem['status']) {
 }
 
 function movementTypeChip(type: StockMovement['movementType']) {
+  if (type === 'move') return <ToneChip label="Mover" tone="blue" />;
   return type === 'entry' ? (
     <ToneChip label="Entrada" tone="green" />
   ) : (
@@ -503,6 +505,13 @@ export default function ReportsPage() {
     if (!prev || pt.date >= prev.date) latestPortioning.set(pt.product.productId, pt);
   }
 
+  // Separa os itens por categoria do cadastro do produto:
+  // "Materia Prima" (ou sem categoria cadastrada) entra em Compras;
+  // "Porcionado" entra em Produção. Produtos antigos sem categoria
+  // continuam aparecendo nas duas abas, como antes.
+  const isPurchaseProduct = (p: Product) => p.category !== 'Porcionado';
+  const isProductionProduct = (p: Product) => p.category === 'Porcionado' || !p.category;
+
   const filteredPerdas = portionings.filter((pt) => {
     if (perdasGroup) {
       const group = productMap.get(pt.product.productId)?.group ?? '';
@@ -588,6 +597,7 @@ export default function ReportsPage() {
 
   const comprasRank: Record<BuyStatus, number> = { comprar: 0, sem: 1, ok: 2 };
   const comprasRows = aggs
+    .filter((a) => isPurchaseProduct(a.product))
     .map((a) => ({
       product: a.product,
       count: a.count,
@@ -684,7 +694,11 @@ export default function ReportsPage() {
       ['Data', 'Tipo', 'Produto', 'Qtd. Itens', 'Peso Total (g)', 'Tipo Item', 'Destino/Motivo'],
       movRows.map((m) => [
         formatDate(m.date),
-        m.movementType === 'entry' ? 'Entrada' : 'Saída',
+        m.movementType === 'entry'
+          ? 'Entrada'
+          : m.movementType === 'move'
+            ? 'Mover'
+            : 'Saída',
         m.product.productName,
         m.quantity,
         m.weightGrams ?? 0,
@@ -733,7 +747,9 @@ export default function ReportsPage() {
     );
   };
 
-  const prodBase = aggs.map((a) => {
+  const prodBase = aggs
+    .filter((a) => isProductionProduct(a.product))
+    .map((a) => {
     const min = a.product.minPortionedQuantity;
     const below = min > 0 && a.portionedCount < min;
     const latest = latestPortioning.get(a.product._id);

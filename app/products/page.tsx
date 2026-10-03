@@ -38,6 +38,21 @@ import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 
 const groups = ['Carnes', 'Aves', 'Peixes', 'Frios', 'Laticinios', 'Hortifruti', 'Graos', 'Bebidas', 'Temperos', 'Massas', 'Outros'];
 const storageMethods = ['Refrigerado', 'Congelado', 'Temperatura Ambiente', 'Camara Fria'];
+const categories = [
+  { value: 'Materia Prima', label: 'Matéria Prima' },
+  { value: 'Porcionado', label: 'Porcionado' },
+];
+
+const categoryColors: Record<string, { bg: string; color: string }> = {
+  'Materia Prima': { bg: '#fff3e0', color: '#e65100' },
+  'Porcionado': { bg: '#e8f5e9', color: '#2e7d32' },
+};
+
+const normalize = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
 const storageColors: Record<string, string> = {
   'Refrigerado': '#00897b',
@@ -84,6 +99,7 @@ export default function ProductsPage() {
     defaultValues: {
       name: '',
       group: '',
+      category: 'Materia Prima',
       storageMethod: '',
       shelfLifeDays: undefined,
       minQuantity: undefined,
@@ -92,17 +108,22 @@ export default function ProductsPage() {
     },
   });
 
-  const filteredProducts = products?.filter(
-    (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.group.toLowerCase().includes(search.toLowerCase()),
-  );
+  const filteredProducts = products?.filter((p) => {
+    const term = normalize(search.trim());
+    if (!term) return true;
+    return (
+      normalize(p.name).includes(term) ||
+      normalize(p.group).includes(term) ||
+      normalize(p.category || '').includes(term)
+    );
+  });
 
   const openCreate = () => {
     setEditing(null);
     form.reset({
       name: '',
       group: '',
+      category: 'Materia Prima',
       storageMethod: '',
       shelfLifeDays: undefined,
       minQuantity: undefined,
@@ -117,6 +138,7 @@ export default function ProductsPage() {
     form.reset({
       name: p.name,
       group: p.group,
+      category: p.category || 'Materia Prima',
       storageMethod: p.storageMethod,
       shelfLifeDays: p.shelfLifeDays,
       minQuantity: p.minQuantity || undefined,
@@ -180,7 +202,7 @@ export default function ProductsPage() {
       <TextField
         fullWidth
         size="small"
-        placeholder="Buscar por nome ou grupo..."
+        placeholder="Buscar por qualquer parte do nome, grupo ou categoria..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         InputProps={{
@@ -202,6 +224,7 @@ export default function ProductsPage() {
               <TableRow sx={{ bgcolor: '#f5f7fa' }}>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }}>Produto</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }}>Grupo</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Categoria</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }}>Armazenamento</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Validade (dias)</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Mínimo em Estoque</TableCell>
@@ -216,6 +239,21 @@ export default function ProductsPage() {
                     <Typography fontWeight={500}>{p.name}</Typography>
                   </TableCell>
                   <TableCell>{p.group}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={
+                        categories.find((c) => c.value === p.category)?.label ||
+                        (p.category === 'Porcionado' ? 'Porcionado' : 'Matéria Prima')
+                      }
+                      size="small"
+                      sx={{
+                        bgcolor: categoryColors[p.category || 'Materia Prima']?.bg || '#f5f5f5',
+                        color: categoryColors[p.category || 'Materia Prima']?.color || '#333',
+                        fontWeight: 500,
+                        borderRadius: 1,
+                      }}
+                    />
+                  </TableCell>
                   <TableCell>
                     <Chip
                       label={p.storageMethod}
@@ -247,7 +285,7 @@ export default function ProductsPage() {
               ))}
               {filteredProducts?.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                     <Typography color="text.secondary">Nenhum produto encontrado</Typography>
                   </TableCell>
                 </TableRow>
@@ -318,6 +356,27 @@ export default function ProductsPage() {
                 </MenuItem>
                 {groups.map((g) => (
                   <MenuItem key={g} value={g}>{g}</MenuItem>
+                ))}
+              </TextField>
+            </Box>
+
+            <Box>
+              <FieldLabel required>Categoria</FieldLabel>
+              <TextField
+                select
+                size="small"
+                value={form.watch('category') || 'Materia Prima'}
+                {...form.register('category')}
+                error={!!form.formState.errors.category}
+                helperText={
+                  form.formState.errors.category?.message ||
+                  'Usada nos relatórios para separar Compras (Matéria Prima) e Produção (Porcionado).'
+                }
+                fullWidth
+                sx={fieldSx}
+              >
+                {categories.map((c) => (
+                  <MenuItem key={c.value} value={c.value}>{c.label}</MenuItem>
                 ))}
               </TextField>
             </Box>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -36,6 +36,12 @@ import { formatDate } from '@/lib/utils';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 
 const thSx = { fontWeight: 700, color: '#333' };
+
+function movementTypeMeta(type?: string) {
+  if (type === 'entry') return { label: '↘ Entrada', bgcolor: '#E8F5E9', color: '#2E7D32' };
+  if (type === 'move') return { label: '↔ Mover', bgcolor: '#E3F2FD', color: '#1565C0' };
+  return { label: '↗ Saída', bgcolor: '#FFEBEE', color: '#C62828' };
+}
 
 function InfoField({ label, value }: { label: string; value: string }) {
   return (
@@ -125,19 +131,18 @@ export default function HistoryPage() {
   const batchLabels = useMemo(() => {
     if (!allItems || !detail) return [];
     if (batchFromReason) {
-      const filtered = allItems.filter((i) => i.batchId === batchFromReason);
-      if (filtered.length > 0) return filtered;
+      // Lote identificado: mostra apenas as etiquetas daquele lote.
+      // O fallback por data juntava etiquetas de porcionamentos
+      // diferentes do mesmo produto, então não é usado aqui.
+      return allItems.filter((i) => i.batchId === batchFromReason);
     }
     return allItems.filter(
       (i) =>
+        !i.batchId &&
         i.manipulationDate === detail.date &&
         (detail.itemType ? i.type === detail.itemType : true),
     );
   }, [allItems, detail, batchFromReason]);
-
-  useEffect(() => {
-    setSelectedLabels([]);
-  }, [detail]);
 
   const toggleLabel = (id: string) => {
     setSelectedLabels((prev) =>
@@ -193,7 +198,7 @@ export default function HistoryPage() {
         </Box>
         <Box>
           <Typography variant="h5" fontWeight="bold">
-            Entradas e Saídas
+            Histórico
           </Typography>
           <Typography variant="body2" sx={{ color: '#666' }}>
             Histórico de movimentações de estoque
@@ -227,6 +232,7 @@ export default function HistoryPage() {
           <MenuItem value="">Todos os tipos</MenuItem>
           <MenuItem value="entry">Entrada</MenuItem>
           <MenuItem value="exit">Saída</MenuItem>
+          <MenuItem value="move">Movimentação</MenuItem>
         </TextField>
       </Box>
 
@@ -254,11 +260,11 @@ export default function HistoryPage() {
                 <TableRow key={m._id} hover>
                   <TableCell>
                     <Chip
-                      label={m.movementType === 'entry' ? '↘ Entrada' : '↗ Saída'}
+                      label={movementTypeMeta(m.movementType).label}
                       size="small"
                       sx={{
-                        bgcolor: m.movementType === 'entry' ? '#E8F5E9' : '#FFEBEE',
-                        color: m.movementType === 'entry' ? '#2E7D32' : '#C62828',
+                        bgcolor: movementTypeMeta(m.movementType).bgcolor,
+                        color: movementTypeMeta(m.movementType).color,
                         fontWeight: 600,
                         borderRadius: 1.5,
                       }}
@@ -298,7 +304,10 @@ export default function HistoryPage() {
                     <IconButton
                       size="small"
                       aria-label="ver detalhes"
-                      onClick={() => setDetail(m)}
+                      onClick={() => {
+                        setSelectedLabels([]);
+                        setDetail(m);
+                      }}
                       sx={{ color: '#666' }}
                     >
                       <VisibilityIcon fontSize="small" />
@@ -335,8 +344,14 @@ export default function HistoryPage() {
           }}
         >
           <Chip
-            label={detail?.movementType === 'entry' ? 'Entrada' : 'Saída'}
-            color={detail?.movementType === 'entry' ? 'success' : 'error'}
+            label={movementTypeMeta(detail?.movementType).label.replace(/^[^\s]+\s/, '')}
+            color={
+              detail?.movementType === 'entry'
+                ? 'success'
+                : detail?.movementType === 'move'
+                  ? 'info'
+                  : 'error'
+            }
             size="small"
             sx={{ fontWeight: 700 }}
           />

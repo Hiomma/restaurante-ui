@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -18,10 +18,12 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  MenuItem,
   CircularProgress,
   Chip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
@@ -36,6 +38,8 @@ import {
   useCreateStockItem,
   useCreateStockMovement,
   useProducts,
+  useEmployees,
+  useMe,
 } from '@/lib/queries';
 import { formatDate, todayISODate, toInputDate } from '@/lib/utils';
 import api from '@/lib/api';
@@ -103,6 +107,8 @@ export default function PortioningsPage() {
   const { enqueueSnackbar } = useSnackbar();
   const { data: portionings, isLoading } = usePortionings();
   const { data: products } = useProducts();
+  const { data: employees } = useEmployees();
+  const { data: me } = useMe();
   const createPortioning = useCreatePortioning();
   const deletePortioning = useDeletePortioning();
   const updateStockItem = useUpdateStockItem();
@@ -116,7 +122,7 @@ export default function PortioningsPage() {
   const [scanned, setScanned] = useState<StockItem[]>([]);
   const [scanning, setScanning] = useState(false);
   const [cleanWeight, setCleanWeight] = useState('');
-  const [portionsCount, setPortionsCount] = useState('');
+  const [outputs, setOutputs] = useState<{ productId: string; count: string }[]>([]);
   const [lote, setLote] = useState('');
   const [employeeName, setEmployeeName] = useState('');
   const [date, setDate] = useState(todayISODate());
@@ -129,13 +135,24 @@ export default function PortioningsPage() {
   const perdaPct = totalGrams > 0 ? (perda / totalGrams) * 100 : 0;
   const product = products?.find((p) => p._id === scanned[0]?.product.productId);
 
+  const totalPortions = outputs.reduce((sum, row) => sum + (parseInt(row.count, 10) || 0), 0);
+  const portionWeight =
+    limpo > 0 && totalPortions > 0 ? Math.round(limpo / totalPortions) : 0;
+
+  const employeeOptions = useMemo(() => {
+    const names = new Set<string>();
+    if (me?.name) names.add(me.name);
+    employees?.filter((e) => e.active !== false).forEach((e) => names.add(e.name));
+    return Array.from(names);
+  }, [employees, me]);
+
   const resetForm = () => {
     setScanInput('');
     setScanned([]);
     setCleanWeight('');
-    setPortionsCount('');
+    setOutputs([]);
     setLote('');
-    setEmployeeName('');
+    setEmployeeName(me?.name ?? '');
     setDate(todayISODate());
   };
 
@@ -165,7 +182,13 @@ export default function PortioningsPage() {
         enqueueSnackbar('Todas as etiquetas devem ser do mesmo produto.', { variant: 'error' });
         return;
       }
-      setScanned((prev) => [...prev, item]);
+      setScanned((prev) => {
+        const next = [...prev, item];
+        if (next.length === 1) {
+          setOutputs([{ productId: item.product.productId, count: '' }]);
+        }
+        return next;
+      });
       if (!lote && item.lote) setLote(item.lote);
       setScanInput('');
     } catch {
@@ -176,12 +199,32 @@ export default function PortioningsPage() {
   };
 
   const removeScanned = (id: string) => {
-    setScanned((prev) => prev.filter((item) => item._id !== id));
+    setScanned((prev) => {
+      const next = prev.filter((item) => item._id !== id);
+      if (next.length === 0) setOutputs([]);
+      return next;
+    });
+  };
+
+  const updateOutput = (index: number, patch: { productId?: string; count?: string }) => {
+    setOutputs((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  const addOutput = () => {
+    setOutputs((prev) => [...prev, { productId: '', count: '' }]);
+  };
+
+  const removeOutput = (index: number) => {
+    setOutputs((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async () => {
     if (scanned.length === 0) return;
-    const n = parseInt(portionsCount, 10);
+    const rows = outputs
+      .map((row) => ({ ...row, count: parseInt(row.count, 10) || 0 }))
+      .filter((row) => row.productId && row.count > 0);
+    const n = rows.reduce((sum, row) => sum + row.count, 0);
+
     if (!limpo || limpo <= 0) {
       enqueueSnackbar('Informe o Peso Limpo (g).', { variant: 'error' });
       return;
@@ -190,8 +233,14 @@ export default function PortioningsPage() {
       enqueueSnackbar('Peso Limpo não pode ser maior que o Peso Bruto.', { variant: 'error' });
       return;
     }
-    if (!n || n < 1) {
-      enqueueSnackbar('Informe a Qtd. de Porções.', { variant: 'error' });
+    if (rows.length === 0 || n < 1) {
+      enqueueSnackbar('Informe os produtos gerados e a quantidade de porções.', {
+        variant: 'error',
+      });
+      return;
+    }
+    if (rows.some((row) => !row.productId)) {
+      enqueueSnackbar('Selecione o produto de cada linha.', { variant: 'error' });
       return;
     }
     setSubmitting(true);
@@ -200,12 +249,20 @@ export default function PortioningsPage() {
       const lossGrams = Math.max(0, bruto - limpo);
       const pct = bruto > 0 ? ((lossGrams / bruto) * 100).toFixed(1) : '0.0';
       const first = scanned[0];
-      const productId = first.product.productId;
-      const productName = product?.name ?? first.product.productName;
+      const batchId = `BATCH-PORT-${Date.now()}`;
+      const portionWeightGrams = Math.round(limpo / n);
+      const nameOf = (id: string) =>
+        products?.find((p) => p._id === id)?.name ??
+        (first.product.productId === id ? first.product.productName : id);
 
       await createPortioning.mutateAsync({
-        productId,
-        productName,
+        productId: rows[0].productId,
+        productName: nameOf(rows[0].productId),
+        outputs: rows.map((row) => ({
+          productId: row.productId,
+          productName: nameOf(row.productId),
+          portionsCount: row.count,
+        })),
         rawWeightGrams: bruto,
         cleanWeightGrams: limpo,
         lossGrams,
@@ -216,54 +273,59 @@ export default function PortioningsPage() {
       });
 
       for (const item of scanned) {
-        await updateStockItem.mutateAsync({ id: item._id, data: { status: 'used' } });
+        await updateStockItem.mutateAsync({
+          id: item._id,
+          data: { status: 'used', batchId },
+        });
       }
 
-      const batchId = `BATCH-PORT-${Date.now()}`;
-      const portionWeight = Math.round(limpo / n);
-      let expiryDate = first.expiryDate;
-      if (product) {
-        const [y, m, d] = date.split('-').map(Number);
-        const exp = new Date(y, (m || 1) - 1, d || 1);
-        exp.setDate(exp.getDate() + (product.shelfLifeDays ?? 0));
-        expiryDate = toInputDate(exp.toISOString());
-      }
+      for (const row of rows) {
+        const rowProduct = products?.find((p) => p._id === row.productId);
+        const rowProductName = nameOf(row.productId);
+        let expiryDate = first.expiryDate;
+        if (rowProduct) {
+          const [y, m, d] = date.split('-').map(Number);
+          const exp = new Date(y, (m || 1) - 1, d || 1);
+          exp.setDate(exp.getDate() + (rowProduct.shelfLifeDays ?? 0));
+          expiryDate = toInputDate(exp.toISOString());
+        }
 
-      for (let i = 0; i < n; i++) {
-        await createStockItem.mutateAsync({
-          productId,
-          productName,
-          type: 'portioned',
-          weightGrams: portionWeight,
-          manipulationDate: date,
-          expiryDate,
-          lote,
-          employeeName,
-          productGroup: product?.group ?? first.product.productGroup,
-          productStorage: product?.storageMethod ?? first.product.productStorage,
-          batchId,
+        for (let i = 0; i < row.count; i++) {
+          await createStockItem.mutateAsync({
+            productId: row.productId,
+            productName: rowProductName,
+            type: 'portioned',
+            weightGrams: portionWeightGrams,
+            manipulationDate: date,
+            expiryDate,
+            lote,
+            employeeName,
+            productGroup: rowProduct?.group ?? first.product.productGroup,
+            productStorage: rowProduct?.storageMethod ?? first.product.productStorage,
+            batchId,
+          });
+        }
+
+        await createMovement.mutateAsync({
+          productId: row.productId,
+          productName: rowProductName,
+          movementType: 'entry',
+          quantity: row.count,
+          weightGrams: row.count * portionWeightGrams,
+          itemType: 'portioned',
+          reason: `Porcionamento — Lote ${lote || '-'} — ${row.count} porções de ${portionWeightGrams}g — ${employeeName || '-'} — ${batchId}`,
+          date,
         });
       }
 
       await createMovement.mutateAsync({
-        productId,
-        productName,
-        movementType: 'entry',
-        quantity: n,
-        weightGrams: limpo,
-        itemType: 'portioned',
-        reason: `Porcionamento — Lote ${lote || '-'} — ${n} porções de ${portionWeight}g — ${employeeName || '-'} — ${batchId}`,
-        date,
-      });
-
-      await createMovement.mutateAsync({
-        productId,
-        productName,
+        productId: first.product.productId,
+        productName: product?.name ?? first.product.productName,
         movementType: 'exit',
         quantity: scanned.length,
         weightGrams: bruto,
         itemType: 'raw',
-        reason: `Porcionamento — Lote ${lote || '-'} — Perda: ${lossGrams}g (${pct}%) — ${employeeName || '-'}`,
+        reason: `Porcionamento — Lote ${lote || '-'} — Perda: ${lossGrams}g (${pct}%) — ${employeeName || '-'} — ${batchId}`,
         date,
       });
 
@@ -342,7 +404,13 @@ export default function PortioningsPage() {
               {portionings?.map((p) => (
                 <TableRow key={p._id} hover>
                   <TableCell>
-                    <Typography fontWeight={500}>{p.product.productName}</Typography>
+                    <Typography fontWeight={500}>
+                      {p.outputs && p.outputs.length > 0
+                        ? p.outputs
+                            .map((o) => `${o.productName} (${o.portionsCount})`)
+                            .join(', ')
+                        : p.product.productName}
+                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Typography
@@ -538,18 +606,6 @@ export default function PortioningsPage() {
                     />
                   </Box>
                   <Box>
-                    <FieldLabel required>Qtd. de Porções</FieldLabel>
-                    <TextField
-                      type="number"
-                      placeholder="Ex: 50"
-                      value={portionsCount}
-                      onChange={(e) => setPortionsCount(e.target.value)}
-                      fullWidth
-                      size="small"
-                      sx={fieldSx}
-                    />
-                  </Box>
-                  <Box>
                     <FieldLabel>Lote</FieldLabel>
                     <TextField
                       placeholder="Ex: L001"
@@ -563,13 +619,33 @@ export default function PortioningsPage() {
                   <Box>
                     <FieldLabel>Funcionário</FieldLabel>
                     <TextField
-                      placeholder="Ex: João Silva"
-                      value={employeeName}
-                      onChange={(e) => setEmployeeName(e.target.value)}
+                      select
                       fullWidth
                       size="small"
+                      value={employeeName}
+                      onChange={(e) => setEmployeeName(e.target.value)}
                       sx={fieldSx}
-                    />
+                      SelectProps={{
+                        displayEmpty: true,
+                        renderValue: (value) =>
+                          !value ? (
+                            <Box component="span" sx={{ color: 'text.disabled' }}>
+                              Selecione o funcionário
+                            </Box>
+                          ) : (
+                            String(value)
+                          ),
+                      }}
+                    >
+                      <MenuItem value="">
+                        <em>Selecione o funcionário</em>
+                      </MenuItem>
+                      {employeeOptions.map((name) => (
+                        <MenuItem key={name} value={name}>
+                          {name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </Box>
                   <Box>
                     <FieldLabel>Data</FieldLabel>
@@ -585,6 +661,113 @@ export default function PortioningsPage() {
                   </Typography>
                   <Typography variant="body2" sx={{ color: limpoExcedeBruto ? '#d32f2f' : '#888' }}>
                     Perda: {perda}g ({perdaPct.toFixed(1)}%)
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            {scanned.length > 0 && (
+              <Box>
+                <Typography variant="body1" fontWeight={700} sx={{ mb: 1.5 }}>
+                  3. Produtos gerados
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {outputs.map((row, index) => (
+                    <Box
+                      key={index}
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: '1fr 140px 44px' },
+                        gap: 1.5,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <TextField
+                        select
+                        size="small"
+                        fullWidth
+                        value={row.productId}
+                        onChange={(e) => updateOutput(index, { productId: e.target.value })}
+                        sx={fieldSx}
+                        SelectProps={{
+                          displayEmpty: true,
+                          renderValue: (value) =>
+                            !value ? (
+                              <Box component="span" sx={{ color: 'text.disabled' }}>
+                                Produto gerado
+                              </Box>
+                            ) : (
+                              products?.find((p) => p._id === value)?.name ?? String(value)
+                            ),
+                        }}
+                      >
+                        <MenuItem value="">
+                          <em>Produto gerado</em>
+                        </MenuItem>
+                        {products?.map((p) => (
+                          <MenuItem key={p._id} value={p._id}>
+                            {p.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        type="number"
+                        size="small"
+                        fullWidth
+                        placeholder="Porções"
+                        value={row.count}
+                        onChange={(e) => updateOutput(index, { count: e.target.value })}
+                        slotProps={{ htmlInput: { min: 1 } }}
+                        sx={fieldSx}
+                      />
+                      <IconButton
+                        size="small"
+                        onClick={() => removeOutput(index)}
+                        disabled={outputs.length <= 1}
+                        sx={{ color: '#d32f2f' }}
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  ))}
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    onClick={addOutput}
+                    sx={{
+                      textTransform: 'none',
+                      borderRadius: 1.5,
+                      color: '#1976D2',
+                      borderColor: '#90CAF9',
+                      alignSelf: 'flex-start',
+                      '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                    }}
+                  >
+                    Adicionar tipo de produto
+                  </Button>
+                </Box>
+
+                <Box
+                  sx={{
+                    mt: 2,
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: totalPortions > 0 && portionWeight > 0 ? '#E3F2FD' : '#f5f7fa',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.25,
+                  }}
+                >
+                  <Typography variant="body2" sx={{ color: '#555' }}>
+                    Total de porções: <b>{totalPortions}</b>
+                  </Typography>
+                  <Typography
+                    variant="body1"
+                    fontWeight={700}
+                    sx={{ color: portionWeight > 0 ? '#1565C0' : '#999' }}
+                  >
+                    Peso de cada porção: {portionWeight > 0 ? `${portionWeight}g` : '—'}
                   </Typography>
                 </Box>
               </Box>
@@ -632,7 +815,20 @@ export default function PortioningsPage() {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1 }}>
-            <DetailRow label="Produto" value={viewTarget?.product.productName ?? '—'} />
+            <DetailRow
+              label="Produto"
+              value={
+                viewTarget?.outputs && viewTarget.outputs.length > 0
+                  ? viewTarget.outputs
+                      .map((o) => `${o.productName} (${o.portionsCount})`)
+                      .join(', ')
+                  : (viewTarget?.product.productName ?? '—')
+              }
+            />
+            <DetailRow
+              label="Peso por porção"
+              value={viewTarget ? `${viewTarget.portionWeightGrams}g` : '—'}
+            />
             <DetailRow label="Lote" value={viewTarget?.lote || '—'} />
             <DetailRow
               label="Peso Bruto"

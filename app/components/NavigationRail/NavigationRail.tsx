@@ -1,6 +1,7 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
 import {
   Box,
   List,
@@ -21,10 +22,11 @@ import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import PeopleIcon from '@mui/icons-material/People';
-import DeleteIcon from '@mui/icons-material/Delete';
+import LockIcon from '@mui/icons-material/Lock';
 import LogoutIcon from '@mui/icons-material/Logout';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
+import ChangePasswordDialog from '@/app/components/ChangePasswordDialog/ChangePasswordDialog';
 
 const navItems = [
   { icon: <DashboardIcon />, label: 'Dashboard', path: '/' },
@@ -32,16 +34,23 @@ const navItems = [
   { icon: <LocalShippingIcon />, label: 'Recebimento', path: '/receiving' },
   { icon: <ScaleIcon />, label: 'Porcionamento', path: '/portionings' },
   { icon: <SwapHorizIcon />, label: 'Movimentações', path: '/movements' },
-  { icon: <ReceiptIcon />, label: 'Entradas / Saídas', path: '/history' },
+  { icon: <ReceiptIcon />, label: 'Histórico', path: '/history' },
   { icon: <QrCodeScannerIcon />, label: 'Estoque', path: '/stock' },
   { icon: <BarChartIcon />, label: 'Relatórios', path: '/reports' },
   { icon: <EventNoteIcon />, label: 'Agenda', path: '/agenda' },
   { icon: <PeopleIcon />, label: 'Funcionários', path: '/employees' },
 ];
 
-export default function NavigationRail() {
+export default function NavigationRail({
+  inDrawer = false,
+  onNavigate,
+}: {
+  inDrawer?: boolean;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -49,18 +58,23 @@ export default function NavigationRail() {
     router.push('/login');
   };
 
+  const navigate = (path: string) => {
+    onNavigate?.();
+    router.push(path);
+  };
+
   return (
     <Box
       sx={{
         width: 240,
-        height: '100vh',
-        position: 'fixed',
-        left: 0,
-        top: 0,
+        height: inDrawer ? '100%' : '100vh',
+        position: inDrawer ? 'static' : 'fixed',
+        left: inDrawer ? undefined : 0,
+        top: inDrawer ? undefined : 0,
         bgcolor: '#1a2332',
         display: 'flex',
         flexDirection: 'column',
-        zIndex: 1000,
+        zIndex: inDrawer ? 'auto' : 1200,
         overflow: 'auto',
       }}
     >
@@ -84,7 +98,7 @@ export default function NavigationRail() {
           return (
             <ListItem key={item.label} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
-                onClick={() => router.push(item.path)}
+                onClick={() => navigate(item.path)}
                 sx={{
                   borderRadius: 2,
                   color: isActive ? '#fff' : '#8899aa',
@@ -117,18 +131,22 @@ export default function NavigationRail() {
       <List sx={{ px: 1 }}>
         <ListItem disablePadding sx={{ mb: 0.5 }}>
           <ListItemButton
+            onClick={() => {
+              setPasswordOpen(true);
+              onNavigate?.();
+            }}
             sx={{
               borderRadius: 2,
-              color: '#cc4444',
+              color: '#8899aa',
               '&:hover': { bgcolor: '#243447' },
               px: 2,
               py: 1,
             }}
           >
             <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
-              <DeleteIcon />
+              <LockIcon />
             </ListItemIcon>
-            <ListItemText primary="Deletar Conta" primaryTypographyProps={{ fontSize: '0.875rem' }} />
+            <ListItemText primary="Alterar Senha" primaryTypographyProps={{ fontSize: '0.875rem' }} />
           </ListItemButton>
         </ListItem>
         <ListItem disablePadding>
@@ -151,8 +169,10 @@ export default function NavigationRail() {
       </List>
 
       <Typography variant="caption" color="#556677" sx={{ textAlign: 'center', py: 1 }}>
-        v2.0 — EstoqueApp
+        v2.1 — EstoqueApp
       </Typography>
+
+      <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </Box>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Box,
   Typography,
@@ -35,14 +35,16 @@ import { useSnackbar } from 'notistack';
 import {
   useProducts,
   useStockItems,
-  useStockItemByQr,
   useUpdateStockItem,
+  useDeleteStockItem,
   useCreateStockMovement,
   useMovementDestinations,
   useCreateMovementDestination,
   useDeleteMovementDestination,
 } from '@/lib/queries';
 import { formatDate, formatWeight, todayISODate } from '@/lib/utils';
+import api from '@/lib/api';
+import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 
 const cardSx = {
@@ -68,7 +70,8 @@ const primaryBtnSx = {
   '&:hover': { bgcolor: '#1565C0' },
 };
 
-const fixedDestinations = ['Perda', 'Salão', 'Bar', 'Cozinha', 'Não encontrado'];
+const fixedMoveDestinations = ['Salão', 'Bar', 'Cozinha'];
+const fixedWriteoffDestinations = ['Perda', 'Não encontrado'];
 
 const statusLabels: Record<string, string> = {
   in_stock: 'Em Estoque',
@@ -115,18 +118,19 @@ export default function MovementsPage() {
   const { data: destinations } = useMovementDestinations();
   const createMovement = useCreateStockMovement();
   const updateItem = useUpdateStockItem();
+  const deleteItem = useDeleteStockItem();
   const createDestination = useCreateMovementDestination();
   const deleteDestination = useDeleteMovementDestination();
 
   const [tab, setTab] = useState(0);
 
   const [qrInput, setQrInput] = useState('');
-  const [searchQr, setSearchQr] = useState('');
+  const [scanned, setScanned] = useState<StockItem[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [action, setAction] = useState<'move' | 'writeoff' | ''>('');
   const [destino, setDestino] = useState('');
   const [obs, setObs] = useState('');
   const qrRef = useRef<HTMLInputElement>(null);
-  const sawFetching = useRef(false);
-  const { data: found, isFetching, isError } = useStockItemByQr(searchQr);
 
   const [countMode, setCountMode] = useState<'product' | 'full'>('product');
   const [countProductId, setCountProductId] = useState('');
@@ -134,70 +138,123 @@ export default function MovementsPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [destName, setDestName] = useState('');
+  const [destType, setDestType] = useState<'move' | 'writeoff'>('move');
+  const [destSubTab, setDestSubTab] = useState<'move' | 'writeoff'>('move');
 
-  useEffect(() => {
-    if (!searchQr) {
-      sawFetching.current = false;
-      return;
-    }
-    if (isFetching) {
-      sawFetching.current = true;
-      return;
-    }
-    if (isError || (!found && sawFetching.current)) {
-      enqueueSnackbar('Etiqueta não encontrada', { variant: 'error' });
+  const handleScan = async () => {
+    const code = qrInput.trim().toUpperCase();
+    if (!code || scanning) return;
+    setScanning(true);
+    try {
+      const res = await api.get<StockItem>(`/stock-items/qr/${code}`);
+      const item = res.data;
+      if (item.status !== 'in_stock') {
+        enqueueSnackbar(
+          `Etiqueta não está em estoque (status: ${statusLabels[item.status] ?? item.status}).`,
+          { variant: 'error' },
+        );
+        setQrInput('');
+        return;
+      }
+      if (scanned.some((s) => s._id === item._id)) {
+        enqueueSnackbar('Esta etiqueta já foi adicionada.', { variant: 'error' });
+        setQrInput('');
+        return;
+      }
+      setScanned((prev) => [...prev, item]);
       setQrInput('');
-      setSearchQr('');
-      setDestino('');
-      setObs('');
       qrRef.current?.focus();
+    } catch {
+      enqueueSnackbar('Etiqueta não encontrada.', { variant: 'error' });
+      setQrInput('');
+    } finally {
+      setScanning(false);
     }
-  }, [searchQr, isFetching, isError, found, enqueueSnackbar]);
-
-  const handleSearch = () => {
-    const code = qrInput.trim();
-    if (!code) return;
-    sawFetching.current = false;
-    setSearchQr(code);
   };
 
-  const clearQr = () => {
-    setQrInput('');
-    setSearchQr('');
+  const removeScanned = (id: string) => {
+    setScanned((prev) => prev.filter((item) => item._id !== id));
+  };
+
+  const clearScanned = () => {
+    setScanned([]);
+    setAction('');
     setDestino('');
     setObs('');
-    sawFetching.current = false;
     qrRef.current?.focus();
   };
 
-  const handleMove = async (status: 'discarded' | 'used') => {
-    if (!found || !destino) return;
-    const reason = obs.trim() ? `${destino} — ${obs.trim()}` : destino;
-    try {
-      await createMovement.mutateAsync({
-        productId: found.product.productId,
-        productName: found.product.productName,
-        movementType: 'exit',
-        quantity: 1,
-        weightGrams: found.weightGrams,
-        itemType: found.type,
-        reason,
-        date: todayISODate(),
-      });
-      await updateItem.mutateAsync({ id: found._id, data: { status } });
-      enqueueSnackbar('Etiqueta movimentada com sucesso!', { variant: 'success' });
-      clearQr();
-    } catch {
-      enqueueSnackbar('Erro ao movimentar etiqueta.', { variant: 'error' });
-    }
+  const selectAction = (next: 'move' | 'writeoff') => {
+    if (action === next) return;
+    setAction(next);
+    setDestino('');
   };
 
-  const destinationOptions = [
-    ...fixedDestinations,
-    ...(destinations ?? [])
-      .filter((d) => d.active && !fixedDestinations.includes(d.name))
-      .map((d) => d.name),
-  ];
+  const destinationOptions =
+    action === 'move'
+      ? [
+          ...fixedMoveDestinations,
+          ...(destinations ?? [])
+            .filter(
+              (d) => d.active && (d.type ?? 'move') === 'move' && !fixedMoveDestinations.includes(d.name),
+            )
+            .map((d) => d.name),
+        ]
+      : action === 'writeoff'
+        ? [
+            ...fixedWriteoffDestinations,
+            ...(destinations ?? [])
+              .filter(
+                (d) => d.active && d.type === 'writeoff' && !fixedWriteoffDestinations.includes(d.name),
+              )
+              .map((d) => d.name),
+          ]
+        : [];
+
+  const moving = createMovement.isPending || updateItem.isPending || deleteItem.isPending;
+
+  const handleConfirm = async () => {
+    if (scanned.length === 0 || !action || !destino) return;
+    const suffix = obs.trim() ? ` — ${obs.trim()}` : '';
+    try {
+      for (const item of scanned) {
+        if (action === 'move') {
+          await createMovement.mutateAsync({
+            productId: item.product.productId,
+            productName: item.product.productName,
+            movementType: 'move',
+            quantity: 1,
+            weightGrams: item.weightGrams,
+            itemType: item.type,
+            reason: `Mover — ${destino}${suffix}`,
+            date: todayISODate(),
+          });
+          await updateItem.mutateAsync({ id: item._id, data: { destination: destino } });
+        } else {
+          await createMovement.mutateAsync({
+            productId: item.product.productId,
+            productName: item.product.productName,
+            movementType: 'exit',
+            quantity: 1,
+            weightGrams: item.weightGrams,
+            itemType: item.type,
+            reason: `Baixar — ${destino}${suffix}`,
+            date: todayISODate(),
+          });
+          await deleteItem.mutateAsync(item._id);
+        }
+      }
+      enqueueSnackbar(
+        action === 'move'
+          ? `${scanned.length} etiqueta(s) movida(s) para ${destino}.`
+          : `${scanned.length} etiqueta(s) baixada(s) — ${destino}.`,
+        { variant: 'success' },
+      );
+      clearScanned();
+    } catch {
+      enqueueSnackbar('Erro ao movimentar etiquetas.', { variant: 'error' });
+    }
+  };
 
   const countItems =
     countMode === 'product' && countProductId
@@ -227,7 +284,7 @@ export default function MovementsPage() {
           reason: 'Contagem — Não encontrado',
           date: todayISODate(),
         });
-        await updateItem.mutateAsync({ id: item._id, data: { status: 'discarded' } });
+        await deleteItem.mutateAsync(item._id);
       }
       enqueueSnackbar(
         `Contagem concluída. ${unfound.length} etiqueta(s) baixada(s).`,
@@ -247,9 +304,10 @@ export default function MovementsPage() {
     const name = destName.trim();
     if (!name) return;
     try {
-      await createDestination.mutateAsync({ name });
+      await createDestination.mutateAsync({ name, type: destType });
       enqueueSnackbar('Destino adicionado com sucesso!', { variant: 'success' });
       setDestName('');
+      setDestType('move');
       setDialogOpen(false);
     } catch {
       enqueueSnackbar('Erro ao adicionar destino.', { variant: 'error' });
@@ -264,8 +322,6 @@ export default function MovementsPage() {
       enqueueSnackbar('Erro ao remover destino.', { variant: 'error' });
     }
   };
-
-  const moving = createMovement.isPending || updateItem.isPending;
 
   return (
     <LoggedLayout>
@@ -322,15 +378,15 @@ export default function MovementsPage() {
       </Tabs>
 
       {tab === 0 && (
-        <Box sx={{ maxWidth: 520, mx: 'auto' }}>
+        <Box sx={{ maxWidth: 560, mx: 'auto' }}>
           <Box sx={{ ...cardSx, p: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
               <QrCodeScannerIcon sx={{ color: '#1976D2', fontSize: 20 }} />
               <Typography variant="subtitle1" fontWeight={700}>
-                Localizar Etiqueta
+                Escanear Etiquetas
               </Typography>
             </Box>
-            <FieldLabel required>Código QR (6 dígitos)</FieldLabel>
+            <FieldLabel>Código QR (6 dígitos)</FieldLabel>
             <Box sx={{ display: 'flex', gap: 1.5 }}>
               <TextField
                 fullWidth
@@ -342,163 +398,222 @@ export default function MovementsPage() {
                 inputProps={{ maxLength: 6 }}
                 onChange={(e) => setQrInput(e.target.value.toUpperCase())}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSearch();
+                  if (e.key === 'Enter') handleScan();
                 }}
               />
               <Button
                 variant="outlined"
-                onClick={handleSearch}
-                disabled={!qrInput.trim() || isFetching}
+                onClick={handleScan}
+                disabled={!qrInput.trim() || scanning}
                 sx={{
                   textTransform: 'none' as const,
                   borderRadius: 1.5,
                   color: '#1976D2',
                   borderColor: '#90CAF9',
                   px: 2.5,
-                  minWidth: 100,
+                  minWidth: 110,
                   '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
                 }}
               >
-                {isFetching ? <CircularProgress size={18} /> : 'Buscar'}
+                {scanning ? <CircularProgress size={18} /> : 'Adicionar'}
               </Button>
             </Box>
             <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 1 }}>
-              Aponte a câmera do celular para o QR Code — o campo será preenchido
-              automaticamente.
+              Escaneie quantas etiquetas quiser — depois escolha a opção Mover ou Baixar.
             </Typography>
           </Box>
 
-          {found && found.status === 'in_stock' && (
+          {scanned.length > 0 && (
             <Box sx={{ ...cardSx, p: 3, mt: 2 }}>
-              <Typography variant="h6" fontWeight="bold">
-                {found.product.productName}
-              </Typography>
               <Box
                 sx={{
                   display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 1,
-                  mt: 1,
-                  mb: 2.5,
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  mb: 2,
                 }}
               >
-                <Chip
-                  label={found.type === 'raw' ? 'Bruto' : 'Porcionado'}
-                  size="small"
-                  sx={{
-                    bgcolor: '#E3F2FD',
-                    color: '#1565C0',
-                    fontWeight: 600,
-                    borderRadius: 1.5,
-                  }}
-                />
-                <Chip label={formatWeight(found.weightGrams)} size="small" sx={grayChipSx} />
-                <Chip
-                  label={`Validade: ${formatDate(found.expiryDate)}`}
-                  size="small"
-                  sx={grayChipSx}
-                />
-                {found.lote && <Chip label={`Lote: ${found.lote}`} size="small" sx={grayChipSx} />}
-                {found.nf && <Chip label={`NF: ${found.nf}`} size="small" sx={grayChipSx} />}
-              </Box>
-
-              <FieldLabel required>Destino</FieldLabel>
-              <TextField
-                select
-                fullWidth
-                size="small"
-                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
-                value={destino}
-                onChange={(e) => setDestino(e.target.value)}
-                SelectProps={{
-                  displayEmpty: true,
-                  renderValue: (value) =>
-                    value === '' ? (
-                      <Box component="span" sx={{ color: 'text.disabled' }}>
-                        Selecione...
-                      </Box>
-                    ) : (
-                      String(value)
-                    ),
-                }}
-              >
-                <MenuItem value="" disabled>
-                  Selecione...
-                </MenuItem>
-                {destinationOptions.map((d) => (
-                  <MenuItem key={d} value={d}>
-                    {d}
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <Box sx={{ mt: 2 }}>
-                <FieldLabel>Observação</FieldLabel>
-                <TextField
-                  fullWidth
-                  size="small"
-                  sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
-                  placeholder="Ex: Retirado para o salão"
-                  value={obs}
-                  onChange={(e) => setObs(e.target.value)}
-                />
-              </Box>
-
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: 1.5,
-                  mt: 2.5,
-                }}
-              >
+                <Typography variant="subtitle1" fontWeight={700}>
+                  Etiquetas selecionadas ({scanned.length})
+                </Typography>
                 <Button
-                  variant="outlined"
-                  disabled={!destino || moving}
-                  onClick={() => handleMove('discarded')}
+                  size="small"
+                  onClick={clearScanned}
                   sx={{
-                    textTransform: 'none' as const,
-                    borderRadius: 1.5,
-                    color: '#C62828',
-                    borderColor: '#C62828',
-                    px: 2.5,
-                    '&:hover': { borderColor: '#C62828', bgcolor: '#FFEBEE' },
+                    textTransform: 'none',
+                    color: '#666',
+                    '&:hover': { bgcolor: '#f5f5f5' },
                   }}
                 >
-                  Descartar
+                  Limpar
                 </Button>
+              </Box>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2.5 }}>
+                {scanned.map((item) => (
+                  <Box
+                    key={item._id}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      p: 1.25,
+                      borderRadius: 2,
+                      border: '1px solid #e8ecf1',
+                      bgcolor: '#f9fafc',
+                    }}
+                  >
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={600} noWrap>
+                        {item.product.productName}
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mt: 0.5 }}>
+                        <Chip
+                          label={item.type === 'raw' ? 'Bruto' : 'Porcionado'}
+                          size="small"
+                          sx={{
+                            bgcolor: '#E3F2FD',
+                            color: '#1565C0',
+                            fontWeight: 600,
+                            borderRadius: 1.5,
+                            height: 20,
+                          }}
+                        />
+                        <Chip
+                          label={formatWeight(item.weightGrams)}
+                          size="small"
+                          sx={{ ...grayChipSx, height: 20 }}
+                        />
+                        <Chip
+                          label={`QR: ${item.qrCode}`}
+                          size="small"
+                          sx={{ ...grayChipSx, height: 20 }}
+                        />
+                        <Chip
+                          label={`Validade: ${formatDate(item.expiryDate)}`}
+                          size="small"
+                          sx={{ ...grayChipSx, height: 20 }}
+                        />
+                        {item.destination && (
+                          <Chip
+                            label={`Em: ${item.destination}`}
+                            size="small"
+                            sx={{ ...grayChipSx, height: 20 }}
+                          />
+                        )}
+                      </Box>
+                    </Box>
+                    <IconButton
+                      size="small"
+                      aria-label="remover etiqueta"
+                      onClick={() => removeScanned(item._id)}
+                      sx={{ color: '#C62828' }}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))}
+              </Box>
+
+              <FieldLabel required>Ação</FieldLabel>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
                 <Button
                   variant="contained"
-                  disabled={!destino || moving}
-                  onClick={() => handleMove('used')}
-                  sx={primaryBtnSx}
+                  onClick={() => selectAction('move')}
+                  sx={toggleSx(action === 'move')}
                 >
-                  Confirmar Saída
+                  Mover
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={() => selectAction('writeoff')}
+                  sx={toggleSx(action === 'writeoff')}
+                >
+                  Baixar
                 </Button>
               </Box>
-            </Box>
-          )}
 
-          {found && found.status !== 'in_stock' && (
-            <Box sx={{ ...cardSx, p: 3, mt: 2 }}>
-              <Typography variant="body2" fontWeight={600} sx={{ color: '#C62828' }}>
-                Etiqueta não está em estoque (status: {statusLabels[found.status] ?? found.status}).
-              </Typography>
-              <Button
-                variant="outlined"
-                onClick={clearQr}
-                sx={{
-                  textTransform: 'none' as const,
-                  borderRadius: 1.5,
-                  color: '#444',
-                  borderColor: '#e0e0e0',
-                  px: 2.5,
-                  mt: 1.5,
-                  '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
-                }}
-              >
-                Nova busca
-              </Button>
+              {action && (
+                <>
+                  <Typography variant="caption" sx={{ color: '#666', display: 'block', mb: 1.5 }}>
+                    {action === 'move'
+                      ? 'O item permanece no estoque e apenas muda de local.'
+                      : 'A etiqueta será excluída do sistema.'}
+                  </Typography>
+
+                  <FieldLabel required>Destino ({action === 'move' ? 'Mover' : 'Baixar'})</FieldLabel>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+                    value={destino}
+                    onChange={(e) => setDestino(e.target.value)}
+                    SelectProps={{
+                      displayEmpty: true,
+                      renderValue: (value) =>
+                        value === '' ? (
+                          <Box component="span" sx={{ color: 'text.disabled' }}>
+                            Selecione...
+                          </Box>
+                        ) : (
+                          String(value)
+                        ),
+                    }}
+                  >
+                    <MenuItem value="" disabled>
+                      Selecione...
+                    </MenuItem>
+                    {destinationOptions.map((d) => (
+                      <MenuItem key={d} value={d}>
+                        {d}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+
+                  <Box sx={{ mt: 2 }}>
+                    <FieldLabel>Observação</FieldLabel>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+                      placeholder="Ex: Retirado para o salão"
+                      value={obs}
+                      onChange={(e) => setObs(e.target.value)}
+                    />
+                  </Box>
+
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      gap: 1.5,
+                      mt: 2.5,
+                    }}
+                  >
+                    <Button
+                      variant="contained"
+                      disabled={!destino || moving}
+                      onClick={handleConfirm}
+                      sx={
+                        action === 'writeoff'
+                          ? {
+                              textTransform: 'none' as const,
+                              borderRadius: 1.5,
+                              bgcolor: '#C62828',
+                              px: 2.5,
+                              '&:hover': { bgcolor: '#B71C1C' },
+                            }
+                          : primaryBtnSx
+                      }
+                    >
+                      {action === 'move'
+                        ? `Mover ${scanned.length} etiqueta(s)`
+                        : `Baixar ${scanned.length} etiqueta(s)`}
+                    </Button>
+                  </Box>
+                </>
+              )}
             </Box>
           )}
         </Box>
@@ -636,16 +751,44 @@ export default function MovementsPage() {
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
             <Typography variant="body2" sx={{ color: '#666', flex: 1 }}>
-              Gerencie os destinos disponíveis para movimentação
+              Gerencie os destinos disponíveis para as ações Mover e Baixar
             </Typography>
             <Button
               variant="contained"
-              onClick={() => setDialogOpen(true)}
+              onClick={() => {
+                setDestType(destSubTab);
+                setDialogOpen(true);
+              }}
               sx={primaryBtnSx}
             >
               Novo Destino
             </Button>
           </Box>
+
+          <Tabs
+            value={destSubTab}
+            onChange={(_, v) => setDestSubTab(v)}
+            sx={{
+              bgcolor: '#f1f3f5',
+              borderRadius: 2,
+              p: 0.5,
+              mb: 2,
+              minHeight: 44,
+              maxWidth: 400,
+              '& .MuiTabs-indicator': { display: 'none' },
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                borderRadius: 1.5,
+                minHeight: 40,
+                fontWeight: 600,
+                color: '#555',
+                '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
+              },
+            }}
+          >
+            <Tab label="Mover" />
+            <Tab label="Baixar" />
+          </Tabs>
 
           <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e8ecf1' }}>
             <Table>
@@ -659,59 +802,79 @@ export default function MovementsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {fixedDestinations.map((d) => (
-                  <TableRow key={d} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {d}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip label="Padrão" size="small" sx={grayChipSx} />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Typography variant="body2" sx={{ color: '#999' }}>
-                        Fixo
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {customDestinations.map((d) => (
-                  <TableRow key={d._id} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {d.name}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label="Personalizado"
-                        size="small"
-                        sx={{
-                          bgcolor: '#1565C0',
-                          color: '#fff',
-                          fontWeight: 600,
-                          borderRadius: 1.5,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        size="small"
-                        aria-label="excluir destino"
-                        onClick={() => handleDeleteDestination(d._id)}
-                        sx={{ color: '#C62828' }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {customDestinations.length === 0 && (
+                {destSubTab === 'move'
+                  ? fixedMoveDestinations.map((d) => (
+                      <TableRow key={d} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={500}>
+                            {d}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip label="Padrão" size="small" sx={grayChipSx} />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Typography variant="body2" sx={{ color: '#999' }}>
+                            Fixo
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  : fixedWriteoffDestinations.map((d) => (
+                      <TableRow key={d} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={500}>
+                            {d}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip label="Padrão" size="small" sx={grayChipSx} />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Typography variant="body2" sx={{ color: '#999' }}>
+                            Fixo
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                {customDestinations
+                  .filter((d) => (d.type ?? 'move') === destSubTab)
+                  .map((d) => (
+                    <TableRow key={d._id} hover>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={500}>
+                          {d.name}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={d.type === 'writeoff' ? 'Baixar' : 'Mover'}
+                          size="small"
+                          sx={{
+                            bgcolor: d.type === 'writeoff' ? '#FFEBEE' : '#E3F2FD',
+                            color: d.type === 'writeoff' ? '#C62828' : '#1565C0',
+                            fontWeight: 600,
+                            borderRadius: 1.5,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        <IconButton
+                          size="small"
+                          aria-label="excluir destino"
+                          onClick={() => handleDeleteDestination(d._id)}
+                          sx={{ color: '#C62828' }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                {customDestinations.filter((d) => (d.type ?? 'move') === destSubTab).length === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
-                        Nenhum destino personalizado cadastrado
+                        Nenhum destino personalizado nesta subguia
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -742,19 +905,35 @@ export default function MovementsPage() {
           </IconButton>
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ pt: 1 }}>
-            <FieldLabel required>Nome do Destino</FieldLabel>
-            <TextField
-              fullWidth
-              size="small"
-              sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
-              placeholder="Ex: Freezer 2"
-              value={destName}
-              onChange={(e) => setDestName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddDestination();
-              }}
-            />
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box>
+              <FieldLabel required>Nome do Destino</FieldLabel>
+              <TextField
+                fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+                placeholder="Ex: Freezer 2"
+                value={destName}
+                onChange={(e) => setDestName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAddDestination();
+                }}
+              />
+            </Box>
+            <Box>
+              <FieldLabel required>Tipo de Uso</FieldLabel>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+                value={destType}
+                onChange={(e) => setDestType(e.target.value as 'move' | 'writeoff')}
+              >
+                <MenuItem value="move">Mover (item permanece no estoque)</MenuItem>
+                <MenuItem value="writeoff">Baixar (etiqueta excluída do sistema)</MenuItem>
+              </TextField>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>

@@ -27,6 +27,12 @@ export const employeeSchema = z.object({
 
 export const movementDestinationSchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  type: z.enum(['move', 'writeoff']).optional(),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Password is required'),
+  newPassword: z.string().min(4, 'Password must be at least 4 characters'),
 });
 
 const emptyToUndefined = (v: unknown) =>
@@ -37,6 +43,7 @@ const emptyToUndefined = (v: unknown) =>
 export const productSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   group: z.string().min(1, 'Group is required'),
+  category: z.string().optional(),
   storageMethod: z.string().min(1, 'Storage method is required'),
   shelfLifeDays: z.preprocess(emptyToUndefined, z.number({ message: 'Shelf life is required' }).min(0)),
   minQuantity: z.preprocess(emptyToUndefined, z.number().min(0).optional()),
@@ -73,7 +80,7 @@ export const stockItemSchema = z.object({
 export const stockMovementSchema = z.object({
   productId: z.string().min(1),
   productName: z.string().min(1),
-  movementType: z.enum(['entry', 'exit']),
+  movementType: z.enum(['entry', 'exit', 'move']),
   quantity: z.number().min(0),
   weightGrams: z.number().optional(),
   itemType: z.enum(['raw', 'portioned']).optional(),

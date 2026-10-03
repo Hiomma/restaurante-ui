@@ -100,6 +100,7 @@ interface PendingItem {
     employeeName?: string;
     productGroup?: string;
     productStorage?: string;
+    batchId?: string;
   };
 }
 
@@ -114,6 +115,7 @@ export default function ReceivingPage() {
   const [numeroNF, setNumeroNF] = useState('');
   const [rows, setRows] = useState<ReceiveRow[]>([emptyRow()]);
   const [pending, setPending] = useState<PendingItem[] | null>(null);
+  const [batchId, setBatchId] = useState('');
   const [saving, setSaving] = useState(false);
 
   const updateRow = (index: number, patch: Partial<ReceiveRow>) => {
@@ -132,6 +134,7 @@ export default function ReceivingPage() {
 
   const handleGenerate = () => {
     if (!canGenerate || !products) return;
+    const newBatchId = `BATCH-RECV-${Date.now()}`;
     const items: PendingItem[] = [];
     for (const row of rows) {
       const product = products.find((p) => p._id === row.productId);
@@ -170,10 +173,12 @@ export default function ReceivingPage() {
             employeeName: me?.name,
             productGroup: product.group,
             productStorage: product.storageMethod,
+            batchId: newBatchId,
           },
         });
       }
     }
+    setBatchId(newBatchId);
     setPending(items);
   };
 
@@ -212,7 +217,7 @@ export default function ReceivingPage() {
           quantity: agg.quantity,
           weightGrams: agg.weightGrams,
           itemType: 'raw',
-          reason: `Recebimento — NF ${numeroNF || 'S/N'}`,
+          reason: `Recebimento — NF ${numeroNF || 'S/N'} — ${batchId}`,
           date: recebimentoDate,
         });
       }
