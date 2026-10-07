@@ -1,12 +1,55 @@
 @import "tailwindcss";
 
+/* Itens ocultos apenas na impressão (filtros, botões, navegação) */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Cabeçalho exclusivo de impressão (relatórios) */
+.print-only {
+  display: none !important;
+}
+
+@media print {
+  .print-only {
+    display: block !important;
+  }
+}
+
+/* Página nomeada para etiquetas térmicas de 58mm */
+@page etiquetas {
+  size: 58mm auto;
+  margin: 0;
+}
+
 @media print {
   @page {
-    size: 58mm auto;
-    margin: 0;
+    size: A4 portrait;
+    margin: 12mm;
   }
 
-  body * {
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Retira a margem do menu lateral na impressão */
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: auto !important;
+    background: #fff !important;
+  }
+
+  /* Etiquetas: apenas a área de etiquetas é impressa, em página de 58mm */
+  body:has(.etiquetas-print-area) * {
     visibility: hidden;
   }
   .etiquetas-print-area,
@@ -16,6 +59,7 @@
     -webkit-print-color-adjust: exact;
   }
   .etiquetas-print-area {
+    page: etiquetas;
     position: absolute;
     left: 0;
     top: 0;

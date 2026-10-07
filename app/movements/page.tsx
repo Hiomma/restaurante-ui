@@ -134,7 +134,18 @@ export default function MovementsPage() {
 
   const [countMode, setCountMode] = useState<'product' | 'full'>('product');
   const [countProductId, setCountProductId] = useState('');
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [countScanInput, setCountScanInput] = useState('');
+  const [countScanned, setCountScanned] = useState<string[]>([]);
+  const [countScanning, setCountScanning] = useState(false);
+  const [countResult, setCountResult] = useState<{
+    expected: number;
+    found: number;
+    missing: StockItem[];
+  } | null>(null);
+  const [missingDest, setMissingDest] = useState<Record<string, string>>({});
+  const [missingSelected, setMissingSelected] = useState<Record<string, boolean>>({});
+  const [bulkDest, setBulkDest] = useState('');
+  const countScanRef = useRef<HTMLInputElement>(null);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [destName, setDestName] = useState('');
@@ -265,15 +276,190 @@ export default function MovementsPage() {
 
   const showCountTable = countMode === 'full' || (countMode === 'product' && !!countProductId);
 
-  const toggleChecked = (id: string, value: boolean) => {
-    setChecked((prev) => ({ ...prev, [id]: value }));
+  const allCountDestinations = [
+    ...fixedMoveDestinations,
+    ...(destinations ?? [])
+      .filter(
+        (d) => d.active && (d.type ?? 'move') === 'move' && !fixedMoveDestinations.includes(d.name),
+      )
+      .map((d) => d.name),
+    ...fixedWriteoffDestinations,
+    ...(destinations ?? [])
+      .filter(
+        (d) =>
+          d.active && d.type === 'writeoff' && !fixedWriteoffDestinations.includes(d.name),
+      )
+      .map((d) => d.name),
+  ];
+
+  const resetCount = () => {
+    setCountScanInput('');
+    setCountScanned([]);
+    setCountResult(null);
+    setMissingDest({});
+    setMissingSelected({});
+    setBulkDest('');
   };
 
-  const handleConcludeCount = async () => {
-    if (!countItems) return;
-    const unfound = countItems.filter((i) => !(checked[i._id] ?? true));
+  const handleCountScan = async () => {
+    const code = countScanInput.trim().toUpperCase();
+    if (!code || countScanning || !countItems) return;
+    setCountScanning(true);
     try {
-      for (const item of unfound) {
+      const res = await api.get<StockItem>(`/stock-items/qr/${code}`);
+      const item = res.data;
+      if (item.status !== 'in_stock') {
+        enqueueSnackbar(
+          `Etiqueta não está em estoque (status: ${statusLabels[item.status] ?? item.status}).`,
+          { variant: 'error' },
+        );
+        setCountScanInput('');
+        return;
+      }
+      if (!countItems.some((i) => i._id === item._id)) {
+        enqueueSnackbar('Etiqueta fora do escopo desta contagem.', { variant: 'error' });
+        setCountScanInput('');
+        return;
+      }
+      if (countScanned.includes(item.qrCode)) {
+        enqueueSnackbar('Código já escaneado.', { variant: 'error' });
+        setCountScanInput('');
+        return;
+      }
+      setCountScanned((prev) => [...prev, item.qrCode]);
+      setCountResult(null);
+      setCountScanInput('');
+      countScanRef.current?.focus();
+    } catch {
+      enqueueSnackbar('Etiqueta não encontrada.', { variant: 'error' });
+      setCountScanInput('');
+    } finally {
+      setCountScanning(false);
+    }
+  };
+
+  const removeCountScan = (qr: string) => {
+    setCountScanned((prev) => prev.filter((c) => c !== qr));
+    setCountResult(null);
+  };
+
+  const handleVerifyCount = () => {
+    if (!countItems) return;
+    const found = countItems.filter((i) => countScanned.includes(i.qrCode)).length;
+    const missing = countItems.filter((i) => !countScanned.includes(i.qrCode));
+    setCountResult({ expected: countItems.length, found, missing });
+    setMissingDest({});
+    setMissingSelected({});
+    setBulkDest('');
+  };
+
+  const resolveMissing = (id: string) => {
+    setCountResult((prev) =>
+      prev ? { ...prev, missing: prev.missing.filter((m) => m._id !== id) } : prev,
+    );
+    setMissingSelected((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const handleMoveMissing = async (item: StockItem) => {
+    const dest = missingDest[item._id];
+    if (!dest) {
+      enqueueSnackbar('Selecione o destino da etiqueta.', { variant: 'warning' });
+      return;
+    }
+    try {
+      await createMovement.mutateAsync({
+        productId: item.product.productId,
+        productName: item.product.productName,
+        movementType: 'move',
+        quantity: 1,
+        weightGrams: item.weightGrams,
+        itemType: item.type,
+        reason: `Contagem — Mover — ${dest}`,
+        date: todayISODate(),
+      });
+      await updateItem.mutateAsync({ id: item._id, data: { destination: dest } });
+      resolveMissing(item._id);
+      enqueueSnackbar(`Etiqueta movida para ${dest}.`, { variant: 'success' });
+    } catch {
+      enqueueSnackbar('Erro ao mover etiqueta.', { variant: 'error' });
+    }
+  };
+
+  const handleDropMissing = async (item: StockItem) => {
+    try {
+      await createMovement.mutateAsync({
+        productId: item.product.productId,
+        productName: item.product.productName,
+        movementType: 'exit',
+        quantity: 1,
+        weightGrams: item.weightGrams,
+        itemType: item.type,
+        reason: 'Contagem — Não encontrado',
+        date: todayISODate(),
+      });
+      await deleteItem.mutateAsync(item._id);
+      resolveMissing(item._id);
+      enqueueSnackbar('Etiqueta baixada.', { variant: 'success' });
+    } catch {
+      enqueueSnackbar('Erro ao baixar etiqueta.', { variant: 'error' });
+    }
+  };
+
+  const selectedMissing = (countResult?.missing ?? []).filter((i) => missingSelected[i._id]);
+
+  const toggleMissing = (id: string, value: boolean) => {
+    setMissingSelected((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const toggleAllMissing = () => {
+    const allSelected =
+      (countResult?.missing.length ?? 0) > 0 &&
+      selectedMissing.length === countResult?.missing.length;
+    setMissingSelected(
+      allSelected
+        ? {}
+        : Object.fromEntries((countResult?.missing ?? []).map((i) => [i._id, true])),
+    );
+  };
+
+  const handleBulkMove = async () => {
+    if (selectedMissing.length === 0 || !bulkDest) return;
+    try {
+      for (const item of selectedMissing) {
+        await createMovement.mutateAsync({
+          productId: item.product.productId,
+          productName: item.product.productName,
+          movementType: 'move',
+          quantity: 1,
+          weightGrams: item.weightGrams,
+          itemType: item.type,
+          reason: `Contagem — Mover — ${bulkDest}`,
+          date: todayISODate(),
+        });
+        await updateItem.mutateAsync({ id: item._id, data: { destination: bulkDest } });
+      }
+      const ids = selectedMissing.map((i) => i._id);
+      setCountResult((prev) =>
+        prev ? { ...prev, missing: prev.missing.filter((m) => !ids.includes(m._id)) } : prev,
+      );
+      setMissingSelected({});
+      setBulkDest('');
+      enqueueSnackbar(`${ids.length} etiqueta(s) movida(s) para ${bulkDest}.`, {
+        variant: 'success',
+      });
+    } catch {
+      enqueueSnackbar('Erro ao mover etiquetas.', { variant: 'error' });
+    }
+  };
+
+  const handleBulkDrop = async () => {
+    if (selectedMissing.length === 0) return;
+    try {
+      for (const item of selectedMissing) {
         await createMovement.mutateAsync({
           productId: item.product.productId,
           productName: item.product.productName,
@@ -286,13 +472,14 @@ export default function MovementsPage() {
         });
         await deleteItem.mutateAsync(item._id);
       }
-      enqueueSnackbar(
-        `Contagem concluída. ${unfound.length} etiqueta(s) baixada(s).`,
-        { variant: 'success' },
+      const ids = selectedMissing.map((i) => i._id);
+      setCountResult((prev) =>
+        prev ? { ...prev, missing: prev.missing.filter((m) => !ids.includes(m._id)) } : prev,
       );
-      setChecked({});
+      setMissingSelected({});
+      enqueueSnackbar(`${ids.length} etiqueta(s) baixada(s).`, { variant: 'success' });
     } catch {
-      enqueueSnackbar('Erro ao concluir contagem.', { variant: 'error' });
+      enqueueSnackbar('Erro ao baixar etiquetas.', { variant: 'error' });
     }
   };
 
@@ -629,14 +816,20 @@ export default function MovementsPage() {
           <Box sx={{ display: 'flex', gap: 1, mb: 2.5 }}>
             <Button
               variant={countMode === 'product' ? 'contained' : 'outlined'}
-              onClick={() => setCountMode('product')}
+              onClick={() => {
+                setCountMode('product');
+                resetCount();
+              }}
               sx={toggleSx(countMode === 'product')}
             >
               Por Produto
             </Button>
             <Button
               variant={countMode === 'full' ? 'contained' : 'outlined'}
-              onClick={() => setCountMode('full')}
+              onClick={() => {
+                setCountMode('full');
+                resetCount();
+              }}
               sx={toggleSx(countMode === 'full')}
             >
               Estoque Completo
@@ -652,7 +845,10 @@ export default function MovementsPage() {
                 size="small"
                 sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
                 value={countProductId}
-                onChange={(e) => setCountProductId(e.target.value)}
+                onChange={(e) => {
+                  setCountProductId(e.target.value);
+                  resetCount();
+                }}
                 SelectProps={{
                   displayEmpty: true,
                   renderValue: (value) => {
@@ -685,63 +881,321 @@ export default function MovementsPage() {
               <CircularProgress />
             ) : (
               <>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                        <TableCell sx={thSx}>Encontrado</TableCell>
-                        <TableCell sx={thSx}>Tipo</TableCell>
-                        <TableCell sx={thSx}>Peso</TableCell>
-                        <TableCell sx={thSx}>Lote</TableCell>
-                        <TableCell sx={thSx}>QR</TableCell>
-                        <TableCell sx={thSx}>Validade</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {countItems?.map((item) => (
-                        <TableRow key={item._id} hover>
-                          <TableCell>
-                            <Checkbox
-                              checked={checked[item._id] ?? true}
-                              onChange={(e) => toggleChecked(item._id, e.target.checked)}
-                              sx={{ color: '#1976D2', '&.Mui-checked': { color: '#1976D2' } }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={item.type === 'raw' ? 'Bruto' : 'Porcionado'}
-                              size="small"
-                              sx={grayChipSx}
-                            />
-                          </TableCell>
-                          <TableCell>{formatWeight(item.weightGrams)}</TableCell>
-                          <TableCell>{item.lote || '—'}</TableCell>
-                          <TableCell>{item.qrCode}</TableCell>
-                          <TableCell>{formatDate(item.expiryDate)}</TableCell>
-                        </TableRow>
-                      ))}
-                      {countItems?.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                            <Typography color="text.secondary">
-                              Nenhuma etiqueta em estoque
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2.5 }}>
+                <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+                  {countItems?.length ?? 0} etiqueta(s) em estoque
+                  {countMode === 'product' && countProductId ? ' para este produto' : ''}.
+                </Typography>
+
+                <FieldLabel>Escanear / Digitar código das etiquetas</FieldLabel>
+                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+                    placeholder="Escaneie ou digite o QR..."
+                    value={countScanInput}
+                    inputRef={countScanRef}
+                    inputProps={{ maxLength: 6 }}
+                    onChange={(e) => setCountScanInput(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void handleCountScan();
+                    }}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={() => void handleCountScan()}
+                    disabled={!countScanInput.trim() || countScanning}
+                    sx={primaryBtnSx}
+                  >
+                    {countScanning ? <CircularProgress size={18} /> : 'Adicionar'}
+                  </Button>
+                </Box>
+                {countScanned.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
+                    {countScanned.map((qr) => (
+                      <Chip
+                        key={qr}
+                        label={qr}
+                        size="small"
+                        onDelete={() => removeCountScan(qr)}
+                        sx={{ ...grayChipSx, fontWeight: 600 }}
+                      />
+                    ))}
+                  </Box>
+                )}
+                <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 1 }}>
+                  {countScanned.length} código(s) escaneado(s). Clique no código para remover.
+                </Typography>
+
+                <Box sx={{ display: 'flex', gap: 1.5, mt: 2 }}>
                   <Button
                     variant="contained"
                     disabled={!countItems?.length || moving}
-                    onClick={handleConcludeCount}
+                    onClick={handleVerifyCount}
                     sx={primaryBtnSx}
                   >
-                    Concluir Contagem
+                    Verificar Contagem
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    disabled={moving}
+                    onClick={resetCount}
+                    sx={{
+                      textTransform: 'none',
+                      borderRadius: 1.5,
+                      color: '#444',
+                      borderColor: '#e0e0e0',
+                    }}
+                  >
+                    Limpar
                   </Button>
                 </Box>
+
+                {countResult && (
+                  <Box sx={{ mt: 3 }}>
+                    <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+                      Resultado da Contagem
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+                        gap: 2,
+                        mb: 2,
+                      }}
+                    >
+                      {[
+                        {
+                          value: countResult.expected,
+                          label: 'No sistema',
+                          bg: '#E3F2FD',
+                          color: '#1565C0',
+                        },
+                        {
+                          value: countResult.found,
+                          label: 'Encontradas',
+                          bg: '#E8F5E9',
+                          color: '#2E7D32',
+                        },
+                        {
+                          value: countResult.missing.length,
+                          label: 'Faltando',
+                          bg: '#FFEBEE',
+                          color: '#C62828',
+                        },
+                      ].map((k) => (
+                        <Box
+                          key={k.label}
+                          sx={{ p: 1.5, borderRadius: 2, bgcolor: k.bg, textAlign: 'center' }}
+                        >
+                          <Typography variant="h5" fontWeight={700} sx={{ color: k.color }}>
+                            {k.value}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: k.color }}>
+                            {k.label}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+
+                    {countResult.missing.length === 0 ? (
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#E8F5E9', textAlign: 'center' }}>
+                        <Typography variant="body2" sx={{ color: '#2E7D32', fontWeight: 600 }}>
+                          Todas as {countResult.expected} etiquetas foram encontradas.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <Box sx={{ border: '1px solid #FFCDD2', borderRadius: 2, overflow: 'hidden' }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ color: '#C62828', fontWeight: 600, px: 1.5, pt: 1.5, mb: 1 }}
+                        >
+                          Etiquetas não encontradas na contagem — identifique o destino ou exclua:
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            px: 1.5,
+                            py: 0.75,
+                            bgcolor: '#FFF5F5',
+                            borderTop: '1px solid #FFCDD2',
+                            borderBottom: '1px solid #FFCDD2',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <Checkbox
+                            checked={
+                              countResult.missing.length > 0 &&
+                              selectedMissing.length === countResult.missing.length
+                            }
+                            indeterminate={
+                              selectedMissing.length > 0 &&
+                              selectedMissing.length < countResult.missing.length
+                            }
+                            onChange={toggleAllMissing}
+                            sx={{ color: '#C62828', '&.Mui-checked': { color: '#C62828' } }}
+                          />
+                          <Typography variant="body2" fontWeight={600}>
+                            Selecionar tudo
+                          </Typography>
+                          {selectedMissing.length > 0 && (
+                            <Box
+                              sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center' }}
+                            >
+                              <TextField
+                                select
+                                size="small"
+                                sx={{ minWidth: 160 }}
+                                value={bulkDest}
+                                onChange={(e) => setBulkDest(e.target.value)}
+                                SelectProps={{
+                                  displayEmpty: true,
+                                  renderValue: (v) =>
+                                    v === '' ? (
+                                      <Box component="span" sx={{ color: 'text.disabled' }}>
+                                        Destino...
+                                      </Box>
+                                    ) : (
+                                      String(v)
+                                    ),
+                                }}
+                              >
+                                <MenuItem value="" disabled>
+                                  Destino...
+                                </MenuItem>
+                                {allCountDestinations.map((d) => (
+                                  <MenuItem key={d} value={d}>
+                                    {d}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={!bulkDest || moving}
+                                onClick={() => void handleBulkMove()}
+                                sx={{ textTransform: 'none' }}
+                              >
+                                Mover ({selectedMissing.length})
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                color="error"
+                                disabled={moving}
+                                onClick={() => void handleBulkDrop()}
+                                sx={{ textTransform: 'none' }}
+                              >
+                                Baixar ({selectedMissing.length})
+                              </Button>
+                            </Box>
+                          )}
+                        </Box>
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ bgcolor: '#f5f7fa' }}>
+                                <TableCell sx={thSx} padding="checkbox" />
+                                <TableCell sx={thSx}>Produto</TableCell>
+                                <TableCell sx={thSx}>Peso</TableCell>
+                                <TableCell sx={thSx}>Lote</TableCell>
+                                <TableCell sx={thSx}>Validade</TableCell>
+                                <TableCell sx={thSx}>QR</TableCell>
+                                <TableCell sx={thSx}>Destino</TableCell>
+                                <TableCell sx={thSx} align="center">
+                                  Ações
+                                </TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {countResult.missing.map((item) => (
+                                <TableRow key={item._id} hover sx={{ bgcolor: '#FFF5F5' }}>
+                                  <TableCell padding="checkbox">
+                                    <Checkbox
+                                      checked={!!missingSelected[item._id]}
+                                      onChange={(e) => toggleMissing(item._id, e.target.checked)}
+                                      sx={{
+                                        color: '#C62828',
+                                        '&.Mui-checked': { color: '#C62828' },
+                                      }}
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Typography variant="body2" fontWeight={600}>
+                                      {item.product.productName}
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell>{item.weightGrams}g</TableCell>
+                                  <TableCell>{item.lote || '—'}</TableCell>
+                                  <TableCell>{formatDate(item.expiryDate)}</TableCell>
+                                  <TableCell sx={{ fontFamily: 'monospace' }}>
+                                    {item.qrCode}
+                                  </TableCell>
+                                  <TableCell>
+                                    <TextField
+                                      select
+                                      size="small"
+                                      sx={{ minWidth: 130 }}
+                                      value={missingDest[item._id] ?? ''}
+                                      onChange={(e) =>
+                                        setMissingDest((prev) => ({
+                                          ...prev,
+                                          [item._id]: e.target.value,
+                                        }))
+                                      }
+                                      SelectProps={{
+                                        displayEmpty: true,
+                                        renderValue: (v) =>
+                                          v === '' ? (
+                                            <Box component="span" sx={{ color: 'text.disabled' }}>
+                                              Destino...
+                                            </Box>
+                                          ) : (
+                                            String(v)
+                                          ),
+                                      }}
+                                    >
+                                      <MenuItem value="" disabled>
+                                        Destino...
+                                      </MenuItem>
+                                      {allCountDestinations.map((d) => (
+                                        <MenuItem key={d} value={d}>
+                                          {d}
+                                        </MenuItem>
+                                      ))}
+                                    </TextField>
+                                  </TableCell>
+                                  <TableCell align="center">
+                                    <IconButton
+                                      size="small"
+                                      aria-label="mover etiqueta"
+                                      disabled={!missingDest[item._id] || moving}
+                                      onClick={() => void handleMoveMissing(item)}
+                                      sx={{ color: '#1976D2' }}
+                                    >
+                                      <SwapHorizIcon fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      aria-label="baixar etiqueta"
+                                      disabled={moving}
+                                      onClick={() => void handleDropMissing(item)}
+                                      sx={{ color: '#C62828' }}
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Box>
+                    )}
+                  </Box>
+                )}
               </>
             ))}
         </Box>

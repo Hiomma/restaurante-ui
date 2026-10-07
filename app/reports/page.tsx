@@ -129,6 +129,15 @@ type LossAgg = {
   count: number;
 };
 
+const REPORT_TAB_NAMES = [
+  'Perdas',
+  'Compras',
+  'Recebimento',
+  'Movimentações',
+  'Estoque',
+  'Produção',
+];
+
 const comprasStatusOptions = [
   { value: '', label: 'Todos os status' },
   { value: 'comprar', label: 'Comprar' },
@@ -286,7 +295,7 @@ function ExportButtons({
     '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5', color: '#212529' },
   } as const;
   return (
-    <Box sx={{ display: 'flex', gap: 1 }}>
+    <Box sx={{ display: 'flex', gap: 1 }} className="no-print">
       <Button
         variant="outlined"
         size="small"
@@ -847,12 +856,22 @@ export default function ReportsPage() {
         </Box>
       </Box>
 
+      <Box className="print-only" sx={{ mb: 2 }}>
+        <Typography variant="h6" fontWeight={700}>
+          Relatórios — {REPORT_TAB_NAMES[tab]}
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          Emitido em {formatDate(new Date().toISOString())}
+        </Typography>
+      </Box>
+
       <Tabs
         value={tab}
         onChange={(_, v: number) => setTab(v)}
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
+        className="no-print"
         sx={{
           bgcolor: '#f1f3f5',
           borderRadius: 2,
@@ -919,7 +938,7 @@ export default function ReportsPage() {
         <>
           {tab === 0 && (
             <Box>
-              <Box sx={toolbarSx}>
+              <Box sx={toolbarSx} className="no-print">
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                   <FilterListIcon sx={{ color: '#1976D2', fontSize: 20 }} />
                   <Typography variant="subtitle2" fontWeight={700}>
@@ -1153,7 +1172,7 @@ export default function ReportsPage() {
 
           {tab === 1 && (
             <Box>
-              <Box sx={toolbarSx}>
+              <Box sx={toolbarSx} className="no-print">
                 <SearchField
                   value={comprasSearch}
                   onChange={setComprasSearch}
@@ -1246,7 +1265,7 @@ export default function ReportsPage() {
 
           {tab === 2 && (
             <Box>
-              <Box sx={toolbarSx}>
+              <Box sx={toolbarSx} className="no-print">
                 <SearchField
                   value={recvSearch}
                   onChange={setRecvSearch}
@@ -1254,7 +1273,7 @@ export default function ReportsPage() {
                 />
                 <DateRangeField from={recvFrom} to={recvTo} onFrom={setRecvFrom} onTo={setRecvTo} />
                 <Box sx={{ ml: 'auto' }}>
-                  <ExportButtons onExcel={exportRecebimento} />
+                  <ExportButtons onExcel={exportRecebimento} onPdf={printReport} />
                 </Box>
               </Box>
 
@@ -1311,7 +1330,7 @@ export default function ReportsPage() {
 
           {tab === 3 && (
             <Box>
-              <Box sx={toolbarSx}>
+              <Box sx={toolbarSx} className="no-print">
                 <SearchField
                   value={movSearch}
                   onChange={setMovSearch}
@@ -1320,7 +1339,7 @@ export default function ReportsPage() {
                 <SelectFilter value={movType} onChange={setMovType} options={movTypeOptions} />
                 <DateRangeField from={movFrom} to={movTo} onFrom={setMovFrom} onTo={setMovTo} />
                 <Box sx={{ ml: 'auto' }}>
-                  <ExportButtons onExcel={exportMovimentacoes} />
+                  <ExportButtons onExcel={exportMovimentacoes} onPdf={printReport} />
                 </Box>
               </Box>
 
@@ -1420,7 +1439,7 @@ export default function ReportsPage() {
                 />
               </Box>
 
-              <Box sx={toolbarSx}>
+              <Box sx={toolbarSx} className="no-print">
                 <SearchField
                   value={estSearch}
                   onChange={setEstSearch}
@@ -1625,7 +1644,7 @@ export default function ReportsPage() {
                 />
               </Box>
 
-              <Box sx={toolbarSx}>
+              <Box sx={toolbarSx} className="no-print">
                 <SearchField
                   value={prodSearch}
                   onChange={setProdSearch}

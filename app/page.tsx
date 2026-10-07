@@ -65,6 +65,13 @@ interface LowStockRow {
   falta: number;
 }
 
+interface LowProductionRow {
+  name: string;
+  portioned: number;
+  minPortionedQuantity: number;
+  falta: number;
+}
+
 function DaysChip({ expiryDate }: { expiryDate: string }) {
   const days = daysUntil(expiryDate);
   if (days === null) return <Chip label="—" size="small" sx={chipGray} />;
@@ -125,7 +132,7 @@ export default function DashboardPage() {
   const expiringCount = inStock.filter((i) => lifeStatus(i) === 'expiring').length;
 
   const lowStockList: LowStockRow[] = (products ?? [])
-    .filter((p) => (p.minQuantity || 0) > 0)
+    .filter((p) => p.category !== 'Porcionado' && (p.minQuantity || 0) > 0)
     .map((p) => {
       const weight = inStock
         .filter((i) => i.product.productId === p._id)
@@ -133,6 +140,21 @@ export default function DashboardPage() {
       return { name: p.name, weight, minQuantity: p.minQuantity, falta: p.minQuantity - weight };
     })
     .filter((r) => r.weight < r.minQuantity);
+
+  const lowProductionList: LowProductionRow[] = (products ?? [])
+    .filter((p) => p.category === 'Porcionado' && (p.minPortionedQuantity || 0) > 0)
+    .map((p) => {
+      const portioned = inStock.filter(
+        (i) => i.product.productId === p._id && i.type === 'portioned',
+      ).length;
+      return {
+        name: p.name,
+        portioned,
+        minPortionedQuantity: p.minPortionedQuantity,
+        falta: p.minPortionedQuantity - portioned,
+      };
+    })
+    .filter((r) => r.portioned < r.minPortionedQuantity);
 
   const groupedMap = new Map<string, StockItem[]>();
   inStock.forEach((item) => {
@@ -513,6 +535,51 @@ export default function DashboardPage() {
                             <TableCell>{r.minQuantity}g</TableCell>
                             <TableCell>
                               <Chip label={`${r.falta}g`} size="small" sx={chipRed} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Card sx={cardSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
+                  <InventoryIcon sx={{ color: '#2E7D32', fontSize: 20 }} />
+                  <Typography variant="h6" fontWeight="bold">
+                    Lista de Produção
+                  </Typography>
+                </Box>
+                <Box sx={{ px: 2.5, pb: 2.5 }}>
+                  <TableContainer>
+                    <Table size="small" sx={tableSx}>
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: '#f5f7fa' }}>
+                          <TableCell sx={thSx}>Produto</TableCell>
+                          <TableCell sx={thSx}>Em Estoque</TableCell>
+                          <TableCell sx={thSx}>Mínimo</TableCell>
+                          <TableCell sx={thSx}>Falta</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {lowProductionList.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={4} align="center" sx={{ py: 3, color: '#666' }}>
+                              Nenhum produto porcionado abaixo do mínimo
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {lowProductionList.map((r) => (
+                          <TableRow key={r.name}>
+                            <TableCell>
+                              <Typography fontWeight={600}>{r.name}</Typography>
+                            </TableCell>
+                            <TableCell>{r.portioned} porções</TableCell>
+                            <TableCell>{r.minPortionedQuantity} porções</TableCell>
+                            <TableCell>
+                              <Chip label={`${r.falta} porções`} size="small" sx={chipAmber} />
                             </TableCell>
                           </TableRow>
                         ))}

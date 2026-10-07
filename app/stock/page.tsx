@@ -18,7 +18,16 @@ import {
   TableHead,
   TableRow,
   CircularProgress,
+  Tabs,
+  Tab,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import SearchIcon from '@mui/icons-material/Search';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import InventoryIcon from '@mui/icons-material/Inventory';
@@ -33,8 +42,10 @@ import {
   useStockItems,
   useDeleteStockItem,
   useMovementDestinations,
+  useCreateStockMovement,
+  useUpdateStockItem,
 } from '@/lib/queries';
-import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus } from '@/lib/utils';
+import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus, todayISODate } from '@/lib/utils';
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
@@ -55,6 +66,9 @@ const chipGray = { bgcolor: '#F1F3F5', color: '#495057', fontWeight: 600, fontSi
 const chipBlue = { bgcolor: '#E3F2FD', color: '#1976D2', fontWeight: 600, fontSize: 12 };
 
 const tableSx = { '& td': { borderBottom: '1px solid #eef1f5' } };
+
+const fixedMoveDestinations = ['Salão', 'Bar', 'Cozinha'];
+const fixedWriteoffDestinations = ['Perda', 'Não encontrado'];
 
 type StatusFilter = 'all' | 'vencendo' | 'vencidos' | 'abaixo' | 'ok';
 
@@ -82,10 +96,13 @@ function DaysChip({ expiryDate }: { expiryDate: string }) {
 }
 
 export default function StockPage() {
+  const { enqueueSnackbar } = useSnackbar();
   const { data: products, isLoading: loadingProducts } = useProducts();
   const { data: items, isLoading: loadingItems } = useStockItems();
   const { data: destinations } = useMovementDestinations();
   const deleteItem = useDeleteStockItem();
+  const createMovement = useCreateStockMovement();
+  const updateItem = useUpdateStockItem();
 
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState('all');
@@ -93,6 +110,9 @@ export default function StockPage() {
   const [destFilter, setDestFilter] = useState('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<'move' | 'writeoff' | null>(null);
+  const [bulkDest, setBulkDest] = useState('');
 
   const isLoading = loadingProducts || loadingItems;
   const allItems = items ?? [];
@@ -218,6 +238,99 @@ export default function StockPage() {
     }
   };
 
+  const moveDestinations = [
+    ...fixedMoveDestinations,
+    ...(destinations ?? [])
+      .filter(
+        (d) => d.active && (d.type ?? 'move') === 'move' && !fixedMoveDestinations.includes(d.name),
+      )
+      .map((d) => d.name),
+  ];
+
+  const writeoffDestinations = [
+    ...fixedWriteoffDestinations,
+    ...(destinations ?? [])
+      .filter(
+        (d) => d.active && d.type === 'writeoff' && !fixedWriteoffDestinations.includes(d.name),
+      )
+      .map((d) => d.name),
+  ];
+
+  const locationTabs = Array.from(
+    new Set([
+      ...fixedMoveDestinations,
+      ...(destinations ?? [])
+        .filter((d) => d.active && (d.type ?? 'move') === 'move')
+        .map((d) => d.name),
+    ]),
+  );
+
+  const countInTab = (tab: string) =>
+    allItems.filter(
+      (i) =>
+        i.status === 'in_stock' &&
+        (tab === 'all' ? true : tab === 'none' ? !i.destination : i.destination === tab),
+    ).length;
+
+  const selectedItems = allItems.filter((i) => selected.has(i._id) && i.status === 'in_stock');
+  const bulkBusy = createMovement.isPending || updateItem.isPending || deleteItem.isPending;
+
+  const toggleSelect = (id: string, isChecked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (isChecked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const handleBulkConfirm = async () => {
+    if (!bulkAction || !bulkDest || selectedItems.length === 0) return;
+    try {
+      for (const item of selectedItems) {
+        if (bulkAction === 'move') {
+          await createMovement.mutateAsync({
+            productId: item.product.productId,
+            productName: item.product.productName,
+            movementType: 'move',
+            quantity: 1,
+            weightGrams: item.weightGrams,
+            itemType: item.type,
+            reason: `Mover — ${bulkDest}`,
+            date: todayISODate(),
+          });
+          await updateItem.mutateAsync({ id: item._id, data: { destination: bulkDest } });
+        } else {
+          await createMovement.mutateAsync({
+            productId: item.product.productId,
+            productName: item.product.productName,
+            movementType: 'exit',
+            quantity: 1,
+            weightGrams: item.weightGrams,
+            itemType: item.type,
+            reason: `Baixar — ${bulkDest}`,
+            date: todayISODate(),
+          });
+          await deleteItem.mutateAsync(item._id);
+        }
+      }
+      const n = selectedItems.length;
+      const dest = bulkDest;
+      const wasMove = bulkAction === 'move';
+      setSelected(new Set());
+      setBulkAction(null);
+      setBulkDest('');
+      enqueueSnackbar(
+        wasMove
+          ? `${n} etiqueta(s) movida(s) para ${dest}.`
+          : `${n} etiqueta(s) baixada(s) — ${dest}.`,
+        { variant: 'success' },
+      );
+    } catch {
+      enqueueSnackbar('Erro ao movimentar etiquetas.', { variant: 'error' });
+    }
+  };
+
   return (
     <LoggedLayout>
       <Box sx={{ mb: 3 }}>
@@ -278,6 +391,49 @@ export default function StockPage() {
             ))}
           </Box>
 
+          <Tabs
+            value={destFilter}
+            onChange={(_, v: string) => {
+              setDestFilter(v);
+              setSelected(new Set());
+            }}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{
+              bgcolor: '#f1f3f5',
+              borderRadius: 2,
+              padding: '6px 8px',
+              minHeight: 40,
+              mb: 3,
+              '& .MuiTabs-flexContainer': { gap: 0.5 },
+              '& .MuiTabs-indicator': { display: 'none' },
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                color: '#495057',
+                minHeight: 36,
+                py: 0.75,
+                px: 1.5,
+                borderRadius: 1.5,
+                mx: 0.25,
+                fontSize: '0.875rem',
+                whiteSpace: 'nowrap',
+                '&.Mui-selected': {
+                  bgcolor: '#fff',
+                  color: '#1976D2',
+                  fontWeight: 600,
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                },
+              },
+            }}
+          >
+            <Tab label={`Todos os locais (${countInTab('all')})`} value="all" />
+            <Tab label={`Sem destino (${countInTab('none')})`} value="none" />
+            {locationTabs.map((name) => (
+              <Tab key={name} label={`${name} (${countInTab(name)})`} value={name} />
+            ))}
+          </Tabs>
+
           <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
             <TextField
               size="small"
@@ -310,21 +466,6 @@ export default function StockPage() {
             <TextField
               select
               size="small"
-              value={destFilter}
-              onChange={(e) => setDestFilter(e.target.value)}
-              sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: 200 }}
-            >
-              <MenuItem value="all">Todos os locais</MenuItem>
-              <MenuItem value="none">Sem destino</MenuItem>
-              {(destinations ?? []).map((d) => (
-                <MenuItem key={d._id} value={d.name}>
-                  {d.name}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: 200 }}
@@ -336,6 +477,58 @@ export default function StockPage() {
               <MenuItem value="ok">OK</MenuItem>
             </TextField>
           </Box>
+
+          {selected.size > 0 && (
+            <Box
+              sx={{
+                ...cardSx,
+                p: 1.5,
+                mb: 2,
+                bgcolor: '#E3F2FD',
+                borderColor: '#BBDEFB',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+                flexWrap: 'wrap',
+              }}
+            >
+              <Typography variant="body2" fontWeight={700} sx={{ color: '#1565C0' }}>
+                {selected.size} etiqueta(s) selecionada(s)
+              </Typography>
+              <Box sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    setBulkAction('move');
+                    setBulkDest('');
+                  }}
+                  sx={{ textTransform: 'none', color: '#1976D2', borderColor: '#90CAF9' }}
+                >
+                  Mover
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="error"
+                  onClick={() => {
+                    setBulkAction('writeoff');
+                    setBulkDest('');
+                  }}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Baixar
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => setSelected(new Set())}
+                  sx={{ textTransform: 'none', color: '#666' }}
+                >
+                  Limpar seleção
+                </Button>
+              </Box>
+            </Box>
+          )}
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {filteredRows.length === 0 && (
@@ -451,6 +644,29 @@ export default function StockPage() {
                         <Table size="small" sx={tableSx}>
                           <TableHead>
                             <TableRow sx={{ bgcolor: '#f5f7fa' }}>
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  size="small"
+                                  checked={
+                                    r.items.length > 0 &&
+                                    r.items.every((i) => selected.has(i._id))
+                                  }
+                                  indeterminate={
+                                    r.items.some((i) => selected.has(i._id)) &&
+                                    !r.items.every((i) => selected.has(i._id))
+                                  }
+                                  onChange={(e) =>
+                                    setSelected((prev) => {
+                                      const next = new Set(prev);
+                                      r.items.forEach((i) => {
+                                        if (e.target.checked) next.add(i._id);
+                                        else next.delete(i._id);
+                                      });
+                                      return next;
+                                    })
+                                  }
+                                />
+                              </TableCell>
                               <TableCell sx={thSx}>Tipo</TableCell>
                               <TableCell sx={thSx}>Peso</TableCell>
                               <TableCell sx={thSx}>Local</TableCell>
@@ -468,6 +684,13 @@ export default function StockPage() {
                           <TableBody>
                             {r.items.map((item) => (
                               <TableRow key={item._id}>
+                                <TableCell padding="checkbox">
+                                  <Checkbox
+                                    size="small"
+                                    checked={selected.has(item._id)}
+                                    onChange={(e) => toggleSelect(item._id, e.target.checked)}
+                                  />
+                                </TableCell>
                                 <TableCell>
                                   <Chip
                                     label={item.type === 'raw' ? 'Bruto' : 'Porcionado'}
@@ -520,6 +743,80 @@ export default function StockPage() {
           </Box>
         </>
       )}
+
+      <Dialog
+        open={bulkAction !== null}
+        onClose={() => setBulkAction(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {bulkAction === 'move' ? 'Mover etiquetas' : 'Baixar etiquetas'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+            {selected.size} etiqueta(s) selecionada(s).{' '}
+            {bulkAction === 'move'
+              ? 'Os itens permanecem no estoque e apenas mudam de local.'
+              : 'As etiquetas serão excluídas do sistema.'}
+          </Typography>
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
+            Destino
+          </Typography>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            value={bulkDest}
+            onChange={(e) => setBulkDest(e.target.value)}
+            SelectProps={{
+              displayEmpty: true,
+              renderValue: (v) =>
+                v === '' ? (
+                  <Box component="span" sx={{ color: 'text.disabled' }}>
+                    Selecione o destino...
+                  </Box>
+                ) : (
+                  String(v)
+                ),
+            }}
+          >
+            <MenuItem value="" disabled>
+              Selecione o destino...
+            </MenuItem>
+            {(bulkAction === 'move' ? moveDestinations : writeoffDestinations).map((d) => (
+              <MenuItem key={d} value={d}>
+                {d}
+              </MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
+          <Button
+            onClick={() => setBulkAction(null)}
+            variant="outlined"
+            sx={{
+              textTransform: 'none',
+              color: '#444',
+              borderColor: '#e0e0e0',
+              bgcolor: '#fff',
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color={bulkAction === 'writeoff' ? 'error' : 'primary'}
+            disabled={!bulkDest || bulkBusy}
+            onClick={() => void handleBulkConfirm()}
+            sx={{ textTransform: 'none' }}
+          >
+            {bulkAction === 'move'
+              ? `Mover ${selected.size} etiqueta(s)`
+              : `Baixar ${selected.size} etiqueta(s)`}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <ConfirmDialog
         open={!!deleteTarget}

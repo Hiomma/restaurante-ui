@@ -65,6 +65,7 @@ export default function NavigationRail({
 
   return (
     <Box
+      className="no-print"
       sx={{
         width: 240,
         height: inDrawer ? '100%' : '100vh',

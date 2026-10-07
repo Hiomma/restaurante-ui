@@ -20,7 +20,12 @@ export default function LoggedLayout({
 
       {isMobile && (
         <>
-          <AppBar position="fixed" elevation={1} sx={{ bgcolor: '#1a2332', zIndex: 1300 }}>
+          <AppBar
+            position="fixed"
+            elevation={1}
+            className="no-print"
+            sx={{ bgcolor: '#1a2332', zIndex: 1300 }}
+          >
             <Toolbar variant="dense">
               <IconButton edge="start" color="inherit" onClick={() => setDrawerOpen(true)} aria-label="menu">
                 <MenuIcon />
@@ -33,6 +38,7 @@ export default function LoggedLayout({
           <Drawer
             open={drawerOpen}
             onClose={() => setDrawerOpen(false)}
+            className="no-print"
             PaperProps={{ sx: { width: 240, bgcolor: '#1a2332' } }}
           >
             <NavigationRail inDrawer onNavigate={() => setDrawerOpen(false)} />
