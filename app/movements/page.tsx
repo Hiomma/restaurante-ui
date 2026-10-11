@@ -492,6 +492,9 @@ export default function MovementsPage() {
     if (!name) return;
     try {
       await createDestination.mutateAsync({ name, type: destType });
+      // Show the sub-tab the new destination belongs to, so it is visible
+      // immediately after creation without a page refresh.
+      setDestSubTab(destType);
       enqueueSnackbar('Destino adicionado com sucesso!', { variant: 'success' });
       setDestName('');
       setDestType('move');
@@ -1221,7 +1224,7 @@ export default function MovementsPage() {
 
           <Tabs
             value={destSubTab}
-            onChange={(_, v) => setDestSubTab(v)}
+            onChange={(_, v: 'move' | 'writeoff') => setDestSubTab(v)}
             sx={{
               bgcolor: '#f1f3f5',
               borderRadius: 2,
@@ -1240,8 +1243,8 @@ export default function MovementsPage() {
               },
             }}
           >
-            <Tab label="Mover" />
-            <Tab label="Baixar" />
+            <Tab label="Mover" value="move" />
+            <Tab label="Baixar" value="writeoff" />
           </Tabs>
 
           <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e8ecf1' }}>

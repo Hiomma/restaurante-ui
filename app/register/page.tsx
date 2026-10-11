@@ -13,12 +13,15 @@ import {
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { registerSchema } from '@/lib/validation';
 import { useRegister } from '@/lib/queries';
+import { storeToken, resetSessionCache } from '@/lib/session';
 
 export default function RegisterPage() {
   const router = useRouter();
   const registerMutation = useRegister();
+  const queryClient = useQueryClient();
   const [error, setError] = useState('');
 
   const {
@@ -37,8 +40,9 @@ export default function RegisterPage() {
     try {
       setError('');
       const result = await registerMutation.mutateAsync(data);
-      localStorage.setItem('token', result.access_token);
-      localStorage.setItem('accessToken', result.access_token);
+      storeToken(result.access_token);
+      // Registration signs the user in — start from a clean cache.
+      resetSessionCache(queryClient);
       router.push('/');
     } catch (err: any) {
       setError(

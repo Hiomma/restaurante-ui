@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Box,
   List,
@@ -27,6 +28,7 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import ChangePasswordDialog from '@/app/components/ChangePasswordDialog/ChangePasswordDialog';
+import { clearToken, resetSessionCache } from '@/lib/session';
 
 const navItems = [
   { icon: <DashboardIcon />, label: 'Dashboard', path: '/' },
@@ -50,11 +52,14 @@ export default function NavigationRail({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [passwordOpen, setPasswordOpen] = useState(false);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('accessToken');
+    clearToken();
+    // Remove every cached API response so no user-specific data survives
+    // into the next session.
+    resetSessionCache(queryClient);
     router.push('/login');
   };
 

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from './api';
+import { getStoredToken } from './session';
 import type {
   User,
   AgendaItem,
@@ -27,7 +28,9 @@ export function useRegister() {
 
 export function useMe() {
   return useQuery({
-    queryKey: ['me'],
+    // Keyed by the session token so data cached for one user's session can
+    // never be served for a different session (different user or re-login).
+    queryKey: ['me', getStoredToken()],
     queryFn: () => api.get('/users/me').then((res) => res.data as User),
   });
 }

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearToken } from './session';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
@@ -19,8 +20,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('accessToken');
+        clearToken();
         window.location.href = '/login';
       }
     }

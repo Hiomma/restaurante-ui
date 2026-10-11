@@ -13,12 +13,15 @@ import {
 } from '@mui/material';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { loginSchema } from '@/lib/validation';
 import { useLogin } from '@/lib/queries';
+import { storeToken, resetSessionCache } from '@/lib/session';
 
 export default function LoginPage() {
   const router = useRouter();
   const login = useLogin();
+  const queryClient = useQueryClient();
   const [error, setError] = useState('');
 
   const {
@@ -33,8 +36,10 @@ export default function LoginPage() {
     try {
       setError('');
       const result = await login.mutateAsync(data);
-      localStorage.setItem('token', result.access_token);
-      localStorage.setItem('accessToken', result.access_token);
+      storeToken(result.access_token);
+      // Drop everything cached under the previous session so the new user
+      // never sees the previous user's data.
+      resetSessionCache(queryClient);
       router.push('/');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Credenciais invalidas');
