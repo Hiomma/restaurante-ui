@@ -5,13 +5,6 @@ import {
   Box,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
@@ -19,7 +12,6 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  CircularProgress,
   Chip,
   Switch,
   InputAdornment,
@@ -44,6 +36,7 @@ import {
 import type { Employee } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
+import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
@@ -146,8 +139,17 @@ export default function EmployeesPage() {
 
   return (
     <LoggedLayout>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', minWidth: 0 }}>
           <Box
             sx={{
               width: 40,
@@ -195,95 +197,83 @@ export default function EmployeesPage() {
         </Typography>
       </Box>
 
-      {isLoading ? (
-        <CircularProgress />
-      ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Nome</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Usuário</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Perfil</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="center">
-                  Ações
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {employees?.map((emp) => (
-                <TableRow key={emp._id} hover>
-                  <TableCell>
-                    <Typography fontWeight={500}>{emp.name}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ color: '#666' }}>
-                      {emp.username}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {emp.role === 'admin' ? (
-                      <Chip
-                        label="Admin"
-                        size="small"
-                        sx={{
-                          bgcolor: '#EDE7F6',
-                          color: '#5E35B1',
-                          fontWeight: 600,
-                          borderRadius: 1,
-                        }}
-                      />
-                    ) : (
-                      <Chip
-                        label="Funcionário"
-                        size="small"
-                        sx={{
-                          bgcolor: '#E3F2FD',
-                          color: '#1565C0',
-                          fontWeight: 600,
-                          borderRadius: 1,
-                        }}
-                      />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={emp.active}
-                      color="primary"
-                      size="small"
-                      onChange={() => toggleActive(emp)}
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <IconButton
-                      size="small"
-                      onClick={() => openEdit(emp)}
-                      sx={{ color: '#666' }}
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => setDeleteTarget(emp._id)}
-                      sx={{ color: '#d32f2f' }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {employees?.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">Nenhum funcionário encontrado</Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+      <ResponsiveTable
+        loading={isLoading}
+        rows={employees}
+        rowKey={(emp) => emp._id}
+        emptyMessage="Nenhum funcionário encontrado"
+        columns={[
+          {
+            id: 'nome',
+            header: 'Nome',
+            primary: true,
+            cell: (emp) => <Typography fontWeight={500}>{emp.name}</Typography>,
+          },
+          {
+            id: 'usuario',
+            header: 'Usuário',
+            cell: (emp) => (
+              <Typography variant="body2" sx={{ color: '#666' }}>
+                {emp.username}
+              </Typography>
+            ),
+          },
+          {
+            id: 'perfil',
+            header: 'Perfil',
+            cell: (emp) =>
+              emp.role === 'admin' ? (
+                <Chip
+                  label="Admin"
+                  size="small"
+                  sx={{
+                    bgcolor: '#EDE7F6',
+                    color: '#5E35B1',
+                    fontWeight: 600,
+                    borderRadius: 1,
+                  }}
+                />
+              ) : (
+                <Chip
+                  label="Funcionário"
+                  size="small"
+                  sx={{
+                    bgcolor: '#E3F2FD',
+                    color: '#1565C0',
+                    fontWeight: 600,
+                    borderRadius: 1,
+                  }}
+                />
+              ),
+          },
+          {
+            id: 'status',
+            header: 'Status',
+            cell: (emp) => (
+              <Switch
+                checked={emp.active}
+                color="primary"
+                size="small"
+                onChange={() => toggleActive(emp)}
+              />
+            ),
+          },
+        ]}
+        actions={(emp) => (
+          <>
+            <IconButton size="small" onClick={() => openEdit(emp)} sx={{ color: '#666' }}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => setDeleteTarget(emp._id)}
+              sx={{ color: '#d32f2f' }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </>
+        )}
+      />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle

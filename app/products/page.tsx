@@ -5,13 +5,6 @@ import {
   Box,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
@@ -19,7 +12,6 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  CircularProgress,
   Chip,
   InputAdornment,
 } from '@mui/material';
@@ -35,6 +27,7 @@ import { productSchema } from '@/lib/validation';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '@/lib/queries';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
+import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 
 const groups = ['Carnes', 'Aves', 'Peixes', 'Frios', 'Laticinios', 'Hortifruti', 'Graos', 'Bebidas', 'Temperos', 'Massas', 'Outros'];
 const storageMethods = ['Refrigerado', 'Congelado', 'Temperatura Ambiente', 'Camara Fria'];
@@ -173,13 +166,21 @@ export default function ProductsPage() {
   return (
     <LoggedLayout>
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
           <Inventory2Icon sx={{ color: '#2196F3', fontSize: 28 }} />
           <Typography variant="h5" fontWeight="bold">
             Cadastro de Produtos
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1,
+          }}
+        >
           <Typography variant="body2" color="text.secondary">
             Gerencie seus produtos e suas configurações
           </Typography>
@@ -215,85 +216,88 @@ export default function ProductsPage() {
         sx={{ mb: 3, bgcolor: '#fff', borderRadius: 2 }}
       />
 
-      {isLoading ? (
-        <CircularProgress />
-      ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Produto</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Grupo</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Categoria</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Armazenamento</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Validade (dias)</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Mínimo em Estoque</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="right">Min. Porcionadas</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="center">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredProducts?.map((p) => (
-                <TableRow key={p._id} hover>
-                  <TableCell>
-                    <Typography fontWeight={500}>{p.name}</Typography>
-                  </TableCell>
-                  <TableCell>{p.group}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={
-                        categories.find((c) => c.value === p.category)?.label ||
-                        (p.category === 'Porcionado' ? 'Porcionado' : 'Matéria Prima')
-                      }
-                      size="small"
-                      sx={{
-                        bgcolor: categoryColors[p.category || 'Materia Prima']?.bg || '#f5f5f5',
-                        color: categoryColors[p.category || 'Materia Prima']?.color || '#333',
-                        fontWeight: 500,
-                        borderRadius: 1,
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={p.storageMethod}
-                      size="small"
-                      sx={{
-                        bgcolor: storageBg[p.storageMethod] || '#f5f5f5',
-                        color: storageColors[p.storageMethod] || '#333',
-                        fontWeight: 500,
-                        borderRadius: 1,
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell align="right">{p.shelfLifeDays}</TableCell>
-                  <TableCell align="right">
-                    {p.minQuantity ? formatWeight(p.minQuantity) : '—'}
-                  </TableCell>
-                  <TableCell align="right">
-                    {p.minPortionedQuantity ? `${p.minPortionedQuantity} etiquetas` : '—'}
-                  </TableCell>
-                  <TableCell align="center">
-                    <IconButton size="small" onClick={() => openEdit(p)} sx={{ color: '#666' }}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => setDeleteTarget(p._id)} sx={{ color: '#d32f2f' }}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredProducts?.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">Nenhum produto encontrado</Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+      <ResponsiveTable
+        loading={isLoading}
+        rows={filteredProducts}
+        rowKey={(p) => p._id}
+        emptyMessage="Nenhum produto encontrado"
+        columns={[
+          {
+            id: 'produto',
+            header: 'Produto',
+            primary: true,
+            cell: (p) => <Typography fontWeight={500}>{p.name}</Typography>,
+          },
+          { id: 'grupo', header: 'Grupo', cell: (p) => p.group },
+          {
+            id: 'categoria',
+            header: 'Categoria',
+            cell: (p) => (
+              <Chip
+                label={
+                  categories.find((c) => c.value === p.category)?.label ||
+                  (p.category === 'Porcionado' ? 'Porcionado' : 'Matéria Prima')
+                }
+                size="small"
+                sx={{
+                  bgcolor: categoryColors[p.category || 'Materia Prima']?.bg || '#f5f5f5',
+                  color: categoryColors[p.category || 'Materia Prima']?.color || '#333',
+                  fontWeight: 500,
+                  borderRadius: 1,
+                }}
+              />
+            ),
+          },
+          {
+            id: 'armazenamento',
+            header: 'Armazenamento',
+            cell: (p) => (
+              <Chip
+                label={p.storageMethod}
+                size="small"
+                sx={{
+                  bgcolor: storageBg[p.storageMethod] || '#f5f5f5',
+                  color: storageColors[p.storageMethod] || '#333',
+                  fontWeight: 500,
+                  borderRadius: 1,
+                }}
+              />
+            ),
+          },
+          {
+            id: 'validade',
+            header: 'Validade (dias)',
+            align: 'right',
+            cell: (p) => p.shelfLifeDays,
+          },
+          {
+            id: 'minimo-estoque',
+            header: 'Mínimo em Estoque',
+            align: 'right',
+            cell: (p) => (p.minQuantity ? formatWeight(p.minQuantity) : '—'),
+          },
+          {
+            id: 'min-porcionadas',
+            header: 'Min. Porcionadas',
+            align: 'right',
+            cell: (p) => (p.minPortionedQuantity ? `${p.minPortionedQuantity} etiquetas` : '—'),
+          },
+        ]}
+        actions={(p) => (
+          <>
+            <IconButton size="small" onClick={() => openEdit(p)} sx={{ color: '#666' }}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => setDeleteTarget(p._id)}
+              sx={{ color: '#d32f2f' }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </>
+        )}
+      />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle

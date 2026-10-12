@@ -10,12 +10,6 @@ import {
   Tab,
   TextField,
   MenuItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   InputAdornment,
   CircularProgress,
 } from '@mui/material';
@@ -57,6 +51,7 @@ import {
 import type { Product, StockItem, StockMovement, Portioning } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import BrDateField from '../components/BrDateField/BrDateField';
+import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -360,7 +355,7 @@ function SearchField({
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      sx={{ minWidth: 250 }}
+      sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { xs: 0, sm: 250 } }}
       InputProps={{
         startAdornment: (
           <InputAdornment position="start">
@@ -389,7 +384,7 @@ function SelectFilter({
       size="small"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      sx={{ minWidth }}
+      sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { xs: 0, sm: minWidth } }}
       SelectProps={{
         displayEmpty: true,
         renderValue: (v) => options.find((o) => o.value === v)?.label ?? '',
@@ -416,32 +411,46 @@ function DateRangeField({
   onTo: (v: string) => void;
 }) {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-      <CalendarTodayIcon sx={{ color: '#1976D2', fontSize: 18 }} />
-      <BrDateField
-        value={from}
-        onChange={onFrom}
-        fullWidth={false}
-      />
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        flexWrap: 'wrap',
+        minWidth: 0,
+      }}
+    >
+      <CalendarTodayIcon sx={{ color: '#1976D2', fontSize: 18, flexShrink: 0 }} />
+      <Box
+        sx={{
+          minWidth: 0,
+          flex: { xs: '1 1 120px', sm: '0 1 auto' },
+          '& .MuiTextField-root': { width: { xs: '100%', sm: 'auto' } },
+        }}
+      >
+        <BrDateField
+          value={from}
+          onChange={onFrom}
+          fullWidth={false}
+        />
+      </Box>
       <Typography variant="body2" color="text.secondary">
         até
       </Typography>
-      <BrDateField
-        value={to}
-        onChange={onTo}
-        fullWidth={false}
-      />
+      <Box
+        sx={{
+          minWidth: 0,
+          flex: { xs: '1 1 120px', sm: '0 1 auto' },
+          '& .MuiTextField-root': { width: { xs: '100%', sm: 'auto' } },
+        }}
+      >
+        <BrDateField
+          value={to}
+          onChange={onTo}
+          fullWidth={false}
+        />
+      </Box>
     </Box>
-  );
-}
-
-function EmptyRow({ cols, text = 'Nenhum registro encontrado' }: { cols: number; text?: string }) {
-  return (
-    <TableRow>
-      <TableCell colSpan={cols} align="center" sx={{ py: 4 }}>
-        <Typography color="text.secondary">{text}</Typography>
-      </TableCell>
-    </TableRow>
   );
 }
 
@@ -832,11 +841,12 @@ export default function ReportsPage() {
 
   return (
     <LoggedLayout>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3, minWidth: 0 }}>
         <Box
           sx={{
             width: 40,
             height: 40,
+            flexShrink: 0,
             borderRadius: '50%',
             bgcolor: '#E3F2FD',
             display: 'flex',
@@ -846,7 +856,7 @@ export default function ReportsPage() {
         >
           <BarChartIcon sx={{ color: '#1976D2' }} />
         </Box>
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography variant="h5" fontWeight="bold">
             Relatórios
           </Typography>
@@ -878,7 +888,11 @@ export default function ReportsPage() {
           padding: '6px 8px',
           minHeight: 40,
           mb: 3,
-          '& .MuiTabs-flexContainer': { gap: 0.5 },
+          maxWidth: '100%',
+          overflowX: 'auto',
+          scrollbarWidth: 'none',
+          '&::-webkit-scrollbar': { display: 'none' },
+          '& .MuiTabs-flexContainer': { gap: 0.5, flexWrap: 'nowrap' },
           '& .MuiTabs-indicator': { display: 'none' },
           '& .MuiTab-root': {
             textTransform: 'none',
@@ -889,6 +903,8 @@ export default function ReportsPage() {
             borderRadius: 1.5,
             mx: 0.25,
             fontSize: '0.875rem',
+            whiteSpace: 'nowrap',
+            maxWidth: '100%',
             '&.Mui-selected': {
               bgcolor: '#fff',
               color: '#1976D2',
@@ -1052,74 +1068,63 @@ export default function ReportsPage() {
                   <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
                     Perda por Grupo
                   </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={thSx}>Grupo</TableCell>
-                          <TableCell sx={thSx}>Perda (g)</TableCell>
-                          <TableCell sx={thSx}>% Perda</TableCell>
-                          <TableCell sx={thSx}>Registos</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {groupLossRows.length === 0 ? (
-                          <EmptyRow cols={4} />
-                        ) : (
-                          groupLossRows.map((r) => (
-                            <TableRow key={r.group} hover>
-                              <TableCell>{r.group}</TableCell>
-                              <TableCell>
-                                <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                                  {fmtG(r.loss)}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <ToneChip label={`${r.pct.toFixed(1)}%`} tone="green" />
-                              </TableCell>
-                              <TableCell>{r.count}</TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <ResponsiveTable
+                    paper={false}
+                    size="small"
+                    loading={loading}
+                    headerCellSx={thSx}
+                    rows={groupLossRows}
+                    rowKey={(r) => r.group}
+                    columns={[
+                      { id: 'grupo', header: 'Grupo', primary: true, cell: (r) => r.group },
+                      {
+                        id: 'perda',
+                        header: 'Perda (g)',
+                        cell: (r) => (
+                          <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                            {fmtG(r.loss)}
+                          </Typography>
+                        ),
+                      },
+                      {
+                        id: 'pct',
+                        header: '% Perda',
+                        cell: (r) => <ToneChip label={`${r.pct.toFixed(1)}%`} tone="green" />,
+                      },
+                      { id: 'registos', header: 'Registos', cell: (r) => r.count },
+                    ]}
+                  />
                 </Box>
 
                 <Box sx={{ ...cardSx, p: 2 }}>
                   <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
                     Perda por Produto
                   </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={thSx}>Produto</TableCell>
-                          <TableCell sx={thSx}>Perda (g)</TableCell>
-                          <TableCell sx={thSx}>% Perda</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {productLossRows.length === 0 ? (
-                          <EmptyRow cols={3} />
-                        ) : (
-                          productLossRows.map((r) => (
-                            <TableRow key={r.productId} hover>
-                              <TableCell>{r.name}</TableCell>
-                              <TableCell>
-                                <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                                  {fmtG(r.loss)}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>
-                                <ToneChip label={`${r.pct.toFixed(1)}%`} tone="green" />
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <ResponsiveTable
+                    paper={false}
+                    size="small"
+                    loading={loading}
+                    headerCellSx={thSx}
+                    rows={productLossRows}
+                    rowKey={(r) => r.productId}
+                    columns={[
+                      { id: 'produto', header: 'Produto', primary: true, cell: (r) => r.name },
+                      {
+                        id: 'perda',
+                        header: 'Perda (g)',
+                        cell: (r) => (
+                          <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                            {fmtG(r.loss)}
+                          </Typography>
+                        ),
+                      },
+                      {
+                        id: 'pct',
+                        header: '% Perda',
+                        cell: (r) => <ToneChip label={`${r.pct.toFixed(1)}%`} tone="green" />,
+                      },
+                    ]}
+                  />
                 </Box>
               </Box>
 
@@ -1127,45 +1132,44 @@ export default function ReportsPage() {
                 <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
                   Histórico de Porcionamentos
                 </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={thSx}>Data</TableCell>
-                        <TableCell sx={thSx}>Produto</TableCell>
-                        <TableCell sx={thSx}>Bruto</TableCell>
-                        <TableCell sx={thSx}>Limpo</TableCell>
-                        <TableCell sx={thSx}>Perda (g)</TableCell>
-                        <TableCell sx={thSx}>% Perda</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {perdasHistory.length === 0 ? (
-                        <EmptyRow cols={6} />
-                      ) : (
-                        perdasHistory.map((p) => (
-                          <TableRow key={p._id} hover>
-                            <TableCell>{formatDate(p.date)}</TableCell>
-                            <TableCell>{p.product.productName}</TableCell>
-                            <TableCell>{p.rawWeightGrams}g</TableCell>
-                            <TableCell>{p.cleanWeightGrams}g</TableCell>
-                            <TableCell>
-                              <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                                {fmtG(p.lossGrams)}
-                              </Typography>
-                            </TableCell>
-                            <TableCell>
-                              <ToneChip
-                                label={`${(p.lossPercentage ?? 0).toFixed(1)}%`}
-                                tone="green"
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <ResponsiveTable
+                  paper={false}
+                  size="small"
+                  loading={loading}
+                  headerCellSx={thSx}
+                  rows={perdasHistory}
+                  rowKey={(p) => p._id}
+                  columns={[
+                    { id: 'data', header: 'Data', cell: (p) => formatDate(p.date) },
+                    {
+                      id: 'produto',
+                      header: 'Produto',
+                      primary: true,
+                      cell: (p) => p.product.productName,
+                    },
+                    { id: 'bruto', header: 'Bruto', cell: (p) => `${p.rawWeightGrams}g` },
+                    { id: 'limpo', header: 'Limpo', cell: (p) => `${p.cleanWeightGrams}g` },
+                    {
+                      id: 'perda',
+                      header: 'Perda (g)',
+                      cell: (p) => (
+                        <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                          {fmtG(p.lossGrams)}
+                        </Typography>
+                      ),
+                    },
+                    {
+                      id: 'pct',
+                      header: '% Perda',
+                      cell: (p) => (
+                        <ToneChip
+                          label={`${(p.lossPercentage ?? 0).toFixed(1)}%`}
+                          tone="green"
+                        />
+                      ),
+                    },
+                  ]}
+                />
               </Box>
             </Box>
           )}
@@ -1200,65 +1204,63 @@ export default function ReportsPage() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   Comparação baseada no peso total em estoque vs. peso mínimo definido
                 </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={thSx}>Produto</TableCell>
-                        <TableCell sx={thSx}>Grupo</TableCell>
-                        <TableCell sx={thSx}>Armazenamento</TableCell>
-                        <TableCell sx={thSx}>Etiquetas</TableCell>
-                        <TableCell sx={thSx}>Peso em Estoque</TableCell>
-                        <TableCell sx={thSx}>Mínimo (g)</TableCell>
-                        <TableCell sx={thSx}>Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {comprasRows.length === 0 ? (
-                        <EmptyRow cols={7} />
-                      ) : (
-                        comprasRows.map((r) => (
-                          <TableRow
-                            key={r.product._id}
-                            hover
-                            sx={r.status === 'comprar' ? rowRedSx : undefined}
-                          >
-                            <TableCell>
-                              <Typography fontWeight={500}>{r.product.name}</Typography>
-                            </TableCell>
-                            <TableCell>{r.product.group}</TableCell>
-                            <TableCell>{r.product.storageMethod}</TableCell>
-                            <TableCell>{r.count}</TableCell>
-                            <TableCell>
-                              <WeightPair grams={r.weight} />
-                            </TableCell>
-                            <TableCell>
-                              {r.product.minQuantity
-                                ? `${r.product.minQuantity}g (${formatKg(r.product.minQuantity)})`
-                                : '—'}
-                            </TableCell>
-                            <TableCell>
-                              {r.status === 'sem' ? (
-                                <Typography variant="body2" color="text.secondary">
-                                  Sem mínimo
-                                </Typography>
-                              ) : r.status === 'comprar' ? (
-                                <SolidRedChip
-                                  label={`Comprar (falta ${fmtG(r.product.minQuantity - r.weight)})`}
-                                />
-                              ) : (
-                                <ToneChip
-                                  label={`OK (+${fmtG(r.weight - r.product.minQuantity)})`}
-                                  tone="green"
-                                />
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <ResponsiveTable
+                  paper={false}
+                  size="small"
+                  loading={loading}
+                  headerCellSx={thSx}
+                  rows={comprasRows}
+                  rowKey={(r) => r.product._id}
+                  rowSx={(r) => (r.status === 'comprar' ? rowRedSx : undefined)}
+                  columns={[
+                    {
+                      id: 'produto',
+                      header: 'Produto',
+                      primary: true,
+                      cell: (r) => <Typography fontWeight={500}>{r.product.name}</Typography>,
+                    },
+                    { id: 'grupo', header: 'Grupo', cell: (r) => r.product.group },
+                    {
+                      id: 'armazenamento',
+                      header: 'Armazenamento',
+                      cell: (r) => r.product.storageMethod,
+                    },
+                    { id: 'etiquetas', header: 'Etiquetas', cell: (r) => r.count },
+                    {
+                      id: 'peso',
+                      header: 'Peso em Estoque',
+                      cell: (r) => <WeightPair grams={r.weight} />,
+                    },
+                    {
+                      id: 'minimo',
+                      header: 'Mínimo (g)',
+                      cell: (r) =>
+                        r.product.minQuantity
+                          ? `${r.product.minQuantity}g (${formatKg(r.product.minQuantity)})`
+                          : '—',
+                    },
+                    {
+                      id: 'status',
+                      header: 'Status',
+                      fullWidthOnMobile: true,
+                      cell: (r) =>
+                        r.status === 'sem' ? (
+                          <Typography variant="body2" color="text.secondary">
+                            Sem mínimo
+                          </Typography>
+                        ) : r.status === 'comprar' ? (
+                          <SolidRedChip
+                            label={`Comprar (falta ${fmtG(r.product.minQuantity - r.weight)})`}
+                          />
+                        ) : (
+                          <ToneChip
+                            label={`OK (+${fmtG(r.weight - r.product.minQuantity)})`}
+                            tone="green"
+                          />
+                        ),
+                    },
+                  ]}
+                />
               </Box>
             </Box>
           )}
@@ -1284,46 +1286,40 @@ export default function ReportsPage() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   {recvItems.length} itens brutos registrados
                 </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={thSx}>Data</TableCell>
-                        <TableCell sx={thSx}>Produto</TableCell>
-                        <TableCell sx={thSx}>Grupo</TableCell>
-                        <TableCell sx={thSx}>Peso</TableCell>
-                        <TableCell sx={thSx}>Validade</TableCell>
-                        <TableCell sx={thSx}>QR</TableCell>
-                        <TableCell sx={thSx}>Lote</TableCell>
-                        <TableCell sx={thSx}>NF</TableCell>
-                        <TableCell sx={thSx}>Funcionário</TableCell>
-                        <TableCell sx={thSx}>Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {recvItems.length === 0 ? (
-                        <EmptyRow cols={10} />
-                      ) : (
-                        recvItems.map((i) => (
-                          <TableRow key={i._id} hover>
-                            <TableCell>{formatDate(i.manipulationDate || i.createdAt)}</TableCell>
-                            <TableCell>{i.product.productName}</TableCell>
-                            <TableCell>{i.product.productGroup || '—'}</TableCell>
-                            <TableCell>
-                              <WeightPair grams={i.weightGrams} />
-                            </TableCell>
-                            <TableCell>{formatDate(i.expiryDate)}</TableCell>
-                            <TableCell>{i.qrCode || '—'}</TableCell>
-                            <TableCell>{i.lote || '—'}</TableCell>
-                            <TableCell>{i.nf || '—'}</TableCell>
-                            <TableCell>{i.employeeName || '—'}</TableCell>
-                            <TableCell>{recvStatusChip(i.status)}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <ResponsiveTable
+                  paper={false}
+                  size="small"
+                  loading={loading}
+                  headerCellSx={thSx}
+                  rows={recvItems}
+                  rowKey={(i) => i._id}
+                  columns={[
+                    {
+                      id: 'data',
+                      header: 'Data',
+                      cell: (i) => formatDate(i.manipulationDate || i.createdAt),
+                    },
+                    {
+                      id: 'produto',
+                      header: 'Produto',
+                      primary: true,
+                      cell: (i) => i.product.productName,
+                    },
+                    { id: 'grupo', header: 'Grupo', cell: (i) => i.product.productGroup || '—' },
+                    { id: 'peso', header: 'Peso', cell: (i) => <WeightPair grams={i.weightGrams} /> },
+                    { id: 'validade', header: 'Validade', cell: (i) => formatDate(i.expiryDate) },
+                    { id: 'qr', header: 'QR', cell: (i) => i.qrCode || '—' },
+                    { id: 'lote', header: 'Lote', cell: (i) => i.lote || '—' },
+                    { id: 'nf', header: 'NF', cell: (i) => i.nf || '—' },
+                    { id: 'funcionario', header: 'Funcionário', cell: (i) => i.employeeName || '—' },
+                    {
+                      id: 'status',
+                      header: 'Status',
+                      fullWidthOnMobile: true,
+                      cell: (i) => recvStatusChip(i.status),
+                    },
+                  ]}
+                />
               </Box>
             </Box>
           )}
@@ -1350,46 +1346,50 @@ export default function ReportsPage() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   {movRows.length} registros
                 </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={thSx}>Data</TableCell>
-                        <TableCell sx={thSx}>Tipo</TableCell>
-                        <TableCell sx={thSx}>Produto</TableCell>
-                        <TableCell sx={thSx}>Qtd. Itens</TableCell>
-                        <TableCell sx={thSx}>Peso Total</TableCell>
-                        <TableCell sx={thSx}>Tipo Item</TableCell>
-                        <TableCell sx={thSx}>Destino/Motivo</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {movRows.length === 0 ? (
-                        <EmptyRow cols={7} />
-                      ) : (
-                        movRows.map((m) => (
-                          <TableRow key={m._id} hover>
-                            <TableCell>{formatDate(m.date)}</TableCell>
-                            <TableCell>{movementTypeChip(m.movementType)}</TableCell>
-                            <TableCell>{m.product.productName}</TableCell>
-                            <TableCell>{m.quantity}</TableCell>
-                            <TableCell>
-                              <WeightPair grams={m.weightGrams ?? null} />
-                            </TableCell>
-                            <TableCell>
-                              {m.itemType === 'raw'
-                                ? 'Bruto'
-                                : m.itemType === 'portioned'
-                                  ? 'Porcionado'
-                                  : '—'}
-                            </TableCell>
-                            <TableCell>{m.reason || '—'}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <ResponsiveTable
+                  paper={false}
+                  size="small"
+                  loading={loading}
+                  headerCellSx={thSx}
+                  rows={movRows}
+                  rowKey={(m) => m._id}
+                  columns={[
+                    { id: 'data', header: 'Data', cell: (m) => formatDate(m.date) },
+                    {
+                      id: 'tipo',
+                      header: 'Tipo',
+                      cell: (m) => movementTypeChip(m.movementType),
+                    },
+                    {
+                      id: 'produto',
+                      header: 'Produto',
+                      primary: true,
+                      cell: (m) => m.product.productName,
+                    },
+                    { id: 'qtd', header: 'Qtd. Itens', cell: (m) => m.quantity },
+                    {
+                      id: 'peso',
+                      header: 'Peso Total',
+                      cell: (m) => <WeightPair grams={m.weightGrams ?? null} />,
+                    },
+                    {
+                      id: 'tipoItem',
+                      header: 'Tipo Item',
+                      cell: (m) =>
+                        m.itemType === 'raw'
+                          ? 'Bruto'
+                          : m.itemType === 'portioned'
+                            ? 'Porcionado'
+                            : '—',
+                    },
+                    {
+                      id: 'motivo',
+                      header: 'Destino/Motivo',
+                      fullWidthOnMobile: true,
+                      cell: (m) => m.reason || '—',
+                    },
+                  ]}
+                />
               </Box>
             </Box>
           )}
@@ -1552,22 +1552,41 @@ export default function ReportsPage() {
                                 Nenhum item em estoque
                               </Typography>
                             ) : (
-                              <TableContainer>
-                                <Table size="small">
-                                  <TableHead>
-                                    <TableRow>
-                                      <TableCell sx={thSx}>Tipo</TableCell>
-                                      <TableCell sx={thSx}>Peso</TableCell>
-                                      <TableCell sx={thSx}>Lote</TableCell>
-                                      <TableCell sx={thSx}>NF</TableCell>
-                                      <TableCell sx={thSx}>Recebimento</TableCell>
-                                      <TableCell sx={thSx}>Validade</TableCell>
-                                      <TableCell sx={thSx}>Status</TableCell>
-                                      <TableCell sx={thSx}>QR</TableCell>
-                                    </TableRow>
-                                  </TableHead>
-                                  <TableBody>
-                                    {sortedItems.map((item) => {
+                              <ResponsiveTable
+                                paper={false}
+                                size="small"
+                                loading={loading}
+                                headerCellSx={thSx}
+                                rows={sortedItems}
+                                rowKey={(item) => item._id}
+                                emptyMessage="Nenhum item em estoque"
+                                columns={[
+                                  {
+                                    id: 'tipo',
+                                    header: 'Tipo',
+                                    cell: (item) => (item.type === 'raw' ? 'Bruto' : 'Porcionado'),
+                                  },
+                                  {
+                                    id: 'peso',
+                                    header: 'Peso',
+                                    cell: (item) => formatWeight(item.weightGrams),
+                                  },
+                                  { id: 'lote', header: 'Lote', cell: (item) => item.lote || '—' },
+                                  { id: 'nf', header: 'NF', cell: (item) => item.nf || '—' },
+                                  {
+                                    id: 'recebimento',
+                                    header: 'Recebimento',
+                                    cell: (item) => formatDate(item.manipulationDate),
+                                  },
+                                  {
+                                    id: 'validade',
+                                    header: 'Validade',
+                                    cell: (item) => formatDate(item.expiryDate),
+                                  },
+                                  {
+                                    id: 'status',
+                                    header: 'Status',
+                                    cell: (item) => {
                                       const days = daysUntil(item.expiryDate);
                                       const st = lifeStatus(item);
                                       const tone: ChipTone =
@@ -1576,30 +1595,21 @@ export default function ReportsPage() {
                                           : st === 'expiring'
                                             ? 'amber'
                                             : 'green';
-                                      return (
-                                        <TableRow key={item._id} hover>
-                                          <TableCell>
-                                            {item.type === 'raw' ? 'Bruto' : 'Porcionado'}
-                                          </TableCell>
-                                          <TableCell>{formatWeight(item.weightGrams)}</TableCell>
-                                          <TableCell>{item.lote || '—'}</TableCell>
-                                          <TableCell>{item.nf || '—'}</TableCell>
-                                          <TableCell>{formatDate(item.manipulationDate)}</TableCell>
-                                          <TableCell>{formatDate(item.expiryDate)}</TableCell>
-                                          <TableCell>
-                                            {days === null ? (
-                                              <ToneChip label="—" tone="gray" />
-                                            ) : (
-                                              <ToneChip label={`${days}d`} tone={tone} />
-                                            )}
-                                          </TableCell>
-                                          <TableCell>{item.qrCode || '—'}</TableCell>
-                                        </TableRow>
+                                      return days === null ? (
+                                        <ToneChip label="—" tone="gray" />
+                                      ) : (
+                                        <ToneChip label={`${days}d`} tone={tone} />
                                       );
-                                    })}
-                                  </TableBody>
-                                </Table>
-                              </TableContainer>
+                                    },
+                                  },
+                                  {
+                                    id: 'qr',
+                                    header: 'QR',
+                                    fullWidthOnMobile: true,
+                                    cell: (item) => item.qrCode || '—',
+                                  },
+                                ]}
+                              />
                             )}
                           </Box>
                         )}
@@ -1669,81 +1679,83 @@ export default function ReportsPage() {
                   Quantidade de etiquetas porcionadas em estoque vs. mínimo definido. O bruto
                   estimado considera a perda do último porcionamento de cada produto.
                 </Typography>
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={thSx}>Produto</TableCell>
-                        <TableCell sx={thSx}>Grupo</TableCell>
-                        <TableCell sx={thSx}>Porcionadas em Estoque</TableCell>
-                        <TableCell sx={thSx}>Mínimo</TableCell>
-                        <TableCell sx={thSx}>Déficit</TableCell>
-                        <TableCell sx={thSx}>% Perda Últ. Porcion.</TableCell>
-                        <TableCell sx={thSx}>Peso Porção</TableCell>
-                        <TableCell sx={thSx}>Bruto Estimado a Retirar</TableCell>
-                        <TableCell sx={thSx}>Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {prodRows.length === 0 ? (
-                        <EmptyRow cols={9} />
-                      ) : (
-                        prodRows.map((r) => (
-                          <TableRow
-                            key={r.product._id}
-                            hover
-                            sx={r.below ? rowRedSx : undefined}
-                          >
-                            <TableCell>
-                              <Typography fontWeight={500}>{r.product.name}</Typography>
-                            </TableCell>
-                            <TableCell>{r.product.group}</TableCell>
-                            <TableCell>{r.portionedCount}</TableCell>
-                            <TableCell>{r.min > 0 ? r.min : '—'}</TableCell>
-                            <TableCell>
-                              {r.below ? (
-                                <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                                  {r.deficit}
-                                </Typography>
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {r.latest ? (
-                                <ToneChip
-                                  label={`${(r.latest.lossPercentage ?? 0).toFixed(1)}%`}
-                                  tone="green"
-                                />
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {r.latest ? `${r.latest.portionWeightGrams}g` : '—'}
-                            </TableCell>
-                            <TableCell>
-                              {r.below && r.latest ? (
-                                <WeightPair grams={r.estimatedRaw} tone="amber" />
-                              ) : (
-                                '—'
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {r.below ? (
-                                <SolidRedChip label="Abaixo do mínimo" withWarning />
-                              ) : r.min <= 0 ? (
-                                <ToneChip label="Sem mínimo" tone="gray" />
-                              ) : (
-                                <ToneChip label="OK" tone="green" />
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <ResponsiveTable
+                  paper={false}
+                  size="small"
+                  loading={loading}
+                  headerCellSx={thSx}
+                  rows={prodRows}
+                  rowKey={(r) => r.product._id}
+                  rowSx={(r) => (r.below ? rowRedSx : undefined)}
+                  columns={[
+                    {
+                      id: 'produto',
+                      header: 'Produto',
+                      primary: true,
+                      cell: (r) => <Typography fontWeight={500}>{r.product.name}</Typography>,
+                    },
+                    { id: 'grupo', header: 'Grupo', cell: (r) => r.product.group },
+                    {
+                      id: 'porcionadas',
+                      header: 'Porcionadas em Estoque',
+                      cell: (r) => r.portionedCount,
+                    },
+                    { id: 'minimo', header: 'Mínimo', cell: (r) => (r.min > 0 ? r.min : '—') },
+                    {
+                      id: 'deficit',
+                      header: 'Déficit',
+                      cell: (r) =>
+                        r.below ? (
+                          <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                            {r.deficit}
+                          </Typography>
+                        ) : (
+                          '—'
+                        ),
+                    },
+                    {
+                      id: 'pctPerda',
+                      header: '% Perda Últ. Porcion.',
+                      cell: (r) =>
+                        r.latest ? (
+                          <ToneChip
+                            label={`${(r.latest.lossPercentage ?? 0).toFixed(1)}%`}
+                            tone="green"
+                          />
+                        ) : (
+                          '—'
+                        ),
+                    },
+                    {
+                      id: 'pesoPorcao',
+                      header: 'Peso Porção',
+                      cell: (r) => (r.latest ? `${r.latest.portionWeightGrams}g` : '—'),
+                    },
+                    {
+                      id: 'brutoEstimado',
+                      header: 'Bruto Estimado a Retirar',
+                      cell: (r) =>
+                        r.below && r.latest ? (
+                          <WeightPair grams={r.estimatedRaw} tone="amber" />
+                        ) : (
+                          '—'
+                        ),
+                    },
+                    {
+                      id: 'status',
+                      header: 'Status',
+                      fullWidthOnMobile: true,
+                      cell: (r) =>
+                        r.below ? (
+                          <SolidRedChip label="Abaixo do mínimo" withWarning />
+                        ) : r.min <= 0 ? (
+                          <ToneChip label="Sem mínimo" tone="gray" />
+                        ) : (
+                          <ToneChip label="OK" tone="green" />
+                        ),
+                    },
+                  ]}
+                />
               </Box>
             </Box>
           )}

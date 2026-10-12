@@ -46,7 +46,16 @@ export default function StockMovementsPage() {
 
   return (
     <LoggedLayout>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 1.5,
+          mb: 3,
+        }}
+      >
         <Typography variant="h4" fontWeight="bold">Movimentações</Typography>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => { form.reset(); setDialogOpen(true); }}>Nova Movimentação</Button>
       </Box>
@@ -56,8 +65,8 @@ export default function StockMovementsPage() {
           {movements?.map((m) => (
             <Card key={m._id}>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                  <Box sx={{ minWidth: 0 }}>
                     <Typography variant="h6" fontWeight="bold">{m.product.productName}</Typography>
                     <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
                       <Chip

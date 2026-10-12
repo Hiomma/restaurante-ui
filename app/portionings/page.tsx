@@ -5,13 +5,6 @@ import {
   Box,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
@@ -19,7 +12,6 @@ import {
   DialogActions,
   TextField,
   MenuItem,
-  CircularProgress,
   Chip,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -47,6 +39,8 @@ import type { Portioning, StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import BrDateField from '../components/BrDateField/BrDateField';
+import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
 
 const fieldSx = {
   '& .MuiOutlinedInput-root': {
@@ -102,6 +96,81 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     </Box>
   );
 }
+
+const portioningColumns: ResponsiveTableColumn<Portioning>[] = [
+  {
+    id: 'product',
+    header: 'Produto',
+    primary: true,
+    cell: (p) => (
+      <Typography fontWeight={500}>
+        {p.outputs && p.outputs.length > 0
+          ? p.outputs
+              .map(
+                (o) =>
+                  `${o.productName} (${o.portionsCount}${
+                    o.portionWeightGrams ? ` × ${o.portionWeightGrams}g` : ''
+                  })`,
+              )
+              .join(', ')
+          : p.product.productName}
+      </Typography>
+    ),
+  },
+  {
+    id: 'lote',
+    header: 'Lote',
+    cell: (p) => (
+      <Typography
+        variant="body2"
+        sx={{ fontFamily: 'monospace', fontSize: 13, color: '#1565C0' }}
+      >
+        {p.lote || '—'}
+      </Typography>
+    ),
+  },
+  {
+    id: 'rawWeight',
+    header: 'Peso Bruto',
+    cell: (p) => `${p.rawWeightGrams}g`,
+  },
+  {
+    id: 'cleanWeight',
+    header: 'Peso Limpo',
+    cell: (p) => `${p.cleanWeightGrams}g`,
+  },
+  {
+    id: 'lossPercentage',
+    header: '% Perda',
+    cell: (p) => (
+      <Chip
+        label={`${p.lossPercentage?.toFixed(1) ?? '0.0'}%`}
+        size="small"
+        sx={{
+          bgcolor: '#E8F5E9',
+          color: '#2E7D32',
+          fontWeight: 600,
+          borderRadius: 1,
+        }}
+      />
+    ),
+  },
+  {
+    id: 'portions',
+    header: 'Porções',
+    cell: (p) => `${p.portionsCount} (${p.portionWeightGrams}g)`,
+  },
+  {
+    id: 'employee',
+    header: 'Funcionário',
+    cell: (p) => p.employeeName || '—',
+  },
+  {
+    id: 'date',
+    header: 'Data',
+    cell: (p) => formatDate(p.date),
+  },
+];
 
 export default function PortioningsPage() {
   const { enqueueSnackbar } = useSnackbar();
@@ -375,8 +444,17 @@ export default function PortioningsPage() {
 
   return (
     <LoggedLayout>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
           <Box
             sx={{
               width: 40,
@@ -405,99 +483,31 @@ export default function PortioningsPage() {
         </Button>
       </Box>
 
-      {isLoading ? (
-        <CircularProgress />
-      ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Produto</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Lote</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Peso Bruto</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Peso Limpo</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>% Perda</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Porções</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Funcionário</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Data</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="center">
-                  Ações
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {portionings?.map((p) => (
-                <TableRow key={p._id} hover>
-                  <TableCell>
-                    <Typography fontWeight={500}>
-                      {p.outputs && p.outputs.length > 0
-                        ? p.outputs
-                            .map(
-                              (o) =>
-                                `${o.productName} (${o.portionsCount}${
-                                  o.portionWeightGrams ? ` × ${o.portionWeightGrams}g` : ''
-                                })`,
-                            )
-                            .join(', ')
-                        : p.product.productName}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: 'monospace', fontSize: 13, color: '#1565C0' }}
-                    >
-                      {p.lote || '—'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{p.rawWeightGrams}g</TableCell>
-                  <TableCell>{p.cleanWeightGrams}g</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={`${p.lossPercentage?.toFixed(1) ?? '0.0'}%`}
-                      size="small"
-                      sx={{
-                        bgcolor: '#E8F5E9',
-                        color: '#2E7D32',
-                        fontWeight: 600,
-                        borderRadius: 1,
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {p.portionsCount} ({p.portionWeightGrams}g)
-                  </TableCell>
-                  <TableCell>{p.employeeName || '—'}</TableCell>
-                  <TableCell>{formatDate(p.date)}</TableCell>
-                  <TableCell align="center">
-                    <IconButton
-                      size="small"
-                      onClick={() => setViewTarget(p)}
-                      sx={{ color: '#666' }}
-                    >
-                      <VisibilityIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => setDeleteTarget(p._id)}
-                      sx={{ color: '#d32f2f' }}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {portionings?.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">Nenhum porcionamento encontrado</Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+      <ResponsiveTable
+        columns={portioningColumns}
+        rows={portionings}
+        rowKey={(p) => p._id}
+        loading={isLoading}
+        emptyMessage="Nenhum porcionamento encontrado"
+        actions={(p) => (
+          <>
+            <IconButton
+              size="small"
+              onClick={() => setViewTarget(p)}
+              sx={{ color: '#666' }}
+            >
+              <VisibilityIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => setDeleteTarget(p._id)}
+              sx={{ color: '#d32f2f' }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </>
+        )}
+      />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle
@@ -529,7 +539,7 @@ export default function PortioningsPage() {
                   autoFocus
                   fullWidth
                   size="small"
-                  sx={fieldSx}
+                  sx={{ ...fieldSx, minWidth: 0 }}
                   placeholder="Escaneie o QR ou digite o código (6 dígitos)..."
                   value={scanInput}
                   onChange={(e) => setScanInput(e.target.value.toUpperCase())}

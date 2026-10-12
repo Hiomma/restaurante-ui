@@ -59,9 +59,10 @@ export default function RegisterPage() {
         alignItems: 'center',
         justifyContent: 'center',
         bgcolor: '#f5f5f5',
+        px: 1.5,
       }}
     >
-      <Card sx={{ width: 400, p: 2 }}>
+      <Card sx={{ width: '100%', maxWidth: 400, p: 2 }}>
         <CardContent>
           <Typography variant="h4" align="center" fontWeight="bold" gutterBottom>
             Restaurante

@@ -11,12 +11,6 @@ import {
   TextField,
   MenuItem,
   InputAdornment,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   CircularProgress,
   Tabs,
   Tab,
@@ -49,6 +43,7 @@ import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus, todayISODate
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
+import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -66,6 +61,37 @@ const chipGray = { bgcolor: '#F1F3F5', color: '#495057', fontWeight: 600, fontSi
 const chipBlue = { bgcolor: '#E3F2FD', color: '#1976D2', fontWeight: 600, fontSize: 12 };
 
 const tableSx = { '& td': { borderBottom: '1px solid #eef1f5' } };
+
+/** Select-all control shown in the table header (and above the mobile list). */
+function SelectAllCheckbox({
+  items,
+  selected,
+  setSelected,
+}: {
+  items: StockItem[];
+  selected: Set<string>;
+  setSelected: React.Dispatch<React.SetStateAction<Set<string>>>;
+}) {
+  return (
+    <Checkbox
+      size="small"
+      checked={items.length > 0 && items.every((i) => selected.has(i._id))}
+      indeterminate={
+        items.some((i) => selected.has(i._id)) && !items.every((i) => selected.has(i._id))
+      }
+      onChange={(e) =>
+        setSelected((prev) => {
+          const next = new Set(prev);
+          items.forEach((i) => {
+            if (e.target.checked) next.add(i._id);
+            else next.delete(i._id);
+          });
+          return next;
+        })
+      }
+    />
+  );
+}
 
 const fixedMoveDestinations = ['Salão', 'Bar', 'Cozinha'];
 const fixedWriteoffDestinations = ['Perda', 'Não encontrado'];
@@ -334,7 +360,7 @@ export default function StockPage() {
   return (
     <LoggedLayout>
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
           <Box
             sx={{
               width: 40,
@@ -406,6 +432,7 @@ export default function StockPage() {
               padding: '6px 8px',
               minHeight: 40,
               mb: 3,
+              maxWidth: '100%',
               '& .MuiTabs-flexContainer': { gap: 0.5 },
               '& .MuiTabs-indicator': { display: 'none' },
               '& .MuiTab-root': {
@@ -447,14 +474,19 @@ export default function StockPage() {
                   </InputAdornment>
                 ),
               }}
-              sx={{ bgcolor: '#fff', borderRadius: 2, flexGrow: 1, minWidth: 220 }}
+              sx={{
+                bgcolor: '#fff',
+                borderRadius: 2,
+                flexGrow: 1,
+                minWidth: { xs: 0, sm: 220 },
+              }}
             />
             <TextField
               select
               size="small"
               value={groupFilter}
               onChange={(e) => setGroupFilter(e.target.value)}
-              sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: 200 }}
+              sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: { xs: 0, sm: 200 } }}
             >
               <MenuItem value="all">Todos os grupos</MenuItem>
               {groupOptions.map((g) => (
@@ -468,7 +500,7 @@ export default function StockPage() {
               size="small"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: 200 }}
+              sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: { xs: 0, sm: 200 } }}
             >
               <MenuItem value="all">Todos os status</MenuItem>
               <MenuItem value="vencendo">Vencendo</MenuItem>
@@ -640,101 +672,109 @@ export default function StockPage() {
                   </Box>
                   <Collapse in={open} timeout="auto" unmountOnExit>
                     <Box sx={{ borderTop: '1px solid #eef1f5', p: 2 }}>
-                      <TableContainer>
-                        <Table size="small" sx={tableSx}>
-                          <TableHead>
-                            <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                              <TableCell padding="checkbox">
-                                <Checkbox
-                                  size="small"
-                                  checked={
-                                    r.items.length > 0 &&
-                                    r.items.every((i) => selected.has(i._id))
-                                  }
-                                  indeterminate={
-                                    r.items.some((i) => selected.has(i._id)) &&
-                                    !r.items.every((i) => selected.has(i._id))
-                                  }
-                                  onChange={(e) =>
-                                    setSelected((prev) => {
-                                      const next = new Set(prev);
-                                      r.items.forEach((i) => {
-                                        if (e.target.checked) next.add(i._id);
-                                        else next.delete(i._id);
-                                      });
-                                      return next;
-                                    })
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell sx={thSx}>Tipo</TableCell>
-                              <TableCell sx={thSx}>Peso</TableCell>
-                              <TableCell sx={thSx}>Local</TableCell>
-                              <TableCell sx={thSx}>Lote</TableCell>
-                              <TableCell sx={thSx}>NF</TableCell>
-                              <TableCell sx={thSx}>Recebimento</TableCell>
-                              <TableCell sx={thSx}>Validade</TableCell>
-                              <TableCell sx={thSx}>Status</TableCell>
-                              <TableCell sx={thSx}>QR</TableCell>
-                              <TableCell sx={thSx} align="center">
-                                Ações
-                              </TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {r.items.map((item) => (
-                              <TableRow key={item._id}>
-                                <TableCell padding="checkbox">
-                                  <Checkbox
-                                    size="small"
-                                    checked={selected.has(item._id)}
-                                    onChange={(e) => toggleSelect(item._id, e.target.checked)}
-                                  />
-                                </TableCell>
-                                <TableCell>
-                                  <Chip
-                                    label={item.type === 'raw' ? 'Bruto' : 'Porcionado'}
-                                    size="small"
-                                    sx={item.type === 'raw' ? chipBlue : chipGreen}
-                                  />
-                                </TableCell>
-                                <TableCell>{formatWeight(item.weightGrams)}</TableCell>
-                                <TableCell>
-                                  {item.destination ? (
-                                    <Chip label={item.destination} size="small" sx={chipGray} />
-                                  ) : (
-                                    '—'
-                                  )}
-                                </TableCell>
-                                <TableCell>{item.lote || '—'}</TableCell>
-                                <TableCell>{item.nf || '—'}</TableCell>
-                                <TableCell>{formatDate(item.manipulationDate)}</TableCell>
-                                <TableCell>{formatDate(item.expiryDate)}</TableCell>
-                                <TableCell>
-                                  <DaysChip expiryDate={item.expiryDate} />
-                                </TableCell>
-                                <TableCell>
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ fontFamily: 'monospace', fontSize: 11, color: '#495057' }}
-                                  >
-                                    {item.qrCode}
-                                  </Typography>
-                                </TableCell>
-                                <TableCell align="center">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => setDeleteTarget(item._id)}
-                                    sx={{ color: '#d32f2f' }}
-                                  >
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
+                      <ResponsiveTable
+                        paper={false}
+                        size="small"
+                        tableSx={tableSx}
+                        headerCellSx={thSx}
+                        actionsLabel="Ações"
+                        rows={r.items}
+                        rowKey={(item) => item._id}
+                        leadingHeader={
+                          <SelectAllCheckbox
+                            items={r.items}
+                            selected={selected}
+                            setSelected={setSelected}
+                          />
+                        }
+                        mobileListHeader={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                            <SelectAllCheckbox
+                              items={r.items}
+                              selected={selected}
+                              setSelected={setSelected}
+                            />
+                            <Typography variant="caption" sx={{ color: '#666' }}>
+                              Selecionar todos
+                            </Typography>
+                          </Box>
+                        }
+                        leadingPadding="checkbox"
+                        leading={(item) => (
+                          <Checkbox
+                            size="small"
+                            checked={selected.has(item._id)}
+                            onChange={(e) => toggleSelect(item._id, e.target.checked)}
+                          />
+                        )}
+                        actions={(item) => (
+                          <IconButton
+                            size="small"
+                            onClick={() => setDeleteTarget(item._id)}
+                            sx={{ color: '#d32f2f' }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                        columns={[
+                          {
+                            id: 'tipo',
+                            header: 'Tipo',
+                            cell: (item) => (
+                              <Chip
+                                label={item.type === 'raw' ? 'Bruto' : 'Porcionado'}
+                                size="small"
+                                sx={item.type === 'raw' ? chipBlue : chipGreen}
+                              />
+                            ),
+                          },
+                          {
+                            id: 'peso',
+                            header: 'Peso',
+                            cell: (item) => formatWeight(item.weightGrams),
+                          },
+                          {
+                            id: 'local',
+                            header: 'Local',
+                            cell: (item) =>
+                              item.destination ? (
+                                <Chip label={item.destination} size="small" sx={chipGray} />
+                              ) : (
+                                '—'
+                              ),
+                          },
+                          { id: 'lote', header: 'Lote', cell: (item) => item.lote || '—' },
+                          { id: 'nf', header: 'NF', cell: (item) => item.nf || '—' },
+                          {
+                            id: 'recebimento',
+                            header: 'Recebimento',
+                            cell: (item) => formatDate(item.manipulationDate),
+                          },
+                          {
+                            id: 'validade',
+                            header: 'Validade',
+                            cell: (item) => formatDate(item.expiryDate),
+                          },
+                          {
+                            id: 'status',
+                            header: 'Status',
+                            cell: (item) => <DaysChip expiryDate={item.expiryDate} />,
+                          },
+                          {
+                            id: 'qr',
+                            header: 'QR',
+                            fullWidthOnMobile: true,
+                            cell: (item) => (
+                              <Typography
+                                variant="caption"
+                                sx={{ fontFamily: 'monospace', fontSize: 11, color: '#495057' }}
+                              >
+                                {item.qrCode}
+                              </Typography>
+                            ),
+                          },
+                        ]}
+                      />
                     </Box>
                   </Collapse>
                 </Card>

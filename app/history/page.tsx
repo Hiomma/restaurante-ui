@@ -6,13 +6,6 @@ import {
   Typography,
   TextField,
   MenuItem,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Chip,
   IconButton,
   Dialog,
@@ -21,7 +14,6 @@ import {
   DialogActions,
   Button,
   InputAdornment,
-  CircularProgress,
   Checkbox,
 } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
@@ -34,6 +26,7 @@ import type { StockMovement, StockItem } from '@/types';
 import { useStockMovements, useStockItems, useDeleteStockItem } from '@/lib/queries';
 import { formatDate } from '@/lib/utils';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
+import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 
 const thSx = { fontWeight: 700, color: '#333' };
 
@@ -182,7 +175,7 @@ export default function HistoryPage() {
 
   return (
     <LoggedLayout>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
         <Box
           sx={{
             width: 40,
@@ -192,6 +185,7 @@ export default function HistoryPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            flexShrink: 0,
           }}
         >
           <SwapHorizIcon sx={{ color: '#1976D2' }} />
@@ -206,7 +200,7 @@ export default function HistoryPage() {
         </Box>
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 1.5, mb: 3 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
         <TextField
           fullWidth
           size="small"
@@ -220,14 +214,14 @@ export default function HistoryPage() {
               </InputAdornment>
             ),
           }}
-          sx={{ bgcolor: '#fff', borderRadius: 2 }}
+          sx={{ bgcolor: '#fff', borderRadius: 2, flex: '1 1 280px', minWidth: 0 }}
         />
         <TextField
           select
           size="small"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          sx={{ width: 180, bgcolor: '#fff', borderRadius: 2 }}
+          sx={{ width: 180, flexShrink: 0, bgcolor: '#fff', borderRadius: 2 }}
         >
           <MenuItem value="">Todos os tipos</MenuItem>
           <MenuItem value="entry">Entrada</MenuItem>
@@ -236,98 +230,90 @@ export default function HistoryPage() {
         </TextField>
       </Box>
 
-      {isLoading ? (
-        <CircularProgress />
-      ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                <TableCell sx={thSx}>Tipo</TableCell>
-                <TableCell sx={thSx}>Produto</TableCell>
-                <TableCell sx={thSx}>Categoria</TableCell>
-                <TableCell sx={thSx}>Qtd</TableCell>
-                <TableCell sx={thSx}>Peso</TableCell>
-                <TableCell sx={thSx}>Motivo</TableCell>
-                <TableCell sx={thSx}>Data</TableCell>
-                <TableCell sx={thSx} align="center">
-                  Ações
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filtered?.map((m) => (
-                <TableRow key={m._id} hover>
-                  <TableCell>
-                    <Chip
-                      label={movementTypeMeta(m.movementType).label}
-                      size="small"
-                      sx={{
-                        bgcolor: movementTypeMeta(m.movementType).bgcolor,
-                        color: movementTypeMeta(m.movementType).color,
-                        fontWeight: 600,
-                        borderRadius: 1.5,
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={500}>
-                      {m.product.productName}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    {m.itemType ? (
-                      <Chip
-                        label={m.itemType === 'raw' ? 'Bruto' : 'Porcionado'}
-                        size="small"
-                        sx={{
-                          bgcolor: '#F1F3F5',
-                          color: '#495057',
-                          borderRadius: 1.5,
-                        }}
-                      />
-                    ) : (
-                      '—'
-                    )}
-                  </TableCell>
-                  <TableCell>{m.quantity}</TableCell>
-                  <TableCell>
-                    {m.weightGrams != null ? `${m.weightGrams}g` : '—'}
-                  </TableCell>
-                  <TableCell sx={{ maxWidth: 220 }}>
-                    <Typography variant="body2" noWrap title={m.reason || undefined}>
-                      {m.reason || '—'}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{formatDate(m.date)}</TableCell>
-                  <TableCell align="center">
-                    <IconButton
-                      size="small"
-                      aria-label="ver detalhes"
-                      onClick={() => {
-                        setSelectedLabels([]);
-                        setDetail(m);
-                      }}
-                      sx={{ color: '#666' }}
-                    >
-                      <VisibilityIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered?.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">
-                      Nenhuma movimentação encontrada
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+      <ResponsiveTable
+        loading={isLoading}
+        rows={filtered}
+        rowKey={(m) => m._id}
+        emptyMessage="Nenhuma movimentação encontrada"
+        headerCellSx={thSx}
+        columns={[
+          {
+            id: 'tipo',
+            header: 'Tipo',
+            cell: (m) => (
+              <Chip
+                label={movementTypeMeta(m.movementType).label}
+                size="small"
+                sx={{
+                  bgcolor: movementTypeMeta(m.movementType).bgcolor,
+                  color: movementTypeMeta(m.movementType).color,
+                  fontWeight: 600,
+                  borderRadius: 1.5,
+                }}
+              />
+            ),
+          },
+          {
+            id: 'produto',
+            header: 'Produto',
+            primary: true,
+            cell: (m) => (
+              <Typography variant="body2" fontWeight={500}>
+                {m.product.productName}
+              </Typography>
+            ),
+          },
+          {
+            id: 'categoria',
+            header: 'Categoria',
+            cell: (m) =>
+              m.itemType ? (
+                <Chip
+                  label={m.itemType === 'raw' ? 'Bruto' : 'Porcionado'}
+                  size="small"
+                  sx={{
+                    bgcolor: '#F1F3F5',
+                    color: '#495057',
+                    borderRadius: 1.5,
+                  }}
+                />
+              ) : (
+                '—'
+              ),
+          },
+          { id: 'qtd', header: 'Qtd', cell: (m) => m.quantity },
+          {
+            id: 'peso',
+            header: 'Peso',
+            cell: (m) => (m.weightGrams != null ? `${m.weightGrams}g` : '—'),
+          },
+          {
+            id: 'motivo',
+            header: 'Motivo',
+            sx: { maxWidth: 220 },
+            fullWidthOnMobile: true,
+            cell: (m) => (
+              <Typography variant="body2" noWrap title={m.reason || undefined}>
+                {m.reason || '—'}
+              </Typography>
+            ),
+          },
+          { id: 'data', header: 'Data', cell: (m) => formatDate(m.date) },
+        ]}
+        actions={(m) => (
+          <IconButton
+            size="small"
+            aria-label="ver detalhes"
+            onClick={() => {
+              setSelectedLabels([]);
+              setDetail(m);
+            }}
+            sx={{ color: '#666' }}
+          >
+            <VisibilityIcon fontSize="small" />
+          </IconButton>
+        )}
+      />
 
       <Dialog
         open={!!detail}
@@ -375,7 +361,7 @@ export default function HistoryPage() {
                 borderRadius: 2,
                 p: 2,
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
                 rowGap: 1.25,
                 columnGap: 2,
               }}

@@ -1,24 +1,16 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   TextField,
-  CircularProgress,
   Chip,
   InputAdornment,
 } from '@mui/material';
@@ -44,6 +36,8 @@ import type { AgendaItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import BrDateField from '../components/BrDateField/BrDateField';
+import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
 
 type AgendaFormValues = z.infer<typeof agendaItemSchema>;
 
@@ -127,6 +121,49 @@ function DetailValue({ label, value, color }: { label: string; value: string; co
   );
 }
 
+const agendaColumns: ResponsiveTableColumn<AgendaItem>[] = [
+  {
+    id: 'name',
+    header: 'Nome',
+    primary: true,
+    cell: (item) => <Typography fontWeight={500}>{item.name}</Typography>,
+  },
+  {
+    id: 'datePerformed',
+    header: 'Data Realizado',
+    cell: (item) => formatDate(item.datePerformed),
+  },
+  {
+    id: 'expiryDate',
+    header: 'Data de Validade',
+    cell: (item) => <Typography fontWeight={700}>{formatDate(item.expiryDate)}</Typography>,
+  },
+  {
+    id: 'observations',
+    header: 'Observações',
+    fullWidthOnMobile: true,
+    cell: (item) => (
+      <Typography
+        variant="body2"
+        title={item.observations || ''}
+        sx={{
+          maxWidth: { md: 320 },
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: { md: 'nowrap' },
+        }}
+      >
+        {item.observations || '—'}
+      </Typography>
+    ),
+  },
+  {
+    id: 'status',
+    header: 'Status',
+    cell: (item) => <StatusChip status={agendaStatus(item.expiryDate)} />,
+  },
+];
+
 export default function AgendaPage() {
   const { data: items, isLoading } = useAgendaItems();
   const createItem = useCreateAgendaItem();
@@ -202,8 +239,17 @@ export default function AgendaPage() {
 
   return (
     <LoggedLayout>
-      <Box sx={{ mb: 3, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Box
+        sx={{
+          mb: 3,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
           <Box
             sx={{
               width: 40,
@@ -250,162 +296,106 @@ export default function AgendaPage() {
         sx={{ mb: 3, bgcolor: '#fff', borderRadius: 2 }}
       />
 
-      {isLoading ? (
-        <CircularProgress />
-      ) : (
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                <TableCell sx={{ fontWeight: 700, color: '#333', width: 48 }} />
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Nome</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Data Realizado</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Data de Validade</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Observações</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: '#333' }} align="center">
-                  Ações
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredItems?.map((item) => {
-                const status = agendaStatus(item.expiryDate);
-                const days = daysUntil(item.expiryDate);
-                const expanded = expandedId === item._id;
-                return (
-                  <Fragment key={item._id}>
-                    <TableRow
-                      hover
-                      sx={{ bgcolor: status === 'Vencido' ? '#FFF5F5' : undefined }}
-                    >
-                      <TableCell padding="none" sx={{ pl: 1, width: 48 }}>
-                        <IconButton
-                          size="small"
-                          onClick={() => setExpandedId(expanded ? null : item._id)}
-                          sx={{
-                            color: '#666',
-                            transform: expanded ? 'rotate(180deg)' : 'none',
-                            transition: 'transform 0.2s',
-                          }}
-                        >
-                          <ExpandMoreIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                      <TableCell>
-                        <Typography fontWeight={500}>{item.name}</Typography>
-                      </TableCell>
-                      <TableCell>{formatDate(item.datePerformed)}</TableCell>
-                      <TableCell>
-                        <Typography fontWeight={700}>{formatDate(item.expiryDate)}</Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography
-                          variant="body2"
-                          title={item.observations || ''}
-                          sx={{
-                            maxWidth: 320,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {item.observations || '—'}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <StatusChip status={status} />
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          onClick={() => openEdit(item)}
-                          sx={{ color: '#666' }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => setDeleteTarget(item._id)}
-                          sx={{ color: '#d32f2f' }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                    {expanded && (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          sx={{ py: 2, bgcolor: '#F8F9FA', borderTop: 'none' }}
-                        >
-                          <Box
-                            sx={{
-                              display: 'grid',
-                              gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                              gap: 2,
-                              px: 1,
-                            }}
-                          >
-                            <Box>
-                              <Typography variant="caption" sx={detailLabelSx}>
-                                Nome
-                              </Typography>
-                              <Typography variant="body2" fontWeight={600}>
-                                {item.name}
-                              </Typography>
-                            </Box>
-                            <Box>
-                              <Typography variant="caption" sx={detailLabelSx}>
-                                Status
-                              </Typography>
-                              <StatusChip status={status} />
-                            </Box>
-                            <DetailValue
-                              label="Data que foi realizado"
-                              value={formatDate(item.datePerformed)}
-                            />
-                            <DetailValue
-                              label="Data de Validade"
-                              value={formatDate(item.expiryDate)}
-                            />
-                            <DetailValue
-                              label="Dias até o vencimento"
-                              value={days !== null ? `${days} dia(s)` : '—'}
-                              color={days !== null && days >= 0 ? '#2E7D32' : '#C62828'}
-                            />
-                            <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1' } }}>
-                              <Typography variant="caption" sx={detailLabelSx}>
-                                Observações
-                              </Typography>
-                              <TextField
-                                fullWidth
-                                size="small"
-                                multiline
-                                minRows={2}
-                                value={item.observations || ''}
-                                slotProps={{ htmlInput: { readOnly: true } }}
-                                sx={{ mt: 0.5, bgcolor: '#fff' }}
-                              />
-                            </Box>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </Fragment>
-                );
-              })}
-              {filteredItems?.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                    <Typography color="text.secondary">Nenhum item encontrado</Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+      <ResponsiveTable
+        columns={agendaColumns}
+        rows={filteredItems}
+        rowKey={(item) => item._id}
+        loading={isLoading}
+        emptyMessage="Nenhum item encontrado"
+        leadingHeader={null}
+        leadingSx={{ pl: 1, width: 48 }}
+        leading={(item) => {
+          const expanded = expandedId === item._id;
+          return (
+            <IconButton
+              size="small"
+              onClick={() => setExpandedId(expanded ? null : item._id)}
+              sx={{
+                color: '#666',
+                transform: expanded ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s',
+              }}
+            >
+              <ExpandMoreIcon fontSize="small" />
+            </IconButton>
+          );
+        }}
+        rowSx={(item) => ({
+          bgcolor: agendaStatus(item.expiryDate) === 'Vencido' ? '#FFF5F5' : undefined,
+        })}
+        expandedRow={(item) => {
+          if (expandedId !== item._id) return null;
+          const status = agendaStatus(item.expiryDate);
+          const days = daysUntil(item.expiryDate);
+          return (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                gap: 2,
+                px: 1,
+              }}
+            >
+              <Box>
+                <Typography variant="caption" sx={detailLabelSx}>
+                  Nome
+                </Typography>
+                <Typography variant="body2" fontWeight={600}>
+                  {item.name}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={detailLabelSx}>
+                  Status
+                </Typography>
+                <StatusChip status={status} />
+              </Box>
+              <DetailValue
+                label="Data que foi realizado"
+                value={formatDate(item.datePerformed)}
+              />
+              <DetailValue label="Data de Validade" value={formatDate(item.expiryDate)} />
+              <DetailValue
+                label="Dias até o vencimento"
+                value={days !== null ? `${days} dia(s)` : '—'}
+                color={days !== null && days >= 0 ? '#2E7D32' : '#C62828'}
+              />
+              <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1' } }}>
+                <Typography variant="caption" sx={detailLabelSx}>
+                  Observações
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  multiline
+                  minRows={2}
+                  value={item.observations || ''}
+                  slotProps={{ htmlInput: { readOnly: true } }}
+                  sx={{ mt: 0.5, bgcolor: '#fff' }}
+                />
+              </Box>
+            </Box>
+          );
+        }}
+        actions={(item) => (
+          <>
+            <IconButton
+              size="small"
+              onClick={() => openEdit(item)}
+              sx={{ color: '#666' }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => setDeleteTarget(item._id)}
+              sx={{ color: '#d32f2f' }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </>
+        )}
+      />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle

@@ -12,12 +12,6 @@ import {
   IconButton,
   Collapse,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   CircularProgress,
 } from '@mui/material';
 import GridOnIcon from '@mui/icons-material/GridOn';
@@ -32,6 +26,7 @@ import { useProducts, useStockItems } from '@/lib/queries';
 import { formatKg, formatDate, daysUntil, lifeStatus } from '@/lib/utils';
 import type { StockItem } from '@/types';
 import LoggedLayout from './components/LoggedLayout/LoggedLayout';
+import ResponsiveTable from './components/ResponsiveTable/ResponsiveTable';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -198,7 +193,7 @@ export default function DashboardPage() {
   return (
     <LoggedLayout>
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
           <Box
             sx={{
               width: 40,
@@ -231,6 +226,7 @@ export default function DashboardPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 2,
+                flexWrap: 'wrap',
                 bgcolor: '#FDECEC',
                 border: '1px solid #F5C2C7',
                 borderRadius: 2,
@@ -270,6 +266,7 @@ export default function DashboardPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 2,
+                flexWrap: 'wrap',
                 bgcolor: '#FFF4E5',
                 border: '1px solid #FFD699',
                 borderRadius: 2,
@@ -401,45 +398,51 @@ export default function DashboardPage() {
                     </Box>
                     <Collapse in={open} timeout="auto" unmountOnExit>
                       <Box sx={{ px: 2.5, pb: 2 }}>
-                        <TableContainer>
-                          <Table size="small" sx={tableSx}>
-                            <TableHead>
-                              <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                                <TableCell sx={thSx}>Tipo</TableCell>
-                                <TableCell sx={thSx}>Peso</TableCell>
-                                <TableCell sx={thSx}>Validade</TableCell>
-                                <TableCell sx={thSx}>Status</TableCell>
-                                <TableCell sx={thSx}>QR</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {g.items.map((item) => (
-                                <TableRow key={item._id}>
-                                  <TableCell>
-                                    <Chip
-                                      label={item.type === 'raw' ? 'Bruto' : 'Porcionado'}
-                                      size="small"
-                                      sx={item.type === 'raw' ? { ...chipGray } : { ...chipGreen }}
-                                    />
-                                  </TableCell>
-                                  <TableCell>{item.weightGrams}g</TableCell>
-                                  <TableCell>{formatDate(item.expiryDate)}</TableCell>
-                                  <TableCell>
-                                    <DaysChip expiryDate={item.expiryDate} />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography
-                                      variant="caption"
-                                      sx={{ fontFamily: 'monospace', fontSize: 11, color: '#495057' }}
-                                    >
-                                      {item.qrCode}
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
+                        <ResponsiveTable
+                          paper={false}
+                          size="small"
+                          tableSx={tableSx}
+                          headerCellSx={thSx}
+                          rows={g.items}
+                          rowKey={(item) => item._id}
+                          columns={[
+                            {
+                              id: 'tipo',
+                              header: 'Tipo',
+                              cell: (item) => (
+                                <Chip
+                                  label={item.type === 'raw' ? 'Bruto' : 'Porcionado'}
+                                  size="small"
+                                  sx={item.type === 'raw' ? { ...chipGray } : { ...chipGreen }}
+                                />
+                              ),
+                            },
+                            { id: 'peso', header: 'Peso', cell: (item) => `${item.weightGrams}g` },
+                            {
+                              id: 'validade',
+                              header: 'Validade',
+                              cell: (item) => formatDate(item.expiryDate),
+                            },
+                            {
+                              id: 'status',
+                              header: 'Status',
+                              cell: (item) => <DaysChip expiryDate={item.expiryDate} />,
+                            },
+                            {
+                              id: 'qr',
+                              header: 'QR',
+                              fullWidthOnMobile: true,
+                              cell: (item) => (
+                                <Typography
+                                  variant="caption"
+                                  sx={{ fontFamily: 'monospace', fontSize: 11, color: '#495057' }}
+                                >
+                                  {item.qrCode}
+                                </Typography>
+                              ),
+                            },
+                          ]}
+                        />
                       </Box>
                     </Collapse>
                   </Box>
@@ -458,44 +461,40 @@ export default function DashboardPage() {
                   </Typography>
                 </Box>
                 <Box sx={{ px: 2.5, pb: 2.5 }}>
-                  <TableContainer>
-                    <Table size="small" sx={tableSx}>
-                      <TableHead>
-                        <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                          <TableCell sx={thSx}>Produto</TableCell>
-                          <TableCell sx={thSx}>Validade</TableCell>
-                          <TableCell sx={thSx}>Status</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {attention.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={3} align="center" sx={{ py: 3, color: '#666' }}>
-                              Nenhum item em atenção
-                            </TableCell>
-                          </TableRow>
-                        )}
-                        {attention.map((item) => {
-                          const expired = lifeStatus(item) === 'expired';
-                          return (
-                            <TableRow key={item._id}>
-                              <TableCell>
-                                <Typography fontWeight={600}>{item.product.productName}</Typography>
-                              </TableCell>
-                              <TableCell>{formatDate(item.expiryDate)}</TableCell>
-                              <TableCell>
-                                {expired ? (
-                                  <Chip label="Vencido" size="small" sx={chipRed} />
-                                ) : (
-                                  <Chip label="Esta semana" size="small" sx={chipAmber} />
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <ResponsiveTable
+                    paper={false}
+                    size="small"
+                    tableSx={tableSx}
+                    headerCellSx={thSx}
+                    rows={attention}
+                    rowKey={(item) => item._id}
+                    emptyMessage="Nenhum item em atenção"
+                    columns={[
+                      {
+                        id: 'produto',
+                        header: 'Produto',
+                        fullWidthOnMobile: true,
+                        cell: (item) => (
+                          <Typography fontWeight={600}>{item.product.productName}</Typography>
+                        ),
+                      },
+                      {
+                        id: 'validade',
+                        header: 'Validade',
+                        cell: (item) => formatDate(item.expiryDate),
+                      },
+                      {
+                        id: 'status',
+                        header: 'Status',
+                        cell: (item) =>
+                          lifeStatus(item) === 'expired' ? (
+                            <Chip label="Vencido" size="small" sx={chipRed} />
+                          ) : (
+                            <Chip label="Esta semana" size="small" sx={chipAmber} />
+                          ),
+                      },
+                    ]}
+                  />
                 </Box>
               </Card>
             </Grid>
@@ -508,39 +507,30 @@ export default function DashboardPage() {
                   </Typography>
                 </Box>
                 <Box sx={{ px: 2.5, pb: 2.5 }}>
-                  <TableContainer>
-                    <Table size="small" sx={tableSx}>
-                      <TableHead>
-                        <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                          <TableCell sx={thSx}>Produto</TableCell>
-                          <TableCell sx={thSx}>Estoque</TableCell>
-                          <TableCell sx={thSx}>Mínimo</TableCell>
-                          <TableCell sx={thSx}>Falta</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {lowStockList.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={4} align="center" sx={{ py: 3, color: '#666' }}>
-                              Nenhum produto abaixo do mínimo
-                            </TableCell>
-                          </TableRow>
-                        )}
-                        {lowStockList.map((r) => (
-                          <TableRow key={r.name}>
-                            <TableCell>
-                              <Typography fontWeight={600}>{r.name}</Typography>
-                            </TableCell>
-                            <TableCell>{r.weight}g</TableCell>
-                            <TableCell>{r.minQuantity}g</TableCell>
-                            <TableCell>
-                              <Chip label={`${r.falta}g`} size="small" sx={chipRed} />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <ResponsiveTable
+                    paper={false}
+                    size="small"
+                    tableSx={tableSx}
+                    headerCellSx={thSx}
+                    rows={lowStockList}
+                    rowKey={(r) => r.name}
+                    emptyMessage="Nenhum produto abaixo do mínimo"
+                    columns={[
+                      {
+                        id: 'produto',
+                        header: 'Produto',
+                        fullWidthOnMobile: true,
+                        cell: (r) => <Typography fontWeight={600}>{r.name}</Typography>,
+                      },
+                      { id: 'estoque', header: 'Estoque', cell: (r) => `${r.weight}g` },
+                      { id: 'minimo', header: 'Mínimo', cell: (r) => `${r.minQuantity}g` },
+                      {
+                        id: 'falta',
+                        header: 'Falta',
+                        cell: (r) => <Chip label={`${r.falta}g`} size="small" sx={chipRed} />,
+                      },
+                    ]}
+                  />
                 </Box>
               </Card>
             </Grid>
@@ -553,39 +543,40 @@ export default function DashboardPage() {
                   </Typography>
                 </Box>
                 <Box sx={{ px: 2.5, pb: 2.5 }}>
-                  <TableContainer>
-                    <Table size="small" sx={tableSx}>
-                      <TableHead>
-                        <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                          <TableCell sx={thSx}>Produto</TableCell>
-                          <TableCell sx={thSx}>Em Estoque</TableCell>
-                          <TableCell sx={thSx}>Mínimo</TableCell>
-                          <TableCell sx={thSx}>Falta</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {lowProductionList.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={4} align="center" sx={{ py: 3, color: '#666' }}>
-                              Nenhum produto porcionado abaixo do mínimo
-                            </TableCell>
-                          </TableRow>
-                        )}
-                        {lowProductionList.map((r) => (
-                          <TableRow key={r.name}>
-                            <TableCell>
-                              <Typography fontWeight={600}>{r.name}</Typography>
-                            </TableCell>
-                            <TableCell>{r.portioned} porções</TableCell>
-                            <TableCell>{r.minPortionedQuantity} porções</TableCell>
-                            <TableCell>
-                              <Chip label={`${r.falta} porções`} size="small" sx={chipAmber} />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  <ResponsiveTable
+                    paper={false}
+                    size="small"
+                    tableSx={tableSx}
+                    headerCellSx={thSx}
+                    rows={lowProductionList}
+                    rowKey={(r) => r.name}
+                    emptyMessage="Nenhum produto porcionado abaixo do mínimo"
+                    columns={[
+                      {
+                        id: 'produto',
+                        header: 'Produto',
+                        fullWidthOnMobile: true,
+                        cell: (r) => <Typography fontWeight={600}>{r.name}</Typography>,
+                      },
+                      {
+                        id: 'em-estoque',
+                        header: 'Em Estoque',
+                        cell: (r) => `${r.portioned} porções`,
+                      },
+                      {
+                        id: 'minimo',
+                        header: 'Mínimo',
+                        cell: (r) => `${r.minPortionedQuantity} porções`,
+                      },
+                      {
+                        id: 'falta',
+                        header: 'Falta',
+                        cell: (r) => (
+                          <Chip label={`${r.falta} porções`} size="small" sx={chipAmber} />
+                        ),
+                      },
+                    ]}
+                  />
                 </Box>
               </Card>
             </Grid>

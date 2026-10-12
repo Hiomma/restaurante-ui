@@ -10,13 +10,6 @@ import {
   IconButton,
   Tabs,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Chip,
   Checkbox,
   Dialog,
@@ -46,6 +39,7 @@ import { formatDate, formatWeight, todayISODate } from '@/lib/utils';
 import api from '@/lib/api';
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
+import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -79,6 +73,17 @@ const statusLabels: Record<string, string> = {
   discarded: 'Descartado',
   expired: 'Vencido',
 };
+
+/**
+ * Unified row of the "Destinos" table: fixed (built-in) destinations and
+ * custom ones share a single shape so one `columns` definition covers both.
+ */
+interface DestinationRow {
+  key: string;
+  name: string;
+  type: 'move' | 'writeoff';
+  fixed: boolean;
+}
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -487,6 +492,25 @@ export default function MovementsPage() {
     a.name.localeCompare(b.name),
   );
 
+  // Fixed + custom destinations of the active sub-tab, as one row array.
+  const destRows: DestinationRow[] = [
+    ...(destSubTab === 'move' ? fixedMoveDestinations : fixedWriteoffDestinations).map((name) => ({
+      key: `fixed-${name}`,
+      name,
+      type: destSubTab,
+      fixed: true,
+    })),
+    ...customDestinations
+      .filter((d) => (d.type ?? 'move') === destSubTab)
+      .map((d) => ({
+        key: d._id,
+        name: d.name,
+        type: d.type ?? 'move',
+        fixed: false,
+      })),
+  ];
+  const hasCustomDestinations = destRows.some((r) => !r.fixed);
+
   const handleAddDestination = async () => {
     const name = destName.trim();
     if (!name) return;
@@ -515,7 +539,7 @@ export default function MovementsPage() {
 
   return (
     <LoggedLayout>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3, flexWrap: 'wrap' }}>
         <Box
           sx={{
             width: 40,
@@ -529,7 +553,7 @@ export default function MovementsPage() {
         >
           <SwapHorizIcon sx={{ color: '#1976D2' }} />
         </Box>
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography variant="h5" fontWeight="bold">
             Movimentações
           </Typography>
@@ -542,6 +566,9 @@ export default function MovementsPage() {
       <Tabs
         value={tab}
         onChange={(_, v) => setTab(v)}
+        variant="scrollable"
+        scrollButtons="auto"
+        allowScrollButtonsMobile
         sx={{
           bgcolor: '#f1f3f5',
           borderRadius: 2,
@@ -555,6 +582,7 @@ export default function MovementsPage() {
             minHeight: 40,
             fontWeight: 600,
             color: '#555',
+            whiteSpace: 'nowrap',
             alignItems: 'center',
             flexDirection: 'row',
             gap: 1,
@@ -577,11 +605,11 @@ export default function MovementsPage() {
               </Typography>
             </Box>
             <FieldLabel>Código QR (6 dígitos)</FieldLabel>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
+            <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
               <TextField
                 fullWidth
                 size="small"
-                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+                sx={{ '& .MuiOutlinedInput-root': { height: 44 }, minWidth: 160, flexGrow: 1 }}
                 placeholder="Ex: AB1234"
                 value={qrInput}
                 inputRef={qrRef}
@@ -602,6 +630,7 @@ export default function MovementsPage() {
                   borderColor: '#90CAF9',
                   px: 2.5,
                   minWidth: 110,
+                  flexShrink: 0,
                   '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
                 }}
               >
@@ -620,6 +649,8 @@ export default function MovementsPage() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
+                  gap: 1,
+                  flexWrap: 'wrap',
                   mb: 2,
                 }}
               >
@@ -706,7 +737,7 @@ export default function MovementsPage() {
               </Box>
 
               <FieldLabel required>Ação</FieldLabel>
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+              <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
                 <Button
                   variant="contained"
                   onClick={() => selectAction('move')}
@@ -779,6 +810,7 @@ export default function MovementsPage() {
                       justifyContent: 'flex-end',
                       gap: 1.5,
                       mt: 2.5,
+                      flexWrap: 'wrap',
                     }}
                   >
                     <Button
@@ -816,7 +848,7 @@ export default function MovementsPage() {
           </Typography>
 
           <FieldLabel>Tipo de Contagem</FieldLabel>
-          <Box sx={{ display: 'flex', gap: 1, mb: 2.5 }}>
+          <Box sx={{ display: 'flex', gap: 1, mb: 2.5, flexWrap: 'wrap' }}>
             <Button
               variant={countMode === 'product' ? 'contained' : 'outlined'}
               onClick={() => {
@@ -890,11 +922,11 @@ export default function MovementsPage() {
                 </Typography>
 
                 <FieldLabel>Escanear / Digitar código das etiquetas</FieldLabel>
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
                   <TextField
                     fullWidth
                     size="small"
-                    sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+                    sx={{ '& .MuiOutlinedInput-root': { height: 44 }, minWidth: 160, flexGrow: 1 }}
                     placeholder="Escaneie ou digite o QR..."
                     value={countScanInput}
                     inputRef={countScanRef}
@@ -908,7 +940,7 @@ export default function MovementsPage() {
                     variant="contained"
                     onClick={() => void handleCountScan()}
                     disabled={!countScanInput.trim() || countScanning}
-                    sx={primaryBtnSx}
+                    sx={{ ...primaryBtnSx, flexShrink: 0 }}
                   >
                     {countScanning ? <CircularProgress size={18} /> : 'Adicionar'}
                   </Button>
@@ -930,7 +962,7 @@ export default function MovementsPage() {
                   {countScanned.length} código(s) escaneado(s). Clique no código para remover.
                 </Typography>
 
-                <Box sx={{ display: 'flex', gap: 1.5, mt: 2 }}>
+                <Box sx={{ display: 'flex', gap: 1.5, mt: 2, flexWrap: 'wrap' }}>
                   <Button
                     variant="contained"
                     disabled={!countItems?.length || moving}
@@ -1045,12 +1077,18 @@ export default function MovementsPage() {
                           </Typography>
                           {selectedMissing.length > 0 && (
                             <Box
-                              sx={{ ml: 'auto', display: 'flex', gap: 1, alignItems: 'center' }}
+                              sx={{
+                                ml: 'auto',
+                                display: 'flex',
+                                gap: 1,
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                              }}
                             >
                               <TextField
                                 select
                                 size="small"
-                                sx={{ minWidth: 160 }}
+                                sx={{ minWidth: { xs: 140, md: 160 }, width: { xs: '100%', sm: 'auto' } }}
                                 value={bulkDest}
                                 onChange={(e) => setBulkDest(e.target.value)}
                                 SelectProps={{
@@ -1096,105 +1134,116 @@ export default function MovementsPage() {
                             </Box>
                           )}
                         </Box>
-                        <TableContainer>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                                <TableCell sx={thSx} padding="checkbox" />
-                                <TableCell sx={thSx}>Produto</TableCell>
-                                <TableCell sx={thSx}>Peso</TableCell>
-                                <TableCell sx={thSx}>Lote</TableCell>
-                                <TableCell sx={thSx}>Validade</TableCell>
-                                <TableCell sx={thSx}>QR</TableCell>
-                                <TableCell sx={thSx}>Destino</TableCell>
-                                <TableCell sx={thSx} align="center">
-                                  Ações
-                                </TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {countResult.missing.map((item) => (
-                                <TableRow key={item._id} hover sx={{ bgcolor: '#FFF5F5' }}>
-                                  <TableCell padding="checkbox">
-                                    <Checkbox
-                                      checked={!!missingSelected[item._id]}
-                                      onChange={(e) => toggleMissing(item._id, e.target.checked)}
-                                      sx={{
-                                        color: '#C62828',
-                                        '&.Mui-checked': { color: '#C62828' },
-                                      }}
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Typography variant="body2" fontWeight={600}>
-                                      {item.product.productName}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell>{item.weightGrams}g</TableCell>
-                                  <TableCell>{item.lote || '—'}</TableCell>
-                                  <TableCell>{formatDate(item.expiryDate)}</TableCell>
-                                  <TableCell sx={{ fontFamily: 'monospace' }}>
-                                    {item.qrCode}
-                                  </TableCell>
-                                  <TableCell>
-                                    <TextField
-                                      select
-                                      size="small"
-                                      sx={{ minWidth: 130 }}
-                                      value={missingDest[item._id] ?? ''}
-                                      onChange={(e) =>
-                                        setMissingDest((prev) => ({
-                                          ...prev,
-                                          [item._id]: e.target.value,
-                                        }))
-                                      }
-                                      SelectProps={{
-                                        displayEmpty: true,
-                                        renderValue: (v) =>
-                                          v === '' ? (
-                                            <Box component="span" sx={{ color: 'text.disabled' }}>
-                                              Destino...
-                                            </Box>
-                                          ) : (
-                                            String(v)
-                                          ),
-                                      }}
-                                    >
-                                      <MenuItem value="" disabled>
-                                        Destino...
-                                      </MenuItem>
-                                      {allCountDestinations.map((d) => (
-                                        <MenuItem key={d} value={d}>
-                                          {d}
-                                        </MenuItem>
-                                      ))}
-                                    </TextField>
-                                  </TableCell>
-                                  <TableCell align="center">
-                                    <IconButton
-                                      size="small"
-                                      aria-label="mover etiqueta"
-                                      disabled={!missingDest[item._id] || moving}
-                                      onClick={() => void handleMoveMissing(item)}
-                                      sx={{ color: '#1976D2' }}
-                                    >
-                                      <SwapHorizIcon fontSize="small" />
-                                    </IconButton>
-                                    <IconButton
-                                      size="small"
-                                      aria-label="baixar etiqueta"
-                                      disabled={moving}
-                                      onClick={() => void handleDropMissing(item)}
-                                      sx={{ color: '#C62828' }}
-                                    >
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
+                        <ResponsiveTable
+                          paper={false}
+                          size="small"
+                          headerCellSx={thSx}
+                          rows={countResult.missing}
+                          rowKey={(item) => item._id}
+                          rowSx={() => ({ bgcolor: '#FFF5F5' })}
+                          actionsLabel="Ações"
+                          leading={(item) => (
+                            <Checkbox
+                              checked={!!missingSelected[item._id]}
+                              onChange={(e) => toggleMissing(item._id, e.target.checked)}
+                              sx={{
+                                color: '#C62828',
+                                '&.Mui-checked': { color: '#C62828' },
+                              }}
+                            />
+                          )}
+                          leadingPadding="checkbox"
+                          actions={(item) => (
+                            <>
+                              <IconButton
+                                size="small"
+                                aria-label="mover etiqueta"
+                                disabled={!missingDest[item._id] || moving}
+                                onClick={() => void handleMoveMissing(item)}
+                                sx={{ color: '#1976D2' }}
+                              >
+                                <SwapHorizIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                aria-label="baixar etiqueta"
+                                disabled={moving}
+                                onClick={() => void handleDropMissing(item)}
+                                sx={{ color: '#C62828' }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </>
+                          )}
+                          columns={[
+                            {
+                              id: 'produto',
+                              header: 'Produto',
+                              primary: true,
+                              cell: (item) => (
+                                <Typography variant="body2" fontWeight={600}>
+                                  {item.product.productName}
+                                </Typography>
+                              ),
+                            },
+                            { id: 'peso', header: 'Peso', cell: (item) => `${item.weightGrams}g` },
+                            { id: 'lote', header: 'Lote', cell: (item) => item.lote || '—' },
+                            {
+                              id: 'validade',
+                              header: 'Validade',
+                              cell: (item) => formatDate(item.expiryDate),
+                            },
+                            {
+                              id: 'qr',
+                              header: 'QR',
+                              sx: { fontFamily: 'monospace' },
+                              cell: (item) => (
+                                <Box component="span" sx={{ fontFamily: 'monospace' }}>
+                                  {item.qrCode}
+                                </Box>
+                              ),
+                            },
+                            {
+                              id: 'destino',
+                              header: 'Destino',
+                              fullWidthOnMobile: true,
+                              cell: (item) => (
+                                <TextField
+                                  select
+                                  size="small"
+                                  sx={{ minWidth: { xs: '100%', md: 130 } }}
+                                  value={missingDest[item._id] ?? ''}
+                                  onChange={(e) =>
+                                    setMissingDest((prev) => ({
+                                      ...prev,
+                                      [item._id]: e.target.value,
+                                    }))
+                                  }
+                                  SelectProps={{
+                                    displayEmpty: true,
+                                    renderValue: (v) =>
+                                      v === '' ? (
+                                        <Box component="span" sx={{ color: 'text.disabled' }}>
+                                          Destino...
+                                        </Box>
+                                      ) : (
+                                        String(v)
+                                      ),
+                                  }}
+                                >
+                                  <MenuItem value="" disabled>
+                                    Destino...
+                                  </MenuItem>
+                                  {allCountDestinations.map((d) => (
+                                    <MenuItem key={d} value={d}>
+                                      {d}
+                                    </MenuItem>
+                                  ))}
+                                </TextField>
+                              ),
+                            },
+                          ]}
+                        />
                       </Box>
                     )}
                   </Box>
@@ -1206,8 +1255,8 @@ export default function MovementsPage() {
 
       {tab === 2 && (
         <>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Typography variant="body2" sx={{ color: '#666', flex: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+            <Typography variant="body2" sx={{ color: '#666', flex: 1, minWidth: 220 }}>
               Gerencie os destinos disponíveis para as ações Mover e Baixar
             </Typography>
             <Button
@@ -1216,7 +1265,7 @@ export default function MovementsPage() {
                 setDestType(destSubTab);
                 setDialogOpen(true);
               }}
-              sx={primaryBtnSx}
+              sx={{ ...primaryBtnSx, ml: 'auto' }}
             >
               Novo Destino
             </Button>
@@ -1225,6 +1274,9 @@ export default function MovementsPage() {
           <Tabs
             value={destSubTab}
             onChange={(_, v: 'move' | 'writeoff') => setDestSubTab(v)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{
               bgcolor: '#f1f3f5',
               borderRadius: 2,
@@ -1232,6 +1284,7 @@ export default function MovementsPage() {
               mb: 2,
               minHeight: 44,
               width: 'fit-content',
+              maxWidth: '100%',
               mx: 'auto',
               '& .MuiTabs-indicator': { display: 'none' },
               '& .MuiTab-root': {
@@ -1241,6 +1294,7 @@ export default function MovementsPage() {
                 minWidth: 96,
                 fontWeight: 600,
                 color: '#555',
+                whiteSpace: 'nowrap',
                 justifyContent: 'center',
                 '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
               },
@@ -1250,98 +1304,70 @@ export default function MovementsPage() {
             <Tab label="Baixar" value="writeoff" />
           </Tabs>
 
-          <TableContainer component={Paper} sx={{ borderRadius: 2, border: '1px solid #e8ecf1' }}>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ bgcolor: '#f5f7fa' }}>
-                  <TableCell sx={thSx}>Destino</TableCell>
-                  <TableCell sx={thSx}>Tipo</TableCell>
-                  <TableCell sx={thSx} align="center">
-                    Ações
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {destSubTab === 'move'
-                  ? fixedMoveDestinations.map((d) => (
-                      <TableRow key={d} hover>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>
-                            {d}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label="Padrão" size="small" sx={grayChipSx} />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Typography variant="body2" sx={{ color: '#999' }}>
-                            Fixo
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  : fixedWriteoffDestinations.map((d) => (
-                      <TableRow key={d} hover>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>
-                            {d}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label="Padrão" size="small" sx={grayChipSx} />
-                        </TableCell>
-                        <TableCell align="center">
-                          <Typography variant="body2" sx={{ color: '#999' }}>
-                            Fixo
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                {customDestinations
-                  .filter((d) => (d.type ?? 'move') === destSubTab)
-                  .map((d) => (
-                    <TableRow key={d._id} hover>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {d.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={d.type === 'writeoff' ? 'Baixar' : 'Mover'}
-                          size="small"
-                          sx={{
-                            bgcolor: d.type === 'writeoff' ? '#FFEBEE' : '#E3F2FD',
-                            color: d.type === 'writeoff' ? '#C62828' : '#1565C0',
-                            fontWeight: 600,
-                            borderRadius: 1.5,
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          aria-label="excluir destino"
-                          onClick={() => handleDeleteDestination(d._id)}
-                          sx={{ color: '#C62828' }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                {customDestinations.filter((d) => (d.type ?? 'move') === destSubTab).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} align="center" sx={{ py: 4 }}>
-                      <Typography color="text.secondary">
-                        Nenhum destino personalizado nesta subguia
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <ResponsiveTable
+            containerSx={{ border: '1px solid #e8ecf1' }}
+            headerCellSx={thSx}
+            rows={destRows}
+            rowKey={(row) => row.key}
+            actionsLabel="Ações"
+            emptyMessage="Nenhum destino personalizado nesta subguia"
+            // The table always has the fixed rows, so the "no custom
+            // destination in this sub-tab" hint is a footer, not an empty state.
+            footerNote={
+              destRows.length > 0 && !hasCustomDestinations ? (
+                <Typography color="text.secondary">
+                  Nenhum destino personalizado nesta subguia
+                </Typography>
+              ) : null
+            }
+            actions={(row) =>
+              row.fixed ? (
+                <Typography variant="body2" sx={{ color: '#999' }}>
+                  Fixo
+                </Typography>
+              ) : (
+                <IconButton
+                  size="small"
+                  aria-label="excluir destino"
+                  onClick={() => handleDeleteDestination(row.key)}
+                  sx={{ color: '#C62828' }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              )
+            }
+            columns={[
+              {
+                id: 'destino',
+                header: 'Destino',
+                primary: true,
+                cell: (row) => (
+                  <Typography variant="body2" fontWeight={500}>
+                    {row.name}
+                  </Typography>
+                ),
+              },
+              {
+                id: 'tipo',
+                header: 'Tipo',
+                cell: (row) =>
+                  row.fixed ? (
+                    <Chip label="Padrão" size="small" sx={grayChipSx} />
+                  ) : (
+                    <Chip
+                      label={row.type === 'writeoff' ? 'Baixar' : 'Mover'}
+                      size="small"
+                      sx={{
+                        bgcolor: row.type === 'writeoff' ? '#FFEBEE' : '#E3F2FD',
+                        color: row.type === 'writeoff' ? '#C62828' : '#1565C0',
+                        fontWeight: 600,
+                        borderRadius: 1.5,
+                      }}
+                    />
+                  ),
+              },
+            ]}
+          />
         </>
       )}
 

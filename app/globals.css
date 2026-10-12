@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Modo mobile (<900px, mesmo breakpoint do menu lateral): a página nunca
+   rola na horizontal, mesmo que algum conteúdo escape. O scroll interno de
+   tabelas, abas e listas continua funcionando normalmente. */
+@media (max-width: 899.95px) {
+  html {
+    overflow-x: clip;
+  }
+}
+
 /* Itens ocultos apenas na impressão (filtros, botões, navegação) */
 @media print {
   .no-print {

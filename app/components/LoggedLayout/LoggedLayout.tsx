@@ -24,7 +24,7 @@ export default function LoggedLayout({
             position="fixed"
             elevation={1}
             className="no-print"
-            sx={{ bgcolor: '#1a2332', zIndex: 1300 }}
+            sx={{ bgcolor: '#1a2332', zIndex: (theme) => theme.zIndex.appBar }}
           >
             <Toolbar variant="dense">
               <IconButton edge="start" color="inherit" onClick={() => setDrawerOpen(true)} aria-label="menu">
@@ -39,6 +39,7 @@ export default function LoggedLayout({
             open={drawerOpen}
             onClose={() => setDrawerOpen(false)}
             className="no-print"
+            sx={{ zIndex: 1300 }}
             PaperProps={{ sx: { width: 240, bgcolor: '#1a2332' } }}
           >
             <NavigationRail inDrawer onNavigate={() => setDrawerOpen(false)} />

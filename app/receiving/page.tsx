@@ -334,6 +334,8 @@ export default function ReceivingPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 1.5,
             mb: 2,
           }}
         >
@@ -526,6 +528,8 @@ export default function ReceivingPage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 1.5,
               mt: 3,
               mb: 2,
             }}
