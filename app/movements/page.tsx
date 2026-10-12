@@ -8,7 +8,6 @@ import {
   TextField,
   MenuItem,
   IconButton,
-  Tabs,
   Tab,
   Chip,
   Checkbox,
@@ -40,6 +39,7 @@ import api from '@/lib/api';
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -563,10 +563,10 @@ export default function MovementsPage() {
         </Box>
       </Box>
 
-      <Tabs
+      <ResponsiveTabs
+        fit="equal"
         value={tab}
         onChange={(_, v) => setTab(v)}
-        variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{
@@ -593,7 +593,7 @@ export default function MovementsPage() {
         <Tab icon={<QrCodeScannerIcon fontSize="small" />} iconPosition="start" label="Movimentar Etiqueta" />
         <Tab icon={<AssignmentIcon fontSize="small" />} iconPosition="start" label="Contagem" />
         <Tab icon={<PlaceIcon fontSize="small" />} iconPosition="start" label="Destinos" />
-      </Tabs>
+      </ResponsiveTabs>
 
       {tab === 0 && (
         <Box sx={{ maxWidth: 560, mx: 'auto' }}>
@@ -1271,10 +1271,9 @@ export default function MovementsPage() {
             </Button>
           </Box>
 
-          <Tabs
+          <ResponsiveTabs
             value={destSubTab}
             onChange={(_, v: 'move' | 'writeoff') => setDestSubTab(v)}
-            variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
             sx={{
@@ -1302,7 +1301,7 @@ export default function MovementsPage() {
           >
             <Tab label="Mover" value="move" />
             <Tab label="Baixar" value="writeoff" />
-          </Tabs>
+          </ResponsiveTabs>
 
           <ResponsiveTable
             containerSx={{ border: '1px solid #e8ecf1' }}

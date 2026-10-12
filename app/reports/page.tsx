@@ -6,7 +6,6 @@ import {
   Typography,
   Button,
   Chip,
-  Tabs,
   Tab,
   TextField,
   MenuItem,
@@ -52,6 +51,7 @@ import type { Product, StockItem, StockMovement, Portioning } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import BrDateField from '../components/BrDateField/BrDateField';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -875,10 +875,9 @@ export default function ReportsPage() {
         </Typography>
       </Box>
 
-      <Tabs
+      <ResponsiveTabs
         value={tab}
         onChange={(_, v: number) => setTab(v)}
-        variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
         className="no-print"
@@ -944,7 +943,7 @@ export default function ReportsPage() {
           icon={<ContentCutIcon sx={{ fontSize: 18 }} />}
           iconPosition="start"
         />
-      </Tabs>
+      </ResponsiveTabs>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>

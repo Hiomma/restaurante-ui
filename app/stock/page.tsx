@@ -12,7 +12,6 @@ import {
   MenuItem,
   InputAdornment,
   CircularProgress,
-  Tabs,
   Tab,
   Button,
   Checkbox,
@@ -44,6 +43,7 @@ import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -417,13 +417,12 @@ export default function StockPage() {
             ))}
           </Box>
 
-          <Tabs
+          <ResponsiveTabs
             value={destFilter}
             onChange={(_, v: string) => {
               setDestFilter(v);
               setSelected(new Set());
             }}
-            variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
             sx={{
@@ -459,7 +458,7 @@ export default function StockPage() {
             {locationTabs.map((name) => (
               <Tab key={name} label={`${name} (${countInTab(name)})`} value={name} />
             ))}
-          </Tabs>
+          </ResponsiveTabs>
 
           <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
             <TextField
