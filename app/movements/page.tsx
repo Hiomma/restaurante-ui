@@ -1231,14 +1231,17 @@ export default function MovementsPage() {
               p: 0.5,
               mb: 2,
               minHeight: 44,
-              maxWidth: 400,
+              width: 'fit-content',
+              mx: 'auto',
               '& .MuiTabs-indicator': { display: 'none' },
               '& .MuiTab-root': {
                 textTransform: 'none',
                 borderRadius: 1.5,
                 minHeight: 40,
+                minWidth: 96,
                 fontWeight: 600,
                 color: '#555',
+                justifyContent: 'center',
                 '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
               },
             }}
