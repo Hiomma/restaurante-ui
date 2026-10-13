@@ -24,6 +24,9 @@ import BarChartIcon from '@mui/icons-material/BarChart';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import LockIcon from '@mui/icons-material/Lock';
 import LogoutIcon from '@mui/icons-material/Logout';
+// Versão exibida na barra lateral: fonte única é o `version` do package.json,
+// que é atualizado junto com a tag no release (v2.4.0, v2.4.1, ...).
+import packageJson from '@/package.json';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import ChangePasswordDialog from '@/app/components/ChangePasswordDialog/ChangePasswordDialog';
@@ -173,7 +176,7 @@ export default function NavigationRail({
       </List>
 
       <Typography variant="caption" color="#556677" sx={{ textAlign: 'center', py: 1 }}>
-        v2.2 — EstoqueApp
+        v{packageJson.version} — EstoqueApp
       </Typography>
 
       <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
