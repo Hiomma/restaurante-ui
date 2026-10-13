@@ -190,7 +190,7 @@ export default function HistoryPage() {
         >
           <SwapHorizIcon sx={{ color: '#1976D2' }} />
         </Box>
-        <Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h5" fontWeight="bold">
             Histórico
           </Typography>

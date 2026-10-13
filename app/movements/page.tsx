@@ -553,7 +553,7 @@ export default function MovementsPage() {
         >
           <SwapHorizIcon sx={{ color: '#1976D2' }} />
         </Box>
-        <Box sx={{ minWidth: 0 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h5" fontWeight="bold">
             Movimentações
           </Typography>

@@ -168,7 +168,7 @@ export default function ProductsPage() {
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
           <Inventory2Icon sx={{ color: '#2196F3', fontSize: 28 }} />
-          <Typography variant="h5" fontWeight="bold">
+          <Typography variant="h5" fontWeight="bold" sx={{ flex: 1, minWidth: 0 }}>
             Cadastro de Produtos
           </Typography>
         </Box>
