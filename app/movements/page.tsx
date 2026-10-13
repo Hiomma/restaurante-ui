@@ -20,7 +20,6 @@ import {
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import AssignmentIcon from '@mui/icons-material/Assignment';
-import PlaceIcon from '@mui/icons-material/Place';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import { useSnackbar } from 'notistack';
@@ -31,8 +30,6 @@ import {
   useDeleteStockItem,
   useCreateStockMovement,
   useMovementDestinations,
-  useCreateMovementDestination,
-  useDeleteMovementDestination,
 } from '@/lib/queries';
 import { formatDate, formatWeight, todayISODate } from '@/lib/utils';
 import api from '@/lib/api';
@@ -40,6 +37,7 @@ import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
+import QrScannerDialog from '../components/QrScannerDialog/QrScannerDialog';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -75,15 +73,10 @@ const statusLabels: Record<string, string> = {
 };
 
 /**
- * Unified row of the "Destinos" table: fixed (built-in) destinations and
- * custom ones share a single shape so one `columns` definition covers both.
+ * Motivos de baixa exigidos na contagem: toda exclusão de etiqueta precisa
+ * de um motivo marcado antes de ser confirmado.
  */
-interface DestinationRow {
-  key: string;
-  name: string;
-  type: 'move' | 'writeoff';
-  fixed: boolean;
-}
+const writeoffReasons = ['Perda', 'Não encontrado', 'Vencido', 'Avaria', 'Outro'];
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -124,10 +117,11 @@ export default function MovementsPage() {
   const createMovement = useCreateStockMovement();
   const updateItem = useUpdateStockItem();
   const deleteItem = useDeleteStockItem();
-  const createDestination = useCreateMovementDestination();
-  const deleteDestination = useDeleteMovementDestination();
 
   const [tab, setTab] = useState(0);
+
+  // Qual campo de código está com o leitor de QR aberto (Movimentar/Contagem).
+  const [scanTarget, setScanTarget] = useState<'mover' | 'contagem' | null>(null);
 
   const [qrInput, setQrInput] = useState('');
   const [scanned, setScanned] = useState<StockItem[]>([]);
@@ -152,13 +146,20 @@ export default function MovementsPage() {
   const [bulkDest, setBulkDest] = useState('');
   const countScanRef = useRef<HTMLInputElement>(null);
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [destName, setDestName] = useState('');
-  const [destType, setDestType] = useState<'move' | 'writeoff'>('move');
-  const [destSubTab, setDestSubTab] = useState<'move' | 'writeoff'>('move');
+  // Motivo da baixa: exibido antes de QUALQUER exclusão na contagem.
+  // 'single' = uma etiqueta (linha), 'bulk' = lote de selecionadas.
+  const [motivoDialog, setMotivoDialog] = useState<
+    { mode: 'single'; item: StockItem } | { mode: 'bulk'; items: StockItem[] } | null
+  >(null);
+  const [motivo, setMotivo] = useState('');
+  const [motivoOther, setMotivoOther] = useState('');
 
-  const handleScan = async () => {
-    const code = qrInput.trim().toUpperCase();
+  /**
+   * Procura a etiqueta pelo código. `override` é usado quando o código vem do
+   * leitor de QR Code (o estado `qrInput` ainda não foi atualizado nesse ponto).
+   */
+  const handleScan = async (override?: string) => {
+    const code = (override ?? qrInput).trim().toUpperCase();
     if (!code || scanning) return;
     setScanning(true);
     try {
@@ -243,6 +244,7 @@ export default function MovementsPage() {
             weightGrams: item.weightGrams,
             itemType: item.type,
             reason: `Mover — ${destino}${suffix}`,
+            destination: destino,
             date: todayISODate(),
           });
           await updateItem.mutateAsync({ id: item._id, data: { destination: destino } });
@@ -255,6 +257,7 @@ export default function MovementsPage() {
             weightGrams: item.weightGrams,
             itemType: item.type,
             reason: `Baixar — ${destino}${suffix}`,
+            destination: destino,
             date: todayISODate(),
           });
           await deleteItem.mutateAsync(item._id);
@@ -306,8 +309,9 @@ export default function MovementsPage() {
     setBulkDest('');
   };
 
-  const handleCountScan = async () => {
-    const code = countScanInput.trim().toUpperCase();
+  /** `override` é usado quando o código vem do leitor de QR Code. */
+  const handleCountScan = async (override?: string) => {
+    const code = (override ?? countScanInput).trim().toUpperCase();
     if (!code || countScanning || !countItems) return;
     setCountScanning(true);
     try {
@@ -384,6 +388,7 @@ export default function MovementsPage() {
         weightGrams: item.weightGrams,
         itemType: item.type,
         reason: `Contagem — Mover — ${dest}`,
+        destination: dest,
         date: todayISODate(),
       });
       await updateItem.mutateAsync({ id: item._id, data: { destination: dest } });
@@ -394,21 +399,54 @@ export default function MovementsPage() {
     }
   };
 
-  const handleDropMissing = async (item: StockItem) => {
+  /** Baixar na contagem exige motivo: abre o diálogo antes de excluir. */
+  const askMotivoSingle = (item: StockItem) => {
+    setMotivo('');
+    setMotivoOther('');
+    setMotivoDialog({ mode: 'single', item });
+  };
+
+  const closeMotivoDialog = () => setMotivoDialog(null);
+
+  /** Destino do movimento de baixa, a partir do motivo marcado. */
+  const motivoDestination = () => (motivo === 'Não encontrado' ? 'Não encontrado' : 'Perda');
+
+  const handleMotivoConfirm = async () => {
+    if (!motivoDialog) return;
+    const label = motivo === 'Outro' ? motivoOther.trim() : motivo;
+    if (!label) return;
+    const targets = motivoDialog.mode === 'single' ? [motivoDialog.item] : motivoDialog.items;
+    setMotivoDialog(null);
     try {
-      await createMovement.mutateAsync({
-        productId: item.product.productId,
-        productName: item.product.productName,
-        movementType: 'exit',
-        quantity: 1,
-        weightGrams: item.weightGrams,
-        itemType: item.type,
-        reason: 'Contagem — Não encontrado',
-        date: todayISODate(),
+      for (const item of targets) {
+        await createMovement.mutateAsync({
+          productId: item.product.productId,
+          productName: item.product.productName,
+          movementType: 'exit',
+          quantity: 1,
+          weightGrams: item.weightGrams,
+          itemType: item.type,
+          reason: `Contagem — ${label}`,
+          destination: motivoDestination(),
+          date: todayISODate(),
+        });
+        await deleteItem.mutateAsync(item._id);
+      }
+      const ids = targets.map((i) => i._id);
+      setCountResult((prev) =>
+        prev ? { ...prev, missing: prev.missing.filter((m) => !ids.includes(m._id)) } : prev,
+      );
+      setMissingSelected((prev) => {
+        const next = { ...prev };
+        for (const id of ids) delete next[id];
+        return next;
       });
-      await deleteItem.mutateAsync(item._id);
-      resolveMissing(item._id);
-      enqueueSnackbar('Etiqueta baixada.', { variant: 'success' });
+      enqueueSnackbar(
+        targets.length === 1
+          ? 'Etiqueta baixada.'
+          : `${targets.length} etiqueta(s) baixada(s).`,
+        { variant: 'success' },
+      );
     } catch {
       enqueueSnackbar('Erro ao baixar etiqueta.', { variant: 'error' });
     }
@@ -443,6 +481,7 @@ export default function MovementsPage() {
           weightGrams: item.weightGrams,
           itemType: item.type,
           reason: `Contagem — Mover — ${bulkDest}`,
+          destination: bulkDest,
           date: todayISODate(),
         });
         await updateItem.mutateAsync({ id: item._id, data: { destination: bulkDest } });
@@ -461,80 +500,11 @@ export default function MovementsPage() {
     }
   };
 
-  const handleBulkDrop = async () => {
+  const askMotivoBulk = () => {
     if (selectedMissing.length === 0) return;
-    try {
-      for (const item of selectedMissing) {
-        await createMovement.mutateAsync({
-          productId: item.product.productId,
-          productName: item.product.productName,
-          movementType: 'exit',
-          quantity: 1,
-          weightGrams: item.weightGrams,
-          itemType: item.type,
-          reason: 'Contagem — Não encontrado',
-          date: todayISODate(),
-        });
-        await deleteItem.mutateAsync(item._id);
-      }
-      const ids = selectedMissing.map((i) => i._id);
-      setCountResult((prev) =>
-        prev ? { ...prev, missing: prev.missing.filter((m) => !ids.includes(m._id)) } : prev,
-      );
-      setMissingSelected({});
-      enqueueSnackbar(`${ids.length} etiqueta(s) baixada(s).`, { variant: 'success' });
-    } catch {
-      enqueueSnackbar('Erro ao baixar etiquetas.', { variant: 'error' });
-    }
-  };
-
-  const customDestinations = [...(destinations ?? [])].sort((a, b) =>
-    a.name.localeCompare(b.name),
-  );
-
-  // Fixed + custom destinations of the active sub-tab, as one row array.
-  const destRows: DestinationRow[] = [
-    ...(destSubTab === 'move' ? fixedMoveDestinations : fixedWriteoffDestinations).map((name) => ({
-      key: `fixed-${name}`,
-      name,
-      type: destSubTab,
-      fixed: true,
-    })),
-    ...customDestinations
-      .filter((d) => (d.type ?? 'move') === destSubTab)
-      .map((d) => ({
-        key: d._id,
-        name: d.name,
-        type: d.type ?? 'move',
-        fixed: false,
-      })),
-  ];
-  const hasCustomDestinations = destRows.some((r) => !r.fixed);
-
-  const handleAddDestination = async () => {
-    const name = destName.trim();
-    if (!name) return;
-    try {
-      await createDestination.mutateAsync({ name, type: destType });
-      // Show the sub-tab the new destination belongs to, so it is visible
-      // immediately after creation without a page refresh.
-      setDestSubTab(destType);
-      enqueueSnackbar('Destino adicionado com sucesso!', { variant: 'success' });
-      setDestName('');
-      setDestType('move');
-      setDialogOpen(false);
-    } catch {
-      enqueueSnackbar('Erro ao adicionar destino.', { variant: 'error' });
-    }
-  };
-
-  const handleDeleteDestination = async (id: string) => {
-    try {
-      await deleteDestination.mutateAsync(id);
-      enqueueSnackbar('Destino removido com sucesso!', { variant: 'success' });
-    } catch {
-      enqueueSnackbar('Erro ao remover destino.', { variant: 'error' });
-    }
+    setMotivo('');
+    setMotivoOther('');
+    setMotivoDialog({ mode: 'bulk', items: selectedMissing });
   };
 
   return (
@@ -592,7 +562,6 @@ export default function MovementsPage() {
       >
         <Tab icon={<QrCodeScannerIcon fontSize="small" />} iconPosition="start" label="Movimentar Etiqueta" />
         <Tab icon={<AssignmentIcon fontSize="small" />} iconPosition="start" label="Contagem" />
-        <Tab icon={<PlaceIcon fontSize="small" />} iconPosition="start" label="Destinos" />
       </ResponsiveTabs>
 
       {tab === 0 && (
@@ -619,9 +588,25 @@ export default function MovementsPage() {
                   if (e.key === 'Enter') handleScan();
                 }}
               />
+              <IconButton
+                aria-label="Ler QR Code"
+                onClick={() => setScanTarget('mover')}
+                disabled={scanning}
+                sx={{
+                  width: 44,
+                  height: 44,
+                  flexShrink: 0,
+                  border: '1px solid #90CAF9',
+                  borderRadius: 1.5,
+                  color: '#1976D2',
+                  '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                }}
+              >
+                <QrCodeScannerIcon fontSize="small" />
+              </IconButton>
               <Button
                 variant="outlined"
-                onClick={handleScan}
+                onClick={() => handleScan()}
                 disabled={!qrInput.trim() || scanning}
                 sx={{
                   textTransform: 'none' as const,
@@ -936,6 +921,22 @@ export default function MovementsPage() {
                       if (e.key === 'Enter') void handleCountScan();
                     }}
                   />
+                  <IconButton
+                    aria-label="Ler QR Code"
+                    onClick={() => setScanTarget('contagem')}
+                    disabled={countScanning}
+                    sx={{
+                      width: 44,
+                      height: 44,
+                      flexShrink: 0,
+                      border: '1px solid #90CAF9',
+                      borderRadius: 1.5,
+                      color: '#1976D2',
+                      '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                    }}
+                  >
+                    <QrCodeScannerIcon fontSize="small" />
+                  </IconButton>
                   <Button
                     variant="contained"
                     onClick={() => void handleCountScan()}
@@ -1061,6 +1062,7 @@ export default function MovementsPage() {
                           }}
                         >
                           <Checkbox
+                            inputProps={{ 'aria-label': 'Selecionar tudo' }}
                             checked={
                               countResult.missing.length > 0 &&
                               selectedMissing.length === countResult.missing.length
@@ -1126,7 +1128,7 @@ export default function MovementsPage() {
                                 variant="contained"
                                 color="error"
                                 disabled={moving}
-                                onClick={() => void handleBulkDrop()}
+                                onClick={() => askMotivoBulk()}
                                 sx={{ textTransform: 'none' }}
                               >
                                 Baixar ({selectedMissing.length})
@@ -1168,7 +1170,7 @@ export default function MovementsPage() {
                                 size="small"
                                 aria-label="baixar etiqueta"
                                 disabled={moving}
-                                onClick={() => void handleDropMissing(item)}
+                                onClick={() => askMotivoSingle(item)}
                                 sx={{ color: '#C62828' }}
                               >
                                 <DeleteIcon fontSize="small" />
@@ -1253,124 +1255,7 @@ export default function MovementsPage() {
         </Box>
       )}
 
-      {tab === 2 && (
-        <>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-            <Typography variant="body2" sx={{ color: '#666', flex: 1, minWidth: 220 }}>
-              Gerencie os destinos disponíveis para as ações Mover e Baixar
-            </Typography>
-            <Button
-              variant="contained"
-              onClick={() => {
-                setDestType(destSubTab);
-                setDialogOpen(true);
-              }}
-              sx={{ ...primaryBtnSx, ml: 'auto' }}
-            >
-              Novo Destino
-            </Button>
-          </Box>
-
-          <ResponsiveTabs
-            value={destSubTab}
-            onChange={(_, v: 'move' | 'writeoff') => setDestSubTab(v)}
-            scrollButtons="auto"
-            allowScrollButtonsMobile
-            sx={{
-              bgcolor: '#f1f3f5',
-              borderRadius: 2,
-              p: 0.5,
-              mb: 2,
-              minHeight: 44,
-              width: 'fit-content',
-              maxWidth: '100%',
-              mx: 'auto',
-              '& .MuiTabs-indicator': { display: 'none' },
-              '& .MuiTab-root': {
-                textTransform: 'none',
-                borderRadius: 1.5,
-                minHeight: 40,
-                minWidth: 96,
-                fontWeight: 600,
-                color: '#555',
-                whiteSpace: 'nowrap',
-                justifyContent: 'center',
-                '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
-              },
-            }}
-          >
-            <Tab label="Mover" value="move" />
-            <Tab label="Baixar" value="writeoff" />
-          </ResponsiveTabs>
-
-          <ResponsiveTable
-            containerSx={{ border: '1px solid #e8ecf1' }}
-            headerCellSx={thSx}
-            rows={destRows}
-            rowKey={(row) => row.key}
-            actionsLabel="Ações"
-            emptyMessage="Nenhum destino personalizado nesta subguia"
-            // The table always has the fixed rows, so the "no custom
-            // destination in this sub-tab" hint is a footer, not an empty state.
-            footerNote={
-              destRows.length > 0 && !hasCustomDestinations ? (
-                <Typography color="text.secondary">
-                  Nenhum destino personalizado nesta subguia
-                </Typography>
-              ) : null
-            }
-            actions={(row) =>
-              row.fixed ? (
-                <Typography variant="body2" sx={{ color: '#999' }}>
-                  Fixo
-                </Typography>
-              ) : (
-                <IconButton
-                  size="small"
-                  aria-label="excluir destino"
-                  onClick={() => handleDeleteDestination(row.key)}
-                  sx={{ color: '#C62828' }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              )
-            }
-            columns={[
-              {
-                id: 'destino',
-                header: 'Destino',
-                primary: true,
-                cell: (row) => (
-                  <Typography variant="body2" fontWeight={500}>
-                    {row.name}
-                  </Typography>
-                ),
-              },
-              {
-                id: 'tipo',
-                header: 'Tipo',
-                cell: (row) =>
-                  row.fixed ? (
-                    <Chip label="Padrão" size="small" sx={grayChipSx} />
-                  ) : (
-                    <Chip
-                      label={row.type === 'writeoff' ? 'Baixar' : 'Mover'}
-                      size="small"
-                      sx={{
-                        bgcolor: row.type === 'writeoff' ? '#FFEBEE' : '#E3F2FD',
-                        color: row.type === 'writeoff' ? '#C62828' : '#1565C0',
-                        fontWeight: 600,
-                        borderRadius: 1.5,
-                      }}
-                    />
-                  ),
-              },
-            ]}
-          />
-        </>
-      )}
-
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={motivoDialog !== null} onClose={closeMotivoDialog} maxWidth="xs" fullWidth>
         <DialogTitle
           sx={{
             display: 'flex',
@@ -1379,10 +1264,10 @@ export default function MovementsPage() {
             pb: 1,
           }}
         >
-          Novo Destino
+          Motivo da baixa
           <IconButton
             aria-label="fechar"
-            onClick={() => setDialogOpen(false)}
+            onClick={closeMotivoDialog}
             size="small"
             sx={{ color: '#666', mr: -1 }}
           >
@@ -1391,39 +1276,61 @@ export default function MovementsPage() {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {motivoDialog?.mode === 'bulk' && (
+              <Typography variant="body2" sx={{ color: '#666' }}>
+                Informe o motivo para baixar as {motivoDialog.items.length} etiqueta(s)
+                selecionada(s).
+              </Typography>
+            )}
             <Box>
-              <FieldLabel required>Nome do Destino</FieldLabel>
-              <TextField
-                fullWidth
-                size="small"
-                sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
-                placeholder="Ex: Freezer 2"
-                value={destName}
-                onChange={(e) => setDestName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleAddDestination();
-                }}
-              />
-            </Box>
-            <Box>
-              <FieldLabel required>Tipo de Uso</FieldLabel>
+              <FieldLabel required>Motivo</FieldLabel>
               <TextField
                 select
                 fullWidth
                 size="small"
                 sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
-                value={destType}
-                onChange={(e) => setDestType(e.target.value as 'move' | 'writeoff')}
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (value) =>
+                    value === '' ? (
+                      <Box component="span" sx={{ color: 'text.disabled' }}>
+                        Selecione...
+                      </Box>
+                    ) : (
+                      String(value)
+                    ),
+                }}
               >
-                <MenuItem value="move">Mover (item permanece no estoque)</MenuItem>
-                <MenuItem value="writeoff">Baixar (etiqueta excluída do sistema)</MenuItem>
+                <MenuItem value="" disabled>
+                  Selecione...
+                </MenuItem>
+                {writeoffReasons.map((r) => (
+                  <MenuItem key={r} value={r}>
+                    {r}
+                  </MenuItem>
+                ))}
               </TextField>
             </Box>
+            {motivo === 'Outro' && (
+              <Box>
+                <FieldLabel required>Descreva o motivo</FieldLabel>
+                <TextField
+                  fullWidth
+                  size="small"
+                  sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+                  placeholder="Ex: Contaminada na câmara fria"
+                  value={motivoOther}
+                  onChange={(e) => setMotivoOther(e.target.value)}
+                />
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
           <Button
-            onClick={() => setDialogOpen(false)}
+            onClick={closeMotivoDialog}
             variant="outlined"
             sx={{
               textTransform: 'none',
@@ -1439,14 +1346,44 @@ export default function MovementsPage() {
           </Button>
           <Button
             variant="contained"
-            disabled={!destName.trim() || createDestination.isPending}
-            onClick={handleAddDestination}
-            sx={primaryBtnSx}
+            color="error"
+            disabled={
+              !(motivo === 'Outro' ? motivoOther.trim() : motivo) || moving
+            }
+            onClick={() => void handleMotivoConfirm()}
+            sx={{
+              textTransform: 'none' as const,
+              borderRadius: 1.5,
+              bgcolor: '#C62828',
+              px: 2.5,
+              '&:hover': { bgcolor: '#B71C1C' },
+            }}
           >
-            Adicionar
+            Confirmar baixa
           </Button>
         </DialogActions>
       </Dialog>
+
+      <QrScannerDialog
+        open={scanTarget !== null}
+        onClose={() => setScanTarget(null)}
+        onScan={(value) => {
+          if (scanTarget === 'mover') {
+            setQrInput(value.toUpperCase());
+            void handleScan(value);
+          } else if (scanTarget === 'contagem') {
+            setCountScanInput(value.toUpperCase());
+            void handleCountScan(value);
+          }
+          setScanTarget(null);
+        }}
+        title={scanTarget === 'contagem' ? 'Ler QR Code — Contagem' : 'Ler QR Code — Movimentar'}
+        hint={
+          scanTarget === 'contagem'
+            ? 'Aponte a câmera para o QR Code da etiqueta em estoque.'
+            : 'Aponte a câmera para o QR Code da etiqueta.'
+        }
+      />
     </LoggedLayout>
   );
 }

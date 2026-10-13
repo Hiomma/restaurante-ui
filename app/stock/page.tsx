@@ -30,6 +30,7 @@ import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DownloadIcon from '@mui/icons-material/Download';
 import {
   useProducts,
   useStockItems,
@@ -38,7 +39,7 @@ import {
   useCreateStockMovement,
   useUpdateStockItem,
 } from '@/lib/queries';
-import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus, todayISODate } from '@/lib/utils';
+import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus, todayISODate, downloadCsv } from '@/lib/utils';
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
@@ -255,6 +256,30 @@ export default function StockPage() {
       else next.add(id);
       return next;
     });
+  };
+
+  // Exporta os itens do grupo, respeitando os filtros ativos da página
+  // (grupo, status, busca e filtro de local — os itens já vêm filtrados).
+  const exportGroupItems = (r: ProductGroupRow) => {
+    const safeName = r.name
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .replace(/[^\w-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase();
+    downloadCsv(
+      `estoque-${safeName || 'grupo'}`,
+      ['Código (QR)', 'Lote', 'Validade', 'Peso (g)', 'Destino', 'Fornecedor', 'Categoria'],
+      r.items.map((item) => [
+        item.qrCode || '',
+        item.lote || '',
+        formatDate(item.expiryDate),
+        item.weightGrams,
+        item.destination || '—',
+        item.supplier || '—',
+        item.type === 'raw' ? 'Bruto' : 'Porcionado',
+      ]),
+    );
   };
 
   const handleDelete = async () => {
@@ -660,7 +685,26 @@ export default function StockPage() {
                         )}
                       </Box>
                     </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<DownloadIcon fontSize="small" />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          exportGroupItems(r);
+                        }}
+                        sx={{
+                          textTransform: 'none',
+                          color: '#495057',
+                          borderColor: '#CED4DA',
+                          borderRadius: 1.5,
+                          flexShrink: 0,
+                          '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5', color: '#212529' },
+                        }}
+                      >
+                        Exportar itens
+                      </Button>
                       <Typography variant="body2" sx={{ color: '#666' }}>
                         Ver etiquetas
                       </Typography>

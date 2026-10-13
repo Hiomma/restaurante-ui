@@ -20,6 +20,8 @@ import {
   useMe,
   useCreateStockItem,
   useCreateStockMovement,
+  useSuppliers,
+  useMovementDestinations,
 } from '@/lib/queries';
 import { todayISODate } from '@/lib/utils';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
@@ -32,10 +34,11 @@ interface ReceiveRow {
   validadeOriginal: string;
   lote: string;
   qtd: string;
+  destination: string;
 }
 
 function emptyRow(): ReceiveRow {
-  return { productId: '', peso: '', validadeOriginal: '', lote: '', qtd: '1' };
+  return { productId: '', peso: '', validadeOriginal: '', lote: '', qtd: '1', destination: '' };
 }
 
 function addDays(iso: string, days: number): string {
@@ -54,6 +57,9 @@ function generateTempQr(): string {
   }
   return result;
 }
+
+/** Destinos fixos usados nas demais telas (Estoque/Movimentações). */
+const fixedMoveDestinations = ['Salão', 'Bar', 'Cozinha'];
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -101,6 +107,10 @@ interface PendingItem {
     productGroup?: string;
     productStorage?: string;
     batchId?: string;
+    supplier?: string;
+    destination?: string;
+    /** QR exibido na etiqueta — o servidor grava exatamente este código. */
+    qrCode?: string;
   };
 }
 
@@ -108,15 +118,31 @@ export default function ReceivingPage() {
   const { enqueueSnackbar } = useSnackbar();
   const { data: products } = useProducts();
   const { data: me } = useMe();
+  const { data: suppliers } = useSuppliers();
+  const { data: destinations } = useMovementDestinations();
   const createItem = useCreateStockItem();
   const createMovement = useCreateStockMovement();
 
   const [recebimentoDate, setRecebimentoDate] = useState(todayISODate());
   const [numeroNF, setNumeroNF] = useState('');
+  const [supplier, setSupplier] = useState('');
   const [rows, setRows] = useState<ReceiveRow[]>([emptyRow()]);
   const [pending, setPending] = useState<PendingItem[] | null>(null);
   const [batchId, setBatchId] = useState('');
   const [saving, setSaving] = useState(false);
+
+  /** Fornecedores ativos (mesmo valor gravado: o nome). */
+  const supplierOptions = (suppliers ?? []).filter((s) => s.active !== false);
+
+  /** Destinos fixos + destinos "move" cadastrados, como nas outras telas. */
+  const destinationOptions = [
+    ...fixedMoveDestinations,
+    ...(destinations ?? [])
+      .filter(
+        (d) => d.active && (d.type ?? 'move') === 'move' && !fixedMoveDestinations.includes(d.name),
+      )
+      .map((d) => d.name),
+  ];
 
   const updateRow = (index: number, patch: Partial<ReceiveRow>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -174,6 +200,10 @@ export default function ReceivingPage() {
             productGroup: product.group,
             productStorage: product.storageMethod,
             batchId: newBatchId,
+            supplier: supplier || undefined,
+            destination: row.destination || undefined,
+            // O QR exibido na etiqueta é exatamente o gravado no estoque.
+            qrCode,
           },
         });
       }
@@ -182,16 +212,32 @@ export default function ReceivingPage() {
     setPending(items);
   };
 
+  /**
+   * Imprime a pré-visualização já gerada (sem regerar QR nem re-renderizar).
+   * A classe `printing-labels` marca o body enquanto o diálogo está aberto e
+   * é removida tanto pelo `finally` quanto pelo evento `afterprint`.
+   */
+  const printLabels = async () => {
+    const removePrintClass = () => document.body.classList.remove('printing-labels');
+    window.addEventListener('afterprint', removePrintClass, { once: true });
+    document.body.classList.add('printing-labels');
+    try {
+      await new Promise((r) => setTimeout(r, 250));
+      window.print();
+    } finally {
+      window.removeEventListener('afterprint', removePrintClass);
+      removePrintClass();
+    }
+  };
+
   const handleSaveAndPrint = async () => {
     if (!pending || pending.length === 0) return;
     setSaving(true);
     try {
-      const withRealQr: LabelData[] = [];
-      let idx = 0;
+      // O QR do cliente já vai no payload: o servidor grava o mesmo código
+      // que está sendo exibido — nada é regenerado na impressão.
       for (const item of pending) {
-        const created = await createItem.mutateAsync(item.payload);
-        withRealQr[idx] = { ...item.label, qrCode: created.qrCode };
-        idx += 1;
+        await createItem.mutateAsync(item.payload);
       }
 
       const byProduct = new Map<
@@ -222,19 +268,13 @@ export default function ReceivingPage() {
         });
       }
 
-      const finalPending = pending.map((item, i) => ({
-        ...item,
-        label: withRealQr[i] ?? item.label,
-      }));
-      setPending(finalPending);
-
       enqueueSnackbar('Etiquetas salvas no estoque!', { variant: 'success' });
 
       setRows([emptyRow()]);
       setNumeroNF('');
 
-      await new Promise((r) => setTimeout(r, 250));
-      window.print();
+      // As etiquetas continuam na tela durante todo o diálogo de impressão.
+      await printLabels();
 
       setPending(null);
     } catch {
@@ -324,6 +364,40 @@ export default function ReceivingPage() {
                     },
               }}
             />
+          </Box>
+          <Box>
+            <FieldLabel>Fornecedor</FieldLabel>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              sx={fieldSx}
+              value={supplier}
+              onChange={(e) => setSupplier(e.target.value)}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (value) =>
+                  !value ? (
+                    <Box component="span" sx={{ color: 'text.disabled' }}>
+                      — Sem fornecedor —
+                    </Box>
+                  ) : (
+                    supplierOptions.find((s) => s.name === String(value))?.name ?? String(value)
+                  ),
+              }}
+            >
+              <MenuItem value="">— Sem fornecedor —</MenuItem>
+              {supplierOptions.map((s) => (
+                <MenuItem key={s._id} value={s.name}>
+                  {s.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {supplierOptions.length === 0 && (
+              <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+                Nenhum fornecedor cadastrado. Cadastre em Cadastros → Fornecedores.
+              </Typography>
+            )}
           </Box>
         </Box>
       </Box>
@@ -456,7 +530,7 @@ export default function ReceivingPage() {
               <Box
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+                  gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
                   gap: 2,
                 }}
               >
@@ -482,6 +556,35 @@ export default function ReceivingPage() {
                     onChange={(e) => updateRow(index, { qtd: e.target.value })}
                     inputProps={{ min: 1 }}
                   />
+                </Box>
+                <Box>
+                  <FieldLabel>Destino</FieldLabel>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    sx={fieldSx}
+                    value={row.destination ?? ''}
+                    onChange={(e) => updateRow(index, { destination: e.target.value })}
+                    SelectProps={{
+                      displayEmpty: true,
+                      renderValue: (value) =>
+                        !value ? (
+                          <Box component="span" sx={{ color: 'text.disabled' }}>
+                            — Sem destino —
+                          </Box>
+                        ) : (
+                          String(value)
+                        ),
+                    }}
+                  >
+                    <MenuItem value="">— Sem destino —</MenuItem>
+                    {destinationOptions.map((name) => (
+                      <MenuItem key={name} value={name}>
+                        {name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
                 </Box>
               </Box>
 

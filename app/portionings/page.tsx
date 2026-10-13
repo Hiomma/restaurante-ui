@@ -21,6 +21,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCutIcon from '@mui/icons-material/ContentCut';
 import CloseIcon from '@mui/icons-material/Close';
 import QrCodeIcon from '@mui/icons-material/QrCode';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import { useSnackbar } from 'notistack';
 import {
   usePortionings,
@@ -32,6 +33,7 @@ import {
   useProducts,
   useEmployees,
   useMe,
+  useSuppliers,
 } from '@/lib/queries';
 import { formatDate, todayISODate, toInputDate } from '@/lib/utils';
 import api from '@/lib/api';
@@ -41,6 +43,7 @@ import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import BrDateField from '../components/BrDateField/BrDateField';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
+import QrScannerDialog from '../components/QrScannerDialog/QrScannerDialog';
 
 const fieldSx = {
   '& .MuiOutlinedInput-root': {
@@ -178,6 +181,7 @@ export default function PortioningsPage() {
   const { data: products } = useProducts();
   const { data: employees } = useEmployees();
   const { data: me } = useMe();
+  const { data: suppliers } = useSuppliers();
   const createPortioning = useCreatePortioning();
   const deletePortioning = useDeletePortioning();
   const updateStockItem = useUpdateStockItem();
@@ -196,14 +200,18 @@ export default function PortioningsPage() {
   >([]);
   const [lote, setLote] = useState('');
   const [employeeName, setEmployeeName] = useState('');
+  const [supplier, setSupplier] = useState('');
   const [date, setDate] = useState(todayISODate());
   const [submitting, setSubmitting] = useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
 
   const totalGrams = scanned.reduce((sum, item) => sum + item.weightGrams, 0);
   const limpo = Number(cleanWeight) || 0;
-  const limpoExcedeBruto = limpo > totalGrams;
+  /** Peso limpo maior que o bruto = ganho (não é rejeitado). */
+  const gainGrams = Math.max(0, limpo - totalGrams);
   const perda = Math.max(0, totalGrams - limpo);
   const perdaPct = totalGrams > 0 ? (perda / totalGrams) * 100 : 0;
+  const supplierOptions = (suppliers ?? []).filter((s) => s.active !== false);
   const product = products?.find((p) => p._id === scanned[0]?.product.productId);
 
   const totalPortions = outputs.reduce((sum, row) => sum + (parseInt(row.count, 10) || 0), 0);
@@ -230,6 +238,7 @@ export default function PortioningsPage() {
     setOutputs([]);
     setLote('');
     setEmployeeName(me?.name ?? '');
+    setSupplier('');
     setDate(todayISODate());
   };
 
@@ -238,8 +247,12 @@ export default function PortioningsPage() {
     setDialogOpen(true);
   };
 
-  const handleScan = async () => {
-    const code = scanInput.trim().toUpperCase();
+  /**
+   * Busca a etiqueta pelo código. `codeInput` permite usar o valor lido pela
+   * câmera (QrScannerDialog) sem depender do estado do campo de texto.
+   */
+  const handleScan = async (codeInput?: string) => {
+    const code = (codeInput ?? scanInput).trim().toUpperCase();
     if (!code || scanning) return;
     setScanning(true);
     try {
@@ -314,10 +327,6 @@ export default function PortioningsPage() {
       enqueueSnackbar('Informe o Peso Limpo (g).', { variant: 'error' });
       return;
     }
-    if (limpo > totalGrams) {
-      enqueueSnackbar('Peso Limpo não pode ser maior que o Peso Bruto.', { variant: 'error' });
-      return;
-    }
     if (rows.length === 0 || n < 1) {
       enqueueSnackbar('Informe os produtos gerados e a quantidade de porções.', {
         variant: 'error',
@@ -359,6 +368,9 @@ export default function PortioningsPage() {
         rawWeightGrams: bruto,
         cleanWeightGrams: limpo,
         lossGrams,
+        // Ganho: peso limpo maior que o bruto (informado apenas quando houver).
+        ...(gainGrams > 0 ? { gainGrams } : {}),
+        supplier: supplier || undefined,
         portionsCount: n,
         date,
         lote,
@@ -568,6 +580,21 @@ export default function PortioningsPage() {
                 >
                   Add
                 </Button>
+                <IconButton
+                  aria-label="Ler QR Code pela câmera"
+                  onClick={() => setQrDialogOpen(true)}
+                  disabled={scanning}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 1.5,
+                    border: '1px solid #1976D2',
+                    color: '#1976D2',
+                    '&:hover': { bgcolor: '#E3F2FD' },
+                  }}
+                >
+                  <QrCodeScannerIcon fontSize="small" />
+                </IconButton>
               </Box>
               <Typography variant="caption" sx={{ color: '#666', mt: 0.75, display: 'block' }}>
                 Pressione Enter após cada leitura.
@@ -636,12 +663,6 @@ export default function PortioningsPage() {
                       onChange={(e) => setCleanWeight(e.target.value)}
                       fullWidth
                       size="small"
-                      error={limpoExcedeBruto}
-                      helperText={
-                        limpoExcedeBruto
-                          ? `Máx. ${totalGrams}g (peso bruto)`
-                          : undefined
-                      }
                       sx={fieldSx}
                     />
                   </Box>
@@ -688,6 +709,40 @@ export default function PortioningsPage() {
                     </TextField>
                   </Box>
                   <Box>
+                    <FieldLabel>Fornecedor</FieldLabel>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      value={supplier}
+                      onChange={(e) => setSupplier(e.target.value)}
+                      sx={fieldSx}
+                      SelectProps={{
+                        displayEmpty: true,
+                        renderValue: (value) =>
+                          !value ? (
+                            <Box component="span" sx={{ color: 'text.disabled' }}>
+                              — Sem fornecedor —
+                            </Box>
+                          ) : (
+                            String(value)
+                          ),
+                      }}
+                    >
+                      <MenuItem value="">— Sem fornecedor —</MenuItem>
+                      {supplierOptions.map((s) => (
+                        <MenuItem key={s._id} value={s.name}>
+                          {s.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    {supplierOptions.length === 0 && (
+                      <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+                        Nenhum fornecedor cadastrado. Cadastre em Cadastros → Fornecedores.
+                      </Typography>
+                    )}
+                  </Box>
+                  <Box>
                     <FieldLabel>Data</FieldLabel>
                     <BrDateField
                       value={date}
@@ -699,9 +754,22 @@ export default function PortioningsPage() {
                   <Typography variant="body2" sx={{ color: '#888' }}>
                     Peso bruto: {totalGrams}g
                   </Typography>
-                  <Typography variant="body2" sx={{ color: limpoExcedeBruto ? '#d32f2f' : '#888' }}>
+                  <Typography variant="body2" sx={{ color: '#888' }}>
                     Perda: {perda}g ({perdaPct.toFixed(1)}%)
                   </Typography>
+                  {gainGrams > 0 && (
+                    <Chip
+                      label={`Ganho: ${gainGrams} g`}
+                      size="small"
+                      sx={{
+                        alignSelf: 'flex-start',
+                        mt: 0.5,
+                        bgcolor: '#E8F5E9',
+                        color: '#2E7D32',
+                        fontWeight: 600,
+                      }}
+                    />
+                  )}
                 </Box>
               </Box>
             )}
@@ -886,7 +954,6 @@ export default function PortioningsPage() {
             disabled={
               submitting ||
               scanned.length === 0 ||
-              limpoExcedeBruto ||
               overAllocated ||
               outputs.some((r) => r.productId && (parseInt(r.count, 10) || 0) > 0 && !(Number(r.weight) > 0))
             }
@@ -896,6 +963,18 @@ export default function PortioningsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <QrScannerDialog
+        open={qrDialogOpen}
+        onClose={() => setQrDialogOpen(false)}
+        onScan={(value) => {
+          setQrDialogOpen(false);
+          setScanInput(value);
+          void handleScan(value);
+        }}
+        title="Ler etiqueta bruta"
+        hint="Aponte a câmera para o QR Code da etiqueta de matéria-prima."
+      />
 
       <Dialog
         open={!!viewTarget}
@@ -966,10 +1045,15 @@ export default function PortioningsPage() {
               }
             />
             <DetailRow
+              label="Ganho"
+              value={viewTarget ? `${viewTarget.gainGrams ?? 0}g` : '—'}
+            />
+            <DetailRow
               label="Porções"
               value={viewTarget ? `${viewTarget.portionsCount}` : '—'}
             />
             <DetailRow label="Funcionário" value={viewTarget?.employeeName || '—'} />
+            <DetailRow label="Fornecedor" value={viewTarget?.supplier || '—'} />
             <DetailRow label="Data" value={formatDate(viewTarget?.date)} />
           </Box>
         </DialogContent>

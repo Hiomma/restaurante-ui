@@ -22,9 +22,10 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { useProducts, useStockItems } from '@/lib/queries';
-import { formatKg, formatDate, daysUntil, lifeStatus } from '@/lib/utils';
-import type { StockItem } from '@/types';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import { useProducts, useStockItems, useAgendaItems } from '@/lib/queries';
+import { formatKg, formatDate, daysUntil, lifeStatus, agendaStatusView } from '@/lib/utils';
+import type { AgendaItem, StockItem } from '@/types';
 import LoggedLayout from './components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from './components/ResponsiveTable/ResponsiveTable';
 
@@ -41,6 +42,15 @@ const chipGreen = { bgcolor: '#E8F5E9', color: '#2E7D32', fontWeight: 600, fontS
 const chipRed = { bgcolor: '#FFEBEE', color: '#C62828', fontWeight: 600, fontSize: 12 };
 const chipAmber = { bgcolor: '#FFF3E0', color: '#E65100', fontWeight: 600, fontSize: 12 };
 const chipGray = { bgcolor: '#F1F3F5', color: '#495057', fontWeight: 600, fontSize: 12 };
+const chipBlue = { bgcolor: '#E3F2FD', color: '#1976D2', fontWeight: 600, fontSize: 12 };
+
+const agendaToneSx: Record<string, typeof chipGreen> = {
+  green: chipGreen,
+  red: chipRed,
+  amber: chipAmber,
+  gray: chipGray,
+  blue: chipBlue,
+};
 
 const tableSx = { '& td': { borderBottom: '1px solid #eef1f5' } };
 
@@ -116,6 +126,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: products, isLoading: loadingProducts } = useProducts();
   const { data: items, isLoading: loadingItems } = useStockItems();
+  const { data: agendaItems = [] } = useAgendaItems();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const isLoading = loadingProducts || loadingItems;
@@ -180,6 +191,17 @@ export default function DashboardPage() {
       return ls === 'expired' || ls === 'expiring';
     })
     .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
+
+  // Agenda: itens vencidos ou vencendo nos próximos 7 dias (finalizados ficam de fora).
+  const agendaAlerts: AgendaItem[] = agendaItems
+    .filter((item) => {
+      const view = agendaStatusView(item);
+      if (view.value === 'finalizado') return false;
+      const days = daysUntil(item.expiryDate);
+      return days !== null && days <= 7;
+    })
+    .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate))
+    .slice(0, 6);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -340,7 +362,208 @@ export default function DashboardPage() {
             </Grid>
           </Grid>
 
-          <Card sx={{ ...cardSx, mb: 3 }}>
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Card sx={cardSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
+                  <ShoppingCartIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+                  <Typography variant="h6" fontWeight="bold">
+                    Lista de Compras
+                  </Typography>
+                </Box>
+                <Box sx={{ px: 2.5, pb: 2.5 }}>
+                  <ResponsiveTable
+                    paper={false}
+                    size="small"
+                    tableSx={tableSx}
+                    headerCellSx={thSx}
+                    rows={lowStockList}
+                    rowKey={(r) => r.name}
+                    emptyMessage="Nenhum produto abaixo do mínimo"
+                    columns={[
+                      {
+                        id: 'produto',
+                        header: 'Produto',
+                        fullWidthOnMobile: true,
+                        cell: (r) => <Typography fontWeight={600}>{r.name}</Typography>,
+                      },
+                      { id: 'estoque', header: 'Estoque', cell: (r) => `${r.weight}g` },
+                      { id: 'minimo', header: 'Mínimo', cell: (r) => `${r.minQuantity}g` },
+                      {
+                        id: 'falta',
+                        header: 'Falta',
+                        cell: (r) => <Chip label={`${r.falta}g`} size="small" sx={chipRed} />,
+                      },
+                    ]}
+                  />
+                </Box>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Card sx={cardSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
+                  <InventoryIcon sx={{ color: '#2E7D32', fontSize: 20 }} />
+                  <Typography variant="h6" fontWeight="bold">
+                    Lista de Produção
+                  </Typography>
+                </Box>
+                <Box sx={{ px: 2.5, pb: 2.5 }}>
+                  <ResponsiveTable
+                    paper={false}
+                    size="small"
+                    tableSx={tableSx}
+                    headerCellSx={thSx}
+                    rows={lowProductionList}
+                    rowKey={(r) => r.name}
+                    emptyMessage="Nenhum produto porcionado abaixo do mínimo"
+                    columns={[
+                      {
+                        id: 'produto',
+                        header: 'Produto',
+                        fullWidthOnMobile: true,
+                        cell: (r) => <Typography fontWeight={600}>{r.name}</Typography>,
+                      },
+                      {
+                        id: 'em-estoque',
+                        header: 'Em Estoque',
+                        cell: (r) => `${r.portioned} porções`,
+                      },
+                      {
+                        id: 'minimo',
+                        header: 'Mínimo',
+                        cell: (r) => `${r.minPortionedQuantity} porções`,
+                      },
+                      {
+                        id: 'falta',
+                        header: 'Falta',
+                        cell: (r) => (
+                          <Chip label={`${r.falta} porções`} size="small" sx={chipAmber} />
+                        ),
+                      },
+                    ]}
+                  />
+                </Box>
+              </Card>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Card sx={cardSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
+                  <EventNoteIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+                  <Typography variant="h6" fontWeight="bold">
+                    Agenda
+                  </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => router.push('/agenda')}
+                    sx={{
+                      ml: 'auto',
+                      textTransform: 'none',
+                      color: '#1976D2',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Ver agenda
+                  </Button>
+                </Box>
+                <Box sx={{ px: 2.5, pb: 2.5 }}>
+                  {agendaAlerts.length === 0 ? (
+                    <Typography variant="body2" sx={{ color: '#666' }}>
+                      Nenhum item próximo do vencimento
+                    </Typography>
+                  ) : (
+                    <ResponsiveTable
+                      paper={false}
+                      size="small"
+                      tableSx={tableSx}
+                      headerCellSx={thSx}
+                      rows={agendaAlerts}
+                      rowKey={(item) => item._id}
+                      columns={[
+                        {
+                          id: 'nome',
+                          header: 'Item',
+                          fullWidthOnMobile: true,
+                          cell: (item) => (
+                            <Typography fontWeight={600}>{item.name}</Typography>
+                          ),
+                        },
+                        {
+                          id: 'validade',
+                          header: 'Validade',
+                          cell: (item) => formatDate(item.expiryDate),
+                        },
+                        {
+                          id: 'status',
+                          header: 'Status',
+                          cell: (item) => {
+                            const view = agendaStatusView(item);
+                            return (
+                              <Chip
+                                label={view.label}
+                                size="small"
+                                sx={agendaToneSx[view.tone] ?? chipGray}
+                              />
+                            );
+                          },
+                        },
+                      ]}
+                    />
+                  )}
+                </Box>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Card sx={cardSx}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
+                  <WarningAmberIcon sx={{ color: '#C62828', fontSize: 20 }} />
+                  <Typography variant="h6" fontWeight="bold">
+                    Atenção Urgente
+                  </Typography>
+                </Box>
+                <Box sx={{ px: 2.5, pb: 2.5 }}>
+                  <ResponsiveTable
+                    paper={false}
+                    size="small"
+                    tableSx={tableSx}
+                    headerCellSx={thSx}
+                    rows={attention}
+                    rowKey={(item) => item._id}
+                    emptyMessage="Nenhum item em atenção"
+                    columns={[
+                      {
+                        id: 'produto',
+                        header: 'Produto',
+                        fullWidthOnMobile: true,
+                        cell: (item) => (
+                          <Typography fontWeight={600}>{item.product.productName}</Typography>
+                        ),
+                      },
+                      {
+                        id: 'validade',
+                        header: 'Validade',
+                        cell: (item) => formatDate(item.expiryDate),
+                      },
+                      {
+                        id: 'status',
+                        header: 'Status',
+                        cell: (item) =>
+                          lifeStatus(item) === 'expired' ? (
+                            <Chip label="Vencido" size="small" sx={chipRed} />
+                          ) : (
+                            <Chip label="Esta semana" size="small" sx={chipAmber} />
+                          ),
+                      },
+                    ]}
+                  />
+                </Box>
+              </Card>
+            </Grid>
+          </Grid>
+
+          <Card sx={cardSx}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
               <Inventory2Icon sx={{ color: '#1976D2', fontSize: 20 }} />
               <Typography variant="h6" fontWeight="bold">
@@ -450,137 +673,6 @@ export default function DashboardPage() {
               })}
             </Box>
           </Card>
-
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={cardSx}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
-                  <WarningAmberIcon sx={{ color: '#C62828', fontSize: 20 }} />
-                  <Typography variant="h6" fontWeight="bold">
-                    Atenção Urgente
-                  </Typography>
-                </Box>
-                <Box sx={{ px: 2.5, pb: 2.5 }}>
-                  <ResponsiveTable
-                    paper={false}
-                    size="small"
-                    tableSx={tableSx}
-                    headerCellSx={thSx}
-                    rows={attention}
-                    rowKey={(item) => item._id}
-                    emptyMessage="Nenhum item em atenção"
-                    columns={[
-                      {
-                        id: 'produto',
-                        header: 'Produto',
-                        fullWidthOnMobile: true,
-                        cell: (item) => (
-                          <Typography fontWeight={600}>{item.product.productName}</Typography>
-                        ),
-                      },
-                      {
-                        id: 'validade',
-                        header: 'Validade',
-                        cell: (item) => formatDate(item.expiryDate),
-                      },
-                      {
-                        id: 'status',
-                        header: 'Status',
-                        cell: (item) =>
-                          lifeStatus(item) === 'expired' ? (
-                            <Chip label="Vencido" size="small" sx={chipRed} />
-                          ) : (
-                            <Chip label="Esta semana" size="small" sx={chipAmber} />
-                          ),
-                      },
-                    ]}
-                  />
-                </Box>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={cardSx}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
-                  <ShoppingCartIcon sx={{ color: '#1976D2', fontSize: 20 }} />
-                  <Typography variant="h6" fontWeight="bold">
-                    Lista de Compras
-                  </Typography>
-                </Box>
-                <Box sx={{ px: 2.5, pb: 2.5 }}>
-                  <ResponsiveTable
-                    paper={false}
-                    size="small"
-                    tableSx={tableSx}
-                    headerCellSx={thSx}
-                    rows={lowStockList}
-                    rowKey={(r) => r.name}
-                    emptyMessage="Nenhum produto abaixo do mínimo"
-                    columns={[
-                      {
-                        id: 'produto',
-                        header: 'Produto',
-                        fullWidthOnMobile: true,
-                        cell: (r) => <Typography fontWeight={600}>{r.name}</Typography>,
-                      },
-                      { id: 'estoque', header: 'Estoque', cell: (r) => `${r.weight}g` },
-                      { id: 'minimo', header: 'Mínimo', cell: (r) => `${r.minQuantity}g` },
-                      {
-                        id: 'falta',
-                        header: 'Falta',
-                        cell: (r) => <Chip label={`${r.falta}g`} size="small" sx={chipRed} />,
-                      },
-                    ]}
-                  />
-                </Box>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={cardSx}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
-                  <InventoryIcon sx={{ color: '#2E7D32', fontSize: 20 }} />
-                  <Typography variant="h6" fontWeight="bold">
-                    Lista de Produção
-                  </Typography>
-                </Box>
-                <Box sx={{ px: 2.5, pb: 2.5 }}>
-                  <ResponsiveTable
-                    paper={false}
-                    size="small"
-                    tableSx={tableSx}
-                    headerCellSx={thSx}
-                    rows={lowProductionList}
-                    rowKey={(r) => r.name}
-                    emptyMessage="Nenhum produto porcionado abaixo do mínimo"
-                    columns={[
-                      {
-                        id: 'produto',
-                        header: 'Produto',
-                        fullWidthOnMobile: true,
-                        cell: (r) => <Typography fontWeight={600}>{r.name}</Typography>,
-                      },
-                      {
-                        id: 'em-estoque',
-                        header: 'Em Estoque',
-                        cell: (r) => `${r.portioned} porções`,
-                      },
-                      {
-                        id: 'minimo',
-                        header: 'Mínimo',
-                        cell: (r) => `${r.minPortionedQuantity} porções`,
-                      },
-                      {
-                        id: 'falta',
-                        header: 'Falta',
-                        cell: (r) => (
-                          <Chip label={`${r.falta} porções`} size="small" sx={chipAmber} />
-                        ),
-                      },
-                    ]}
-                  />
-                </Box>
-              </Card>
-            </Grid>
-          </Grid>
         </>
       )}
     </LoggedLayout>

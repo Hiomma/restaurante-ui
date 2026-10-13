@@ -6,6 +6,7 @@ import type {
   AgendaItem,
   Employee,
   MovementDestination,
+  Supplier,
   Product,
   Portioning,
   StockItem,
@@ -163,6 +164,39 @@ export function useUpdateMovementDestination() {
     mutationFn: ({ id, data }: { id: string; data: any }) =>
       api.put(`/movement-destinations/${id}`, data).then((res) => res.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['movement-destinations'] }),
+  });
+}
+
+// Suppliers (Fornecedores)
+export function useSuppliers() {
+  return useQuery({
+    queryKey: ['suppliers'],
+    queryFn: () => api.get('/suppliers').then((res) => res.data as Supplier[]),
+  });
+}
+
+export function useCreateSupplier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string }) => api.post('/suppliers', data).then((res) => res.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['suppliers'] }),
+  });
+}
+
+export function useUpdateSupplier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Supplier> }) =>
+      api.put(`/suppliers/${id}`, data).then((res) => res.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['suppliers'] }),
+  });
+}
+
+export function useDeleteSupplier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/suppliers/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['suppliers'] }),
   });
 }
 

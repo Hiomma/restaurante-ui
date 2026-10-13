@@ -117,6 +117,60 @@ export function agendaStatus(expiryDate: string): 'Vencido' | 'No prazo' {
   return days < 0 ? 'Vencido' : 'No prazo';
 }
 
+export type AgendaStatusValue = 'no_prazo' | 'em_andamento' | 'pendente' | 'finalizado';
+
+/** Opções manuais de status da agenda (o "Vencido" é derivado da data). */
+export const AGENDA_STATUS_OPTIONS: { value: AgendaStatusValue; label: string }[] = [
+  { value: 'pendente', label: 'Pendente' },
+  { value: 'em_andamento', label: 'Em andamento' },
+  { value: 'no_prazo', label: 'No prazo' },
+  { value: 'finalizado', label: 'Finalizado' },
+];
+
+export const AGENDA_STATUS_LABELS: Record<AgendaStatusValue, string> = {
+  pendente: 'Pendente',
+  em_andamento: 'Em andamento',
+  no_prazo: 'No prazo',
+  finalizado: 'Finalizado',
+};
+
+export interface AgendaStatusView {
+  /** Rótulo exibido na tela. */
+  label: string;
+  /** Status efetivamente armazenado. */
+  value: AgendaStatusValue;
+  /** Item vencido (data passada e ainda não finalizado). */
+  overdue: boolean;
+  tone: 'red' | 'green' | 'blue' | 'amber' | 'gray';
+}
+
+/**
+ * Status exibido de um item da agenda: itens finalizados nunca aparecem como
+ * vencidos; os demais ficam "Vencido" quando a data de validade passou.
+ */
+export function agendaStatusView(item: {
+  expiryDate: string;
+  status?: AgendaStatusValue | string | null;
+}): AgendaStatusView {
+  const stored = (item.status ?? 'pendente') as AgendaStatusValue;
+  const value: AgendaStatusValue = AGENDA_STATUS_LABELS[stored] ? stored : 'pendente';
+  if (value === 'finalizado') {
+    return { label: 'Finalizado', value, overdue: false, tone: 'gray' };
+  }
+  const days = daysUntil(item.expiryDate);
+  if (days !== null && days < 0) {
+    return { label: 'Vencido', value, overdue: true, tone: 'red' };
+  }
+  switch (value) {
+    case 'em_andamento':
+      return { label: 'Em andamento', value, overdue: false, tone: 'blue' };
+    case 'no_prazo':
+      return { label: 'No prazo', value, overdue: false, tone: 'green' };
+    default:
+      return { label: 'Pendente', value, overdue: false, tone: 'amber' };
+  }
+}
+
 export function todayISODate(): string {
   return toInputDate(new Date().toISOString());
 }

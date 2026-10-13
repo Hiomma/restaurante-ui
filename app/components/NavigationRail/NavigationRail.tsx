@@ -15,14 +15,13 @@ import {
   Divider,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
-import InventoryIcon from '@mui/icons-material/Inventory';
+import AppRegistrationIcon from '@mui/icons-material/AppRegistration';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import ScaleIcon from '@mui/icons-material/Scale';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import EventNoteIcon from '@mui/icons-material/EventNote';
-import PeopleIcon from '@mui/icons-material/People';
 import LockIcon from '@mui/icons-material/Lock';
 import LogoutIcon from '@mui/icons-material/Logout';
 import ReceiptIcon from '@mui/icons-material/Receipt';
@@ -32,7 +31,7 @@ import { clearToken, resetSessionCache } from '@/lib/session';
 
 const navItems = [
   { icon: <DashboardIcon />, label: 'Dashboard', path: '/' },
-  { icon: <InventoryIcon />, label: 'Produtos', path: '/products' },
+  { icon: <AppRegistrationIcon />, label: 'Cadastros', path: '/cadastros' },
   { icon: <LocalShippingIcon />, label: 'Recebimento', path: '/receiving' },
   { icon: <ScaleIcon />, label: 'Porcionamento', path: '/portionings' },
   { icon: <SwapHorizIcon />, label: 'Movimentações', path: '/movements' },
@@ -40,7 +39,6 @@ const navItems = [
   { icon: <QrCodeScannerIcon />, label: 'Estoque', path: '/stock' },
   { icon: <BarChartIcon />, label: 'Relatórios', path: '/reports' },
   { icon: <EventNoteIcon />, label: 'Agenda', path: '/agenda' },
-  { icon: <PeopleIcon />, label: 'Funcionários', path: '/employees' },
 ];
 
 export default function NavigationRail({
@@ -175,7 +173,7 @@ export default function NavigationRail({
       </List>
 
       <Typography variant="caption" color="#556677" sx={{ textAlign: 'center', py: 1 }}>
-        v2.1 — EstoqueApp
+        v2.2 — EstoqueApp
       </Typography>
 
       <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />

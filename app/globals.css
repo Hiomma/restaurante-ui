@@ -57,7 +57,10 @@
     background: #fff !important;
   }
 
-  /* Etiquetas: apenas a área de etiquetas é impressa, em página de 58mm */
+  /* Etiquetas: apenas a área de etiquetas é impressa, em página de 58mm.
+     O fluxo de Recebimento marca document.body com a classe `printing-labels`
+     ao chamar window.print() e a remove em afterprint/finally — a área de
+     etiquetas continua renderizada na tela durante o diálogo de impressão. */
   body:has(.etiquetas-print-area) * {
     visibility: hidden;
   }
@@ -86,11 +89,12 @@
     padding: 2mm !important;
     break-inside: avoid;
     page-break-inside: avoid;
-    break-after: page;
-    page-break-after: always;
   }
-  .etiqueta-print:last-child {
-    break-after: auto;
-    page-break-after: auto;
+  /* Cada etiqueta (exceto a primeira) começa em uma nova página. Usa o
+     vizinho anterior em vez de `break-after` para não deixar uma página em
+     branco depois da última etiqueta. */
+  .etiqueta-print + .etiqueta-print {
+    break-before: page;
+    page-break-before: always;
   }
 }

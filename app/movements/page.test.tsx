@@ -1,15 +1,15 @@
 /**
- * Regression tests for BUG 1 — destination creation, stock behavior and list
- * updates on the "Movimentações → Destinos" tab.
+ * Tests for the "Movimentações" page (post-Destinos extraction).
  *
- * Root cause under test: the "Mover"/"Baixar" sub-tab <Tab> elements had no
- * explicit `value`, so MUI assigned them their indexes (0/1). Clicking a
- * sub-tab stored a number in `destSubTab`, which (a) never matched the
- * `type: 'move' | 'writeoff'` filter (existing AND newly created custom
- * destinations disappeared from the list) and (b) pre-filled the creation
- * dialog with an invalid type.
+ * Covered behavior:
+ * - The Destinos tab no longer exists here (it lives in Cadastros now).
+ * - The QR reader button on "Movimentar Etiqueta" and "Contagem" feeds the
+ *   same lookup flow used by the manual code input.
+ * - Counting deletions ("baixar") ALWAYS require a marked reason ("motivo"):
+ *   no delete happens without confirming the "Motivo da baixa" dialog, and the
+ *   created movement carries the reason string plus the proper destination.
  */
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SnackbarProvider } from 'notistack';
@@ -19,41 +19,91 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/movements',
 }));
 
+// The real dialog only starts the camera when open, but tests should not
+// depend on html5-qrcode at all: a stub exposes the same scan contract.
+vi.mock('../components/QrScannerDialog/QrScannerDialog', async () => {
+  const { createElement } = await import('react');
+  type QrProps = { open: boolean; onScan: (value: string) => void; onClose: () => void };
+  return {
+    default: ({ open, onScan, onClose }: QrProps) =>
+      open
+        ? createElement(
+            'div',
+            { role: 'dialog', 'aria-label': 'Leitor de QR (mock)' },
+            createElement('button', { onClick: () => onScan('AB1234') }, 'scan-mock'),
+            createElement('button', { onClick: onClose }, 'close-mock'),
+          )
+        : null,
+  };
+});
+
 vi.mock('@/lib/api', () => {
-  const destinations: Array<Record<string, unknown>> = [
-    { _id: 'd-move-1', name: 'Barcozinha', type: 'move', active: true },
-    { _id: 'd-move-2', name: 'Freezer', type: 'move', active: true },
-    { _id: 'd-wo-1', name: 'Entulho', type: 'writeoff', active: true },
+  const items: Array<Record<string, unknown>> = [
+    {
+      _id: 'i1',
+      product: { productId: 'p1', productName: 'Queijo' },
+      type: 'raw',
+      weightGrams: 1000,
+      manipulationDate: '2026-10-01',
+      expiryDate: '2026-10-20',
+      qrCode: 'AB1234',
+      status: 'in_stock',
+    },
+    {
+      _id: 'i2',
+      product: { productId: 'p1', productName: 'Queijo' },
+      type: 'portioned',
+      weightGrams: 250,
+      manipulationDate: '2026-10-01',
+      expiryDate: '2026-10-21',
+      qrCode: 'CD5678',
+      status: 'in_stock',
+    },
   ];
-  const posted: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const gets: string[] = [];
+  const movements: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const deletes: string[] = [];
   const api = {
     get: async (url: string) => {
-      if (url === '/movement-destinations') return { data: destinations.map((d) => ({ ...d })) };
+      gets.push(url);
+      if (url.startsWith('/stock-items/qr/')) {
+        const code = url.split('/').pop()!.toUpperCase();
+        const item = items.find((i) => i.qrCode === code);
+        if (!item) throw new Error('not found');
+        return { data: { ...item } };
+      }
+      if (url === '/stock-items') return { data: items.map((i) => ({ ...i })) };
+      if (url === '/products') return { data: [{ _id: 'p1', name: 'Queijo' }] };
+      if (url === '/movement-destinations') return { data: [] };
       if (url === '/users/me') {
         return { data: { _id: 'u1', name: 'Usuário Teste', username: 'teste' } };
       }
       return { data: [] };
     },
     post: async (url: string, body: Record<string, unknown>) => {
-      if (url === '/movement-destinations') {
-        posted.push({ url, body });
-        const doc = { _id: `d-new-${destinations.length}`, active: true, ...body };
-        destinations.push(doc);
-        return { data: doc };
+      if (url === '/stock-movements') {
+        movements.push({ url, body });
+        return { data: { _id: `m-${movements.length}`, ...body } };
       }
       return { data: {} };
     },
     put: async () => ({ data: {} }),
-    delete: async () => ({ data: {} }),
+    delete: async (url: string) => {
+      deletes.push(url);
+      return { data: {} };
+    },
   };
-  return { default: api, __posted: posted };
+  return { default: api, __gets: gets, __movements: movements, __deletes: deletes };
 });
 
 import MovementsPage from './page';
 import * as apiModule from '@/lib/api';
 
-const posted = (apiModule as unknown as { __posted: Array<{ url: string; body: Record<string, unknown> }> })
-  .__posted;
+const mockApi = apiModule as unknown as {
+  __gets: string[];
+  __movements: Array<{ url: string; body: Record<string, unknown> }>;
+  __deletes: string[];
+};
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -68,93 +118,217 @@ function renderPage() {
   );
 }
 
-async function openSubTab(name: 'Mover' | 'Baixar') {
-  fireEvent.click(screen.getByRole('tab', { name }));
+/** Opens a MUI (non-native) select and picks an option by accessible name. */
+async function pickSelectOption(selectTrigger: HTMLElement, optionName: string) {
+  fireEvent.mouseDown(selectTrigger);
+  let option: HTMLElement | null = null;
+  try {
+    option = await screen.findByRole('option', { name: optionName });
+  } catch {
+    fireEvent.click(selectTrigger);
+    option = await screen.findByRole('option', { name: optionName });
+  }
+  fireEvent.click(option!);
 }
+
+/** Enters "Contagem" in full-stock mode and verifies the (empty) count. */
+async function setupCountMissing() {
+  fireEvent.click(screen.getByRole('tab', { name: 'Contagem' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Estoque Completo' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Verificar Contagem' }));
+  // Both mocked items were not scanned, so both are "missing".
+  expect(await screen.findAllByRole('button', { name: 'baixar etiqueta' })).toHaveLength(2);
+}
+
+beforeEach(() => {
+  mockApi.__gets.length = 0;
+  mockApi.__movements.length = 0;
+  mockApi.__deletes.length = 0;
+});
 
 afterEach(() => {
   cleanup();
 });
 
-describe('Movements destinations tab (BUG 1)', () => {
-  it('lists destinations by behavior on each sub-tab and shows a newly created destination immediately', async () => {
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
+describe('Movements page structure', () => {
+  it('no longer renders the Destinos tab (moved to Cadastros)', async () => {
     renderPage();
 
-    // Main "Destinos" tab
-    fireEvent.click(screen.getByRole('tab', { name: 'Destinos' }));
+    const tabs = await screen.findAllByRole('tab');
+    expect(tabs.map((t) => t.textContent)).toEqual(['Movimentar Etiqueta', 'Contagem']);
+    expect(screen.queryByRole('tab', { name: 'Destinos' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Novo Destino' })).toBeNull();
+  });
+});
 
-    // Initial "Mover" sub-tab: move-type customs are listed, writeoff ones are not
-    expect(await screen.findByText('Barcozinha')).toBeTruthy();
-    expect(await screen.findByText('Freezer')).toBeTruthy();
-    expect(screen.queryByText('Entulho')).toBeNull();
-    // fixed destinations for "Mover"
-    expect(screen.getByText('Salão')).toBeTruthy();
+describe('QR code reading (camera)', () => {
+  it('Movimentar Etiqueta: scanning with the camera runs the same lookup flow', async () => {
+    renderPage();
 
-    // Switch to "Baixar": writeoff customs only (business rule)
-    await openSubTab('Baixar');
-    expect(await screen.findByText('Entulho')).toBeTruthy();
-    expect(screen.queryByText('Barcozinha')).toBeNull();
-    expect(screen.getByText('Perda')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Ler QR Code' }));
+    const scanner = await screen.findByRole('dialog', { name: 'Leitor de QR (mock)' });
+    fireEvent.click(within(scanner).getByRole('button', { name: 'scan-mock' }));
 
-    // Switch back to "Mover": move customs must come back
-    await openSubTab('Mover');
-    expect(await screen.findByText('Barcozinha')).toBeTruthy();
-    expect(screen.queryByText('Entulho')).toBeNull();
+    // lookup performed with the scanned code
+    await waitFor(() => expect(mockApi.__gets).toContain('/stock-items/qr/AB1234'));
+    // and the item was added to the selection
+    expect(await screen.findByText('Etiquetas selecionadas (1)')).toBeTruthy();
+    expect(screen.getByText('Queijo')).toBeTruthy();
+  });
 
-    // --- Create "Câmara" with behavior "item remains in stock" (move),
-    // starting from the "Baixar" sub-tab (the situation from the bug video).
-    await openSubTab('Baixar');
-    fireEvent.click(screen.getByRole('button', { name: 'Novo Destino' }));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByPlaceholderText('Ex: Freezer 2'), {
-      target: { value: 'Câmara' },
-    });
+  it('Contagem: scanning with the camera feeds the counting scan field', async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Contagem' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Estoque Completo' }));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ler QR Code' }));
+    const scanner = await screen.findByRole('dialog', { name: 'Leitor de QR (mock)' });
+    fireEvent.click(within(scanner).getByRole('button', { name: 'scan-mock' }));
+
+    await waitFor(() => expect(mockApi.__gets).toContain('/stock-items/qr/AB1234'));
+    // the scanned code appears as a chip
+    expect(await screen.findByText('AB1234')).toBeTruthy();
+  });
+});
+
+describe('Counting write-offs require a motivo', () => {
+  it('does not delete anything while the motivo dialog is not confirmed', async () => {
+    renderPage();
+    await setupCountMissing();
+
+    // per-row delete opens the dialog instead of deleting
+    fireEvent.click(screen.getAllByRole('button', { name: 'baixar etiqueta' })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Motivo da baixa' });
+
+    // confirm is blocked without a motivo
+    const confirm = within(dialog).getByRole('button', { name: 'Confirmar baixa' });
+    expect(confirm).toHaveProperty('disabled', true);
+
+    // cancelling deletes nothing
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Motivo da baixa' })).toBeNull());
+    expect(mockApi.__deletes).toHaveLength(0);
+    expect(mockApi.__movements).toHaveLength(0);
+  });
+
+  it('per-row write-off creates a movement with the motivo and deletes the item', async () => {
+    renderPage();
+    await setupCountMissing();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'baixar etiqueta' })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Motivo da baixa' });
 
     const selectTrigger =
       dialog.querySelector('[role="combobox"]') ?? dialog.querySelector('.MuiSelect-select');
     expect(selectTrigger).toBeTruthy();
-    fireEvent.mouseDown(selectTrigger!);
-    let moveOption: HTMLElement | null = null;
-    try {
-      moveOption = await screen.findByRole('option', {
-        name: /Mover \(item permanece no estoque\)/,
-      });
-    } catch {
-      fireEvent.click(selectTrigger!);
-      moveOption = await screen.findByRole('option', {
-        name: /Mover \(item permanece no estoque\)/,
-      });
-    }
-    fireEvent.click(moveOption!);
+    await pickSelectOption(selectTrigger as HTMLElement, 'Perda');
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Adicionar' }));
+    const confirm = within(dialog).getByRole('button', { name: 'Confirmar baixa' });
+    expect(confirm).toHaveProperty('disabled', false);
+    fireEvent.click(confirm);
 
-    // success feedback
-    expect(await screen.findByText('Destino adicionado com sucesso!')).toBeTruthy();
-    // the dialog closes after a successful creation (exit transition included)
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-
-    // the POST carried the correct, business-relevant configuration
-    expect(posted.at(-1)?.body).toEqual({ name: 'Câmara', type: 'move' });
-
-    // the new destination is visible right away (its sub-tab is shown)
-    expect(await screen.findByText('Câmara')).toBeTruthy();
-
-    // ...and it honors the Mover/Baixar split afterwards
-    await openSubTab('Baixar');
-    expect(screen.queryByText('Câmara')).toBeNull();
-    expect(await screen.findByText('Entulho')).toBeTruthy();
-    await openSubTab('Mover');
-    expect(await screen.findByText('Câmara')).toBeTruthy();
-
-    // No MUI "invalid Tabs value" warnings (the original defect)
-    const tabsWarnings = consoleErrorSpy.mock.calls.filter((args) =>
-      String(args[0]).includes('Tabs component is invalid'),
+    await waitFor(() => expect(mockApi.__movements).toHaveLength(1));
+    expect(mockApi.__movements[0].body).toEqual(
+      expect.objectContaining({
+        movementType: 'exit',
+        reason: 'Contagem — Perda',
+        destination: 'Perda',
+      }),
     );
-    expect(tabsWarnings).toHaveLength(0);
+    await waitFor(() => expect(mockApi.__deletes).toEqual(['/stock-items/i1']));
 
-    consoleErrorSpy.mockRestore();
+    expect(await screen.findByText('Etiqueta baixada.')).toBeTruthy();
+    // wait for the motivo dialog to fully unmount (exit transition keeps the
+    // page aria-hidden while it fades out)
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Motivo da baixa' })).toBeNull());
+    // only one item remains as missing
+    expect(screen.getAllByRole('button', { name: 'baixar etiqueta' })).toHaveLength(1);
+  });
+
+  it('"Não encontrado" motivo writes off with destination "Não encontrado"', async () => {
+    renderPage();
+    await setupCountMissing();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'baixar etiqueta' })[1]);
+    const dialog = await screen.findByRole('dialog', { name: 'Motivo da baixa' });
+
+    const selectTrigger =
+      dialog.querySelector('[role="combobox"]') ?? dialog.querySelector('.MuiSelect-select');
+    await pickSelectOption(selectTrigger as HTMLElement, 'Não encontrado');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirmar baixa' }));
+
+    await waitFor(() => expect(mockApi.__movements).toHaveLength(1));
+    expect(mockApi.__movements[0].body).toEqual(
+      expect.objectContaining({
+        reason: 'Contagem — Não encontrado',
+        destination: 'Não encontrado',
+      }),
+    );
+    await waitFor(() => expect(mockApi.__deletes).toEqual(['/stock-items/i2']));
+  });
+
+  it('bulk write-off asks for one motivo and applies it to the whole batch', async () => {
+    renderPage();
+    await setupCountMissing();
+
+    // select all missing items and use the bulk "Baixar"
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Selecionar tudo' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Baixar (2)' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Motivo da baixa' });
+    // batch hint mentions the number of selected items
+    expect(within(dialog).getByText(/baixar as 2 etiqueta\(s\)/)).toBeTruthy();
+
+    const selectTrigger =
+      dialog.querySelector('[role="combobox"]') ?? dialog.querySelector('.MuiSelect-select');
+    await pickSelectOption(selectTrigger as HTMLElement, 'Perda');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Confirmar baixa' }));
+
+    await waitFor(() => expect(mockApi.__movements).toHaveLength(2));
+    for (const movement of mockApi.__movements) {
+      expect(movement.body).toEqual(
+        expect.objectContaining({
+          movementType: 'exit',
+          reason: 'Contagem — Perda',
+          destination: 'Perda',
+        }),
+      );
+    }
+    await waitFor(() =>
+      expect(mockApi.__deletes).toEqual(['/stock-items/i1', '/stock-items/i2']),
+    );
+
+    // nothing else to write off
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'baixar etiqueta' })).toBeNull(),
+    );
+  });
+
+  it('"Outro" motivo requires a free-text description before confirming', async () => {
+    renderPage();
+    await setupCountMissing();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'baixar etiqueta' })[0]);
+    const dialog = await screen.findByRole('dialog', { name: 'Motivo da baixa' });
+
+    const selectTrigger =
+      dialog.querySelector('[role="combobox"]') ?? dialog.querySelector('.MuiSelect-select');
+    await pickSelectOption(selectTrigger as HTMLElement, 'Outro');
+
+    const confirm = within(dialog).getByRole('button', { name: 'Confirmar baixa' });
+    // still blocked: the free-text description is required
+    expect(confirm).toHaveProperty('disabled', true);
+
+    fireEvent.change(within(dialog).getByPlaceholderText('Ex: Contaminada na câmara fria'), {
+      target: { value: 'Contaminada' },
+    });
+    expect(confirm).toHaveProperty('disabled', false);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(mockApi.__movements).toHaveLength(1));
+    expect(mockApi.__movements[0].body).toEqual(
+      expect.objectContaining({ reason: 'Contagem — Contaminada', destination: 'Perda' }),
+    );
   });
 });

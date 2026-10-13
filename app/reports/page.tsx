@@ -173,6 +173,26 @@ const recvStatusLabel: Record<StockItem['status'], string> = {
 const fmtG = (grams: number) =>
   `${new Intl.NumberFormat('pt-BR').format(Math.round(grams))}g`;
 
+/** Remove acentos e padroniza para minúsculas (busca sem depender de acentos). */
+const normalizeText = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase();
+
+/**
+ * Destino de uma movimentação: usa o campo novo `destination` ou infere do
+ * motivo legado ("Mover — Salão", "Baixar — Bar", "Contagem — Não encontrado").
+ */
+function movementDestination(m: StockMovement): string {
+  const dest = (m.destination ?? '').trim();
+  if (dest) return dest;
+  const reason = (m.reason ?? '').trim();
+  if (!reason) return '—';
+  const match = reason.match(/^\s*\S+\s*[—–-]\s*(.+)$/);
+  return match ? match[1].trim() : 'Outros';
+}
+
 function buyStatusOf(product: Product, weight: number): BuyStatus {
   if (!product.minQuantity) return 'sem';
   return weight < product.minQuantity ? 'comprar' : 'ok';
@@ -463,6 +483,8 @@ export default function ReportsPage() {
   const { data: portionings = [], isLoading: lt } = usePortionings();
 
   const [perdasGroup, setPerdasGroup] = useState('');
+  const [perdasProduct, setPerdasProduct] = useState('');
+  const [perdasSupplier, setPerdasSupplier] = useState('');
   const [perdasFrom, setPerdasFrom] = useState('');
   const [perdasTo, setPerdasTo] = useState('');
 
@@ -476,6 +498,8 @@ export default function ReportsPage() {
 
   const [movSearch, setMovSearch] = useState('');
   const [movType, setMovType] = useState('');
+  const [movDest, setMovDest] = useState('');
+  const [movMotivo, setMovMotivo] = useState('');
   const [movFrom, setMovFrom] = useState('');
   const [movTo, setMovTo] = useState('');
 
@@ -495,6 +519,36 @@ export default function ReportsPage() {
   const groupOptions = [
     { value: '', label: 'Todos os grupos' },
     ...groups.map((g) => ({ value: g, label: g })),
+  ];
+
+  // Opções dos filtros de Perdas: produtos e fornecedores presentes nos dados.
+  const perdasProductMap = new Map<string, string>();
+  for (const pt of portionings) {
+    if (!perdasProductMap.has(pt.product.productId)) {
+      perdasProductMap.set(pt.product.productId, pt.product.productName);
+    }
+  }
+  const perdasProductOptions = [
+    { value: '', label: 'Todos os produtos' },
+    ...Array.from(perdasProductMap.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
+  ];
+
+  const perdasSupplierOptions = [
+    { value: '', label: 'Todos os fornecedores' },
+    ...Array.from(
+      new Set(portionings.map((pt) => (pt.supplier ?? '').trim()).filter(Boolean)),
+    )
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map((s) => ({ value: s, label: s })),
+  ];
+
+  const movDestOptions = [
+    { value: '', label: 'Todos os destinos' },
+    ...Array.from(new Set(movements.map((m) => movementDestination(m))))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map((d) => ({ value: d, label: d })),
   ];
 
   const inStockItems = stockItems.filter((i) => i.status === 'in_stock');
@@ -535,6 +589,8 @@ export default function ReportsPage() {
       const group = productMap.get(pt.product.productId)?.group ?? '';
       if (group !== perdasGroup) return false;
     }
+    if (perdasProduct && pt.product.productId !== perdasProduct) return false;
+    if (perdasSupplier && (pt.supplier ?? '').trim() !== perdasSupplier) return false;
     if (perdasFrom && perdasTo) {
       const d = pt.date.slice(0, 10);
       if (d < perdasFrom || d > perdasTo) return false;
@@ -601,10 +657,11 @@ export default function ReportsPage() {
   const exportPerdas = () => {
     downloadCsv(
       'relatorio-perdas',
-      ['Data', 'Produto', 'Bruto (g)', 'Limpo (g)', 'Perda (g)', '% Perda'],
+      ['Data', 'Produto', 'Fornecedor', 'Bruto (g)', 'Limpo (g)', 'Perda (g)', '% Perda'],
       perdasHistory.map((p) => [
         formatDate(p.date),
         p.product.productName,
+        p.supplier || '',
         p.rawWeightGrams,
         p.cleanWeightGrams,
         p.lossGrams,
@@ -691,14 +748,17 @@ export default function ReportsPage() {
   const movRows = movements
     .filter((m) => {
       const q = movSearch.trim().toLowerCase();
-      if (
-        q &&
-        !m.product.productName.toLowerCase().includes(q) &&
-        !(m.reason ?? '').toLowerCase().includes(q)
-      ) {
+      if (q && !m.product.productName.toLowerCase().includes(q)) {
         return false;
       }
       if (movType && m.movementType !== movType) return false;
+      if (movDest && movementDestination(m) !== movDest) return false;
+      if (
+        movMotivo.trim() &&
+        !normalizeText(m.reason ?? '').includes(normalizeText(movMotivo.trim()))
+      ) {
+        return false;
+      }
       const d = m.date.slice(0, 10);
       if (movFrom && d < movFrom) return false;
       if (movTo && d > movTo) return false;
@@ -709,7 +769,17 @@ export default function ReportsPage() {
   const exportMovimentacoes = () => {
     downloadCsv(
       'relatorio-movimentacoes',
-      ['Data', 'Tipo', 'Produto', 'Qtd. Itens', 'Peso Total (g)', 'Tipo Item', 'Destino/Motivo'],
+      [
+        'Data',
+        'Tipo',
+        'Produto',
+        'Qtd. Itens',
+        'Peso Total (g)',
+        'Tipo Item',
+        'Destino',
+        'Motivo',
+        'Usuário',
+      ],
       movRows.map((m) => [
         formatDate(m.date),
         m.movementType === 'entry'
@@ -721,7 +791,9 @@ export default function ReportsPage() {
         m.quantity,
         m.weightGrams ?? 0,
         m.itemType === 'raw' ? 'Bruto' : m.itemType === 'portioned' ? 'Porcionado' : '',
+        movementDestination(m),
         m.reason || '',
+        m.userName || '',
       ]),
     );
   };
@@ -966,6 +1038,18 @@ export default function ReportsPage() {
                   options={groupOptions}
                   minWidth={190}
                 />
+                <SelectFilter
+                  value={perdasProduct}
+                  onChange={setPerdasProduct}
+                  options={perdasProductOptions}
+                  minWidth={210}
+                />
+                <SelectFilter
+                  value={perdasSupplier}
+                  onChange={setPerdasSupplier}
+                  options={perdasSupplierOptions}
+                  minWidth={210}
+                />
                 <DateRangeField
                   from={perdasFrom}
                   to={perdasTo}
@@ -1145,6 +1229,11 @@ export default function ReportsPage() {
                       header: 'Produto',
                       primary: true,
                       cell: (p) => p.product.productName,
+                    },
+                    {
+                      id: 'fornecedor',
+                      header: 'Fornecedor',
+                      cell: (p) => p.supplier || '—',
                     },
                     { id: 'bruto', header: 'Bruto', cell: (p) => `${p.rawWeightGrams}g` },
                     { id: 'limpo', header: 'Limpo', cell: (p) => `${p.cleanWeightGrams}g` },
@@ -1329,9 +1418,20 @@ export default function ReportsPage() {
                 <SearchField
                   value={movSearch}
                   onChange={setMovSearch}
-                  placeholder="Buscar por produto ou destino..."
+                  placeholder="Buscar por produto..."
+                />
+                <SearchField
+                  value={movMotivo}
+                  onChange={setMovMotivo}
+                  placeholder="Filtrar por motivo..."
                 />
                 <SelectFilter value={movType} onChange={setMovType} options={movTypeOptions} />
+                <SelectFilter
+                  value={movDest}
+                  onChange={setMovDest}
+                  options={movDestOptions}
+                  minWidth={190}
+                />
                 <DateRangeField from={movFrom} to={movTo} onFrom={setMovFrom} onTo={setMovTo} />
                 <Box sx={{ ml: 'auto' }}>
                   <ExportButtons onExcel={exportMovimentacoes} onPdf={printReport} />
@@ -1382,8 +1482,18 @@ export default function ReportsPage() {
                             : '—',
                     },
                     {
+                      id: 'destino',
+                      header: 'Destino',
+                      cell: (m) => movementDestination(m),
+                    },
+                    {
+                      id: 'usuario',
+                      header: 'Usuário',
+                      cell: (m) => m.userName || '—',
+                    },
+                    {
                       id: 'motivo',
-                      header: 'Destino/Motivo',
+                      header: 'Motivo',
                       fullWidthOnMobile: true,
                       cell: (m) => m.reason || '—',
                     },

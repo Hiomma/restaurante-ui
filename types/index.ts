@@ -19,14 +19,25 @@ export interface AgendaItem {
   datePerformed: string;
   expiryDate: string;
   observations?: string;
+  /** Status controlado pelo usuário (o "Vencido" é derivado da data). */
+  status?: AgendaStatus;
   createdAt: string;
 }
+
+export type AgendaStatus = 'no_prazo' | 'em_andamento' | 'pendente' | 'finalizado';
 
 export interface Employee {
   _id: string;
   name: string;
   username: string;
   role: 'employee' | 'admin';
+  active: boolean;
+  createdAt: string;
+}
+
+export interface Supplier {
+  _id: string;
+  name: string;
   active: boolean;
   createdAt: string;
 }
@@ -70,6 +81,10 @@ export interface Portioning {
   cleanWeightGrams: number;
   lossGrams: number;
   lossPercentage: number;
+  /** Ganho de peso quando o peso limpo é maior que o bruto (ingrediente sem etiqueta). */
+  gainGrams?: number;
+  /** Fornecedor de quem veio a matéria-prima porcionada. */
+  supplier?: string;
   portionsCount: number;
   portionWeightGrams: number;
   date: string;
@@ -97,6 +112,8 @@ export interface StockItem {
   destination?: string;
   lote?: string;
   nf?: string;
+  /** Fornecedor de quem a mercadoria foi recebida. */
+  supplier?: string;
   employeeName?: string;
   createdAt: string;
 }
@@ -112,6 +129,9 @@ export interface StockMovement {
   weightGrams?: number;
   itemType?: 'raw' | 'portioned';
   reason?: string;
+  destination?: string;
+  /** Usuário que realizou a movimentação. */
+  userName?: string;
   date: string;
   createdAt: string;
 }

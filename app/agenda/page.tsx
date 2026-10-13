@@ -12,6 +12,7 @@ import {
   DialogActions,
   TextField,
   Chip,
+  MenuItem,
   InputAdornment,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -31,8 +32,15 @@ import {
   useUpdateAgendaItem,
   useDeleteAgendaItem,
 } from '@/lib/queries';
-import { agendaStatus, daysUntil, formatDate, toInputDate, todayISODate } from '@/lib/utils';
-import type { AgendaItem } from '@/types';
+import {
+  agendaStatusView,
+  AGENDA_STATUS_OPTIONS,
+  daysUntil,
+  formatDate,
+  toInputDate,
+  todayISODate,
+} from '@/lib/utils';
+import type { AgendaItem, AgendaStatus } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import BrDateField from '../components/BrDateField/BrDateField';
@@ -79,32 +87,61 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
   );
 }
 
-function StatusChip({ status }: { status: 'Vencido' | 'No prazo' }) {
-  if (status === 'Vencido') {
-    return (
-      <Chip
-        label="Vencido"
-        size="small"
-        sx={{
-          bgcolor: '#E53935',
-          color: '#fff',
-          fontWeight: 600,
-          borderRadius: 1,
-        }}
-      />
-    );
-  }
+const agendaChipTones = {
+  red: { bgcolor: '#FFEBEE', color: '#C62828' },
+  green: { bgcolor: '#E8F5E9', color: '#2E7D32' },
+  blue: { bgcolor: '#E3F2FD', color: '#1976D2' },
+  amber: { bgcolor: '#FFF3E0', color: '#E65100' },
+  gray: { bgcolor: '#F1F3F5', color: '#495057' },
+} as const;
+
+/** Chip de status derivado de agendaStatusView (finalizado nunca aparece vencido). */
+function StatusChip({ item }: { item: AgendaItem }) {
+  const view = agendaStatusView(item);
   return (
     <Chip
-      label="No prazo"
+      label={view.label}
       size="small"
       sx={{
-        bgcolor: '#E8F5E9',
-        color: '#2E7D32',
+        ...agendaChipTones[view.tone],
         fontWeight: 600,
         borderRadius: 1,
       }}
     />
+  );
+}
+
+/** Select de mudança de status do item da agenda. */
+function StatusSelect({
+  item,
+  onChange,
+  minWidth = 150,
+}: {
+  item: AgendaItem;
+  onChange: (status: AgendaStatus) => void;
+  minWidth?: number;
+}) {
+  return (
+    <TextField
+      select
+      size="small"
+      value={item.status ?? 'pendente'}
+      onChange={(e) => onChange(e.target.value as AgendaStatus)}
+      sx={{
+        minWidth,
+        bgcolor: 'transparent',
+        '& .MuiOutlinedInput-root': {
+          bgcolor: 'transparent',
+          '& fieldset': { borderColor: '#e0e0e0' },
+        },
+      }}
+    >
+      {AGENDA_STATUS_OPTIONS.map((o) => (
+        <MenuItem key={o.value} value={o.value}>
+          {o.label}
+        </MenuItem>
+      ))}
+    </TextField>
   );
 }
 
@@ -121,49 +158,6 @@ function DetailValue({ label, value, color }: { label: string; value: string; co
   );
 }
 
-const agendaColumns: ResponsiveTableColumn<AgendaItem>[] = [
-  {
-    id: 'name',
-    header: 'Nome',
-    primary: true,
-    cell: (item) => <Typography fontWeight={500}>{item.name}</Typography>,
-  },
-  {
-    id: 'datePerformed',
-    header: 'Data Realizado',
-    cell: (item) => formatDate(item.datePerformed),
-  },
-  {
-    id: 'expiryDate',
-    header: 'Data de Validade',
-    cell: (item) => <Typography fontWeight={700}>{formatDate(item.expiryDate)}</Typography>,
-  },
-  {
-    id: 'observations',
-    header: 'Observações',
-    fullWidthOnMobile: true,
-    cell: (item) => (
-      <Typography
-        variant="body2"
-        title={item.observations || ''}
-        sx={{
-          maxWidth: { md: 320 },
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: { md: 'nowrap' },
-        }}
-      >
-        {item.observations || '—'}
-      </Typography>
-    ),
-  },
-  {
-    id: 'status',
-    header: 'Status',
-    cell: (item) => <StatusChip status={agendaStatus(item.expiryDate)} />,
-  },
-];
-
 export default function AgendaPage() {
   const { data: items, isLoading } = useAgendaItems();
   const createItem = useCreateAgendaItem();
@@ -175,6 +169,8 @@ export default function AgendaPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AgendaItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  // Status escolhido no diálogo de edição (o schema do form não inclui status).
+  const [dialogStatus, setDialogStatus] = useState<AgendaStatus>('pendente');
 
   const form = useForm<AgendaFormValues>({
     resolver: zodResolver(agendaItemSchema),
@@ -185,6 +181,62 @@ export default function AgendaPage() {
       observations: '',
     },
   });
+
+  const handleStatusChange = (item: AgendaItem, status: AgendaStatus) => {
+    updateItem.mutate({ id: item._id, data: { status } });
+  };
+
+  const agendaColumns: ResponsiveTableColumn<AgendaItem>[] = [
+    {
+      id: 'name',
+      header: 'Nome',
+      primary: true,
+      cell: (item) => <Typography fontWeight={500}>{item.name}</Typography>,
+    },
+    {
+      id: 'datePerformed',
+      header: 'Data Realizado',
+      cell: (item) => formatDate(item.datePerformed),
+    },
+    {
+      id: 'expiryDate',
+      header: 'Data de Validade',
+      cell: (item) => <Typography fontWeight={700}>{formatDate(item.expiryDate)}</Typography>,
+    },
+    {
+      id: 'observations',
+      header: 'Observações',
+      fullWidthOnMobile: true,
+      cell: (item) => (
+        <Typography
+          variant="body2"
+          title={item.observations || ''}
+          sx={{
+            maxWidth: { md: 320 },
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: { md: 'nowrap' },
+          }}
+        >
+          {item.observations || '—'}
+        </Typography>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      fullWidthOnMobile: true,
+      cell: (item) => (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <StatusChip item={item} />
+          <StatusSelect
+            item={item}
+            onChange={(status) => handleStatusChange(item, status)}
+          />
+        </Box>
+      ),
+    },
+  ];
 
   const q = search.trim().toLowerCase();
   const filteredItems = items?.filter((item) => {
@@ -201,6 +253,7 @@ export default function AgendaPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setDialogStatus('pendente');
     form.reset({
       name: '',
       datePerformed: todayISODate(),
@@ -212,6 +265,7 @@ export default function AgendaPage() {
 
   const openEdit = (item: AgendaItem) => {
     setEditing(item);
+    setDialogStatus(item.status ?? 'pendente');
     form.reset({
       name: item.name,
       datePerformed: toInputDate(item.datePerformed),
@@ -223,7 +277,7 @@ export default function AgendaPage() {
 
   const onSubmit = async (data: AgendaFormValues) => {
     if (editing) {
-      await updateItem.mutateAsync({ id: editing._id, data });
+      await updateItem.mutateAsync({ id: editing._id, data: { ...data, status: dialogStatus } });
     } else {
       await createItem.mutateAsync(data);
     }
@@ -321,11 +375,10 @@ export default function AgendaPage() {
           );
         }}
         rowSx={(item) => ({
-          bgcolor: agendaStatus(item.expiryDate) === 'Vencido' ? '#FFF5F5' : undefined,
+          bgcolor: agendaStatusView(item).overdue ? '#FFF5F5' : undefined,
         })}
         expandedRow={(item) => {
           if (expandedId !== item._id) return null;
-          const status = agendaStatus(item.expiryDate);
           const days = daysUntil(item.expiryDate);
           return (
             <Box
@@ -348,7 +401,14 @@ export default function AgendaPage() {
                 <Typography variant="caption" sx={detailLabelSx}>
                   Status
                 </Typography>
-                <StatusChip status={status} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                  <StatusChip item={item} />
+                  <StatusSelect
+                    item={item}
+                    onChange={(status) => handleStatusChange(item, status)}
+                    minWidth={160}
+                  />
+                </Box>
               </Box>
               <DetailValue
                 label="Data que foi realizado"
@@ -469,6 +529,27 @@ export default function AgendaPage() {
                 minRows={3}
               />
             </Box>
+            {editing && (
+              <Box>
+                <FieldLabel>Status</FieldLabel>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                  <StatusChip item={{ ...editing, status: dialogStatus }} />
+                  <TextField
+                    select
+                    size="small"
+                    value={dialogStatus}
+                    onChange={(e) => setDialogStatus(e.target.value as AgendaStatus)}
+                    sx={{ minWidth: 180, bgcolor: '#fff' }}
+                  >
+                    {AGENDA_STATUS_OPTIONS.map((o) => (
+                      <MenuItem key={o.value} value={o.value}>
+                        {o.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
+              </Box>
+            )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
