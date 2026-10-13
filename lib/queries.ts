@@ -19,13 +19,6 @@ export function useLogin() {
   });
 }
 
-export function useRegister() {
-  return useMutation({
-    mutationFn: (data: { name: string; username: string; password: string }) =>
-      api.post('/auth/register', data).then((res) => res.data),
-  });
-}
-
 export function useMe() {
   return useQuery({
     // Keyed by the session token so data cached for one user's session can

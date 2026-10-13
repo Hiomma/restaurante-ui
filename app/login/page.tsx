@@ -95,13 +95,6 @@ export default function LoginPage() {
             >
               {login.isPending ? 'Entrando...' : 'Entrar'}
             </Button>
-            <Button
-              variant="outlined"
-              fullWidth
-              onClick={() => router.push('/register')}
-            >
-              Criar conta
-            </Button>
           </Box>
         </CardContent>
       </Card>
