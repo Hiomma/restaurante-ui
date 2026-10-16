@@ -33,6 +33,14 @@
   margin: 0;
 }
 
+/* Reimpressão (Histórico): a área de etiquetas fica no DOM enquanto o diálogo
+   de reimpressão está aberto, mas só aparece na impressão — o bloco abaixo
+   (.etiquetas-print-area { display: block !important }) vence este
+   display:none por causa do !important. */
+.etiquetas-print-area-offscreen {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -96,5 +104,16 @@
   .etiqueta-print + .etiqueta-print {
     break-before: page;
     page-break-before: always;
+  }
+
+  /* Só a área de etiquetas vai ao papel: o restante de `main` (título,
+     filtros, tabela, cartões) e o diálogo de reimpressão saem com
+     display:none — com visibility:hidden eles continuariam ocupando espaço e
+     deixariam páginas em branco depois das etiquetas. A área de etiquetas é
+     filha de `main`, por isso está no :not(.etiquetas-print-area). Vale para
+     o Recebimento e para a reimpressão do Histórico. */
+  body:has(.etiquetas-print-area) main > *:not(.etiquetas-print-area),
+  body:has(.etiquetas-print-area) .reprint-dialog {
+    display: none !important;
   }
 }

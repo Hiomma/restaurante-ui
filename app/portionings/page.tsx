@@ -36,8 +36,9 @@ import {
   useSuppliers,
 } from '@/lib/queries';
 import { formatDate, todayISODate, toInputDate } from '@/lib/utils';
+import { useAccess } from '@/lib/permissions';
 import api from '@/lib/api';
-import type { Portioning, StockItem } from '@/types';
+import type { Portioning, StockItem, UsedLabelInfo } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import BrDateField from '../components/BrDateField/BrDateField';
@@ -187,6 +188,9 @@ export default function PortioningsPage() {
   const updateStockItem = useUpdateStockItem();
   const createStockItem = useCreateStockItem();
   const createMovement = useCreateStockMovement();
+  // Funcionário com acesso restrito: pode criar porcionamento, mas o
+  // histórico é somente visualização (sem editar/excluir).
+  const { restricted } = useAccess();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewTarget, setViewTarget] = useState<Portioning | null>(null);
@@ -281,7 +285,25 @@ export default function PortioningsPage() {
       });
       if (!lote && item.lote) setLote(item.lote);
       setScanInput('');
-    } catch {
+    } catch (err) {
+      const response = (err as { response?: { status?: number; data?: unknown } }).response;
+      const used = response?.data as UsedLabelInfo | undefined;
+      if (response?.status === 410 && used?.used) {
+        // Etiqueta já baixada: informa o destino/autor em vez do 404 genérico
+        // e NÃO segue com o porcionamento a partir desta etiqueta.
+        const details: string[] = [];
+        if (used.productName) details.push(used.productName);
+        if (used.destination) details.push(`destino: ${used.destination}`);
+        if (used.userName) details.push(`por ${used.userName}`);
+        if (used.removedAt) details.push(`em ${formatDate(used.removedAt)}`);
+        enqueueSnackbar(
+          details.length > 0
+            ? `Etiqueta já usada: ${details.join(' — ')}`
+            : 'Etiqueta já usada.',
+          { variant: 'info' },
+        );
+        return;
+      }
       enqueueSnackbar('Etiqueta não encontrada.', { variant: 'error' });
     } finally {
       setScanning(false);
@@ -510,13 +532,15 @@ export default function PortioningsPage() {
             >
               <VisibilityIcon fontSize="small" />
             </IconButton>
-            <IconButton
-              size="small"
-              onClick={() => setDeleteTarget(p._id)}
-              sx={{ color: '#d32f2f' }}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
+            {!restricted && (
+              <IconButton
+                size="small"
+                onClick={() => setDeleteTarget(p._id)}
+                sx={{ color: '#d32f2f' }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            )}
           </>
         )}
       />

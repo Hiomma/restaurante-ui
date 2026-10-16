@@ -26,7 +26,6 @@ import Inventory2Icon from '@mui/icons-material/Inventory2';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -40,6 +39,7 @@ import {
   useUpdateStockItem,
 } from '@/lib/queries';
 import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus, todayISODate, downloadCsv } from '@/lib/utils';
+import { useAccess } from '@/lib/permissions';
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
@@ -99,6 +99,17 @@ const fixedWriteoffDestinations = ['Perda', 'Não encontrado'];
 
 type StatusFilter = 'all' | 'vencendo' | 'vencidos' | 'abaixo' | 'ok';
 
+/**
+ * Filtros alternáveis clicando nos cards de KPI do topo.
+ * `life` (vencendo/vencidos) e `type` (bruto/porcionado) são chaves
+ * independentes: combinam-se entre si (ex.: vencidos + bruto) e cada card
+ * clicado duas vezes zera somente o próprio filtro.
+ */
+interface KpiFilterState {
+  life: 'all' | 'expiring' | 'expired';
+  type: 'all' | 'raw' | 'portioned';
+}
+
 interface ProductGroupRow {
   productId: string;
   name: string;
@@ -130,6 +141,8 @@ export default function StockPage() {
   const deleteItem = useDeleteStockItem();
   const createMovement = useCreateStockMovement();
   const updateItem = useUpdateStockItem();
+  // Permissões: funcionário (restrito) não exporta nem exclui itens — visualização ok.
+  const { estoqueExport, estoqueDelete } = useAccess();
 
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState('all');
@@ -140,6 +153,14 @@ export default function StockPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'move' | 'writeoff' | null>(null);
   const [bulkDest, setBulkDest] = useState('');
+  const [kpiFilter, setKpiFilter] = useState<KpiFilterState>({ life: 'all', type: 'all' });
+
+  // Clicar de novo no mesmo card limpa só esse filtro; cards de chaves
+  // diferentes (ex.: "Vencidos" + "Total Bruto") permanecem combinados.
+  const toggleLifeFilter = (value: 'expiring' | 'expired') =>
+    setKpiFilter((prev) => ({ ...prev, life: prev.life === value ? 'all' : value }));
+  const toggleTypeFilter = (value: 'raw' | 'portioned') =>
+    setKpiFilter((prev) => ({ ...prev, type: prev.type === value ? 'all' : value }));
 
   const isLoading = loadingProducts || loadingItems;
   const allItems = items ?? [];
@@ -150,15 +171,41 @@ export default function StockPage() {
     return i.destination === destFilter;
   });
 
+  // Filtros de KPI (clique nos cards do topo). A base dos grupos abaixo é
+  // "em estoque + aba de local + filtros de KPI"; os demais filtros (busca,
+  // grupo, status) continuam aplicados depois, sobre as linhas de produto.
+  const passesKpiFilter = (i: StockItem) => {
+    if (kpiFilter.life === 'expiring' && lifeStatus(i) !== 'expiring') return false;
+    if (kpiFilter.life === 'expired' && lifeStatus(i) !== 'expired') return false;
+    if (kpiFilter.type === 'raw' && i.type !== 'raw') return false;
+    if (kpiFilter.type === 'portioned' && i.type !== 'portioned') return false;
+    return true;
+  };
+
+  // Contagens dos cards de KPI: sempre sobre a base total (em estoque + aba de
+  // local ativa), ANTES dos filtros de KPI/busca/grupo/status — ligar um filtro
+  // não altera os números dos cards. "Vencidos" passou a contar apenas itens em
+  // estoque (antes usava allItems) para o número bater com a lista exibida ao
+  // clicar no card, já que a lista só mostra itens em estoque.
   const rawItems = inStock.filter((i) => i.type === 'raw');
   const portionedItems = inStock.filter((i) => i.type === 'portioned');
   const rawWeight = rawItems.reduce((s, i) => s + i.weightGrams, 0);
   const portionedWeight = portionedItems.reduce((s, i) => s + i.weightGrams, 0);
   const expiringCount = inStock.filter((i) => lifeStatus(i) === 'expiring').length;
-  const expiredCount = allItems.filter((i) => lifeStatus(i) === 'expired').length;
+  const expiredCount = inStock.filter((i) => lifeStatus(i) === 'expired').length;
+
+  // Base das contagens das abas/chips de local ("onde eles estão"): em estoque +
+  // filtros de KPI, mas SEM a aba de local selecionada (cada aba mostra a
+  // contagem do próprio local) — assim os números refletem os itens filtrados.
+  const kpiFilteredStock = allItems.filter(
+    (i) => i.status === 'in_stock' && passesKpiFilter(i),
+  );
+
+  // Itens efetivamente listados: em estoque + aba de local + filtros de KPI.
+  const visibleItems = inStock.filter(passesKpiFilter);
 
   const groupedMap = new Map<string, StockItem[]>();
-  inStock.forEach((item) => {
+  visibleItems.forEach((item) => {
     const key = item.product.productId;
     const arr = groupedMap.get(key);
     if (arr) arr.push(item);
@@ -190,12 +237,25 @@ export default function StockPage() {
     });
   });
 
-  const lowCount = rows.filter((r) => r.belowMin).length;
-
   const groupOptions = Array.from(new Set((products ?? []).map((p) => p.group))).sort();
 
+  const searchQuery = search.trim().toLowerCase();
+
+  // Busca casando contra o nome do produto OU o lote de qualquer etiqueta do
+  // grupo ("Lote 255997" com o prefixo ou só o valor "255997") — facilita
+  // rastrear quanto ainda resta de um lote problemático.
+  const matchesSearch = (r: ProductGroupRow) => {
+    if (!searchQuery) return true;
+    if (r.name.toLowerCase().includes(searchQuery)) return true;
+    return r.items.some((i) => {
+      const lote = (i.lote ?? '').toLowerCase();
+      if (!lote) return false;
+      return lote.includes(searchQuery) || `lote ${lote}`.includes(searchQuery);
+    });
+  };
+
   const filteredRows = rows
-    .filter((r) => r.name.toLowerCase().includes(search.trim().toLowerCase()))
+    .filter(matchesSearch)
     .filter((r) => groupFilter === 'all' || r.group === groupFilter)
     .filter((r) => {
       if (statusFilter === 'all') return true;
@@ -217,35 +277,40 @@ export default function StockPage() {
       value: rawItems.length,
       caption: formatKg(rawWeight),
       bg: '#E3F2FD',
+      accent: '#1976D2',
       icon: <Inventory2Icon sx={{ color: '#1976D2', fontSize: 22 }} />,
+      active: kpiFilter.type === 'raw',
+      onToggle: () => toggleTypeFilter('raw'),
     },
     {
       label: 'Total Porcionado',
       value: portionedItems.length,
       caption: formatKg(portionedWeight),
       bg: '#E3F2FD',
+      accent: '#1976D2',
       icon: <InventoryIcon sx={{ color: '#1976D2', fontSize: 22 }} />,
+      active: kpiFilter.type === 'portioned',
+      onToggle: () => toggleTypeFilter('portioned'),
     },
     {
       label: 'Vencendo na Semana',
       value: expiringCount,
       caption: 'itens',
       bg: '#FFF3E0',
+      accent: '#E65100',
       icon: <AccessTimeIcon sx={{ color: '#E65100', fontSize: 22 }} />,
+      active: kpiFilter.life === 'expiring',
+      onToggle: () => toggleLifeFilter('expiring'),
     },
     {
       label: 'Vencidos',
       value: expiredCount,
       caption: 'itens',
       bg: '#FFEBEE',
+      accent: '#C62828',
       icon: <WarningAmberIcon sx={{ color: '#C62828', fontSize: 22 }} />,
-    },
-    {
-      label: 'Precisam Comprar',
-      value: lowCount,
-      caption: 'produtos',
-      bg: '#FFEBEE',
-      icon: <ShoppingCartIcon sx={{ color: '#C62828', fontSize: 22 }} />,
+      active: kpiFilter.life === 'expired',
+      onToggle: () => toggleLifeFilter('expired'),
     },
   ];
 
@@ -316,11 +381,13 @@ export default function StockPage() {
     ]),
   );
 
+  // Contagem por local: usa a base com os filtros de KPI aplicados (reflete
+  // "onde estão" os itens filtrados), mantendo cada aba com a contagem do
+  // próprio local, independente da aba selecionada.
   const countInTab = (tab: string) =>
-    allItems.filter(
+    kpiFilteredStock.filter(
       (i) =>
-        i.status === 'in_stock' &&
-        (tab === 'all' ? true : tab === 'none' ? !i.destination : i.destination === tab),
+        tab === 'all' ? true : tab === 'none' ? !i.destination : i.destination === tab,
     ).length;
 
   const selectedItems = allItems.filter((i) => selected.has(i._id) && i.status === 'in_stock');
@@ -415,13 +482,38 @@ export default function StockPage() {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
               gap: 2,
               mb: 3,
             }}
           >
             {kpis.map((k) => (
-              <Card key={k.label} sx={cardSx}>
+              <Card
+                key={k.label}
+                onClick={k.onToggle}
+                role="button"
+                tabIndex={0}
+                aria-pressed={k.active}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    k.onToggle();
+                  }
+                }}
+                sx={{
+                  ...cardSx,
+                  cursor: 'pointer',
+                  // Card ativo (filtro aplicado): borda e fundo destacados.
+                  bgcolor: k.active ? k.bg : '#fff',
+                  border: '2px solid',
+                  borderColor: k.active ? k.accent : '#e8ecf1',
+                  transition: 'border-color .15s ease-in-out, box-shadow .15s ease-in-out',
+                  '&:hover': {
+                    boxShadow: '0 3px 8px rgba(0,0,0,0.08)',
+                    borderColor: k.active ? k.accent : '#c9d2db',
+                  },
+                }}
+              >
                 <Box sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
@@ -434,7 +526,15 @@ export default function StockPage() {
                       {k.caption}
                     </Typography>
                   </Box>
-                  <Box sx={{ bgcolor: k.bg, borderRadius: 1.5, p: 1, display: 'flex', flexShrink: 0 }}>
+                  <Box
+                    sx={{
+                      bgcolor: k.active ? '#fff' : k.bg,
+                      borderRadius: 1.5,
+                      p: 1,
+                      display: 'flex',
+                      flexShrink: 0,
+                    }}
+                  >
                     {k.icon}
                   </Box>
                 </Box>
@@ -488,7 +588,7 @@ export default function StockPage() {
           <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
             <TextField
               size="small"
-              placeholder="Buscar produto..."
+              placeholder="Buscar produto ou lote..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               InputProps={{
@@ -563,18 +663,20 @@ export default function StockPage() {
                 >
                   Mover
                 </Button>
-                <Button
-                  size="small"
-                  variant="contained"
-                  color="error"
-                  onClick={() => {
-                    setBulkAction('writeoff');
-                    setBulkDest('');
-                  }}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Baixar
-                </Button>
+                {estoqueDelete && (
+                  <Button
+                    size="small"
+                    variant="contained"
+                    color="error"
+                    onClick={() => {
+                      setBulkAction('writeoff');
+                      setBulkDest('');
+                    }}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Baixar
+                  </Button>
+                )}
                 <Button
                   size="small"
                   onClick={() => setSelected(new Set())}
@@ -686,25 +788,27 @@ export default function StockPage() {
                       </Box>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<DownloadIcon fontSize="small" />}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          exportGroupItems(r);
-                        }}
-                        sx={{
-                          textTransform: 'none',
-                          color: '#495057',
-                          borderColor: '#CED4DA',
-                          borderRadius: 1.5,
-                          flexShrink: 0,
-                          '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5', color: '#212529' },
-                        }}
-                      >
-                        Exportar itens
-                      </Button>
+                      {estoqueExport && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<DownloadIcon fontSize="small" />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            exportGroupItems(r);
+                          }}
+                          sx={{
+                            textTransform: 'none',
+                            color: '#495057',
+                            borderColor: '#CED4DA',
+                            borderRadius: 1.5,
+                            flexShrink: 0,
+                            '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5', color: '#212529' },
+                          }}
+                        >
+                          Exportar itens
+                        </Button>
+                      )}
                       <Typography variant="body2" sx={{ color: '#666' }}>
                         Ver etiquetas
                       </Typography>
@@ -750,15 +854,19 @@ export default function StockPage() {
                             onChange={(e) => toggleSelect(item._id, e.target.checked)}
                           />
                         )}
-                        actions={(item) => (
-                          <IconButton
-                            size="small"
-                            onClick={() => setDeleteTarget(item._id)}
-                            sx={{ color: '#d32f2f' }}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        )}
+                        actions={
+                          estoqueDelete
+                            ? (item) => (
+                                <IconButton
+                                  size="small"
+                                  onClick={() => setDeleteTarget(item._id)}
+                                  sx={{ color: '#d32f2f' }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              )
+                            : undefined
+                        }
                         columns={[
                           {
                             id: 'tipo',

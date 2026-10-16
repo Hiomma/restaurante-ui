@@ -23,6 +23,13 @@ vi.mock('@/lib/queries', () => {
     isPending: false,
   });
   return {
+    // Consumed by lib/permissions (useAccess) through the NavigationRail that
+    // mounts inside LoggedLayout: an owner (non-employee) so Cadastros and
+    // Relatórios stay visible in the sidebar during the test.
+    useMe: () => ({
+      data: { _id: 'u1', name: 'Dono Teste', username: 'dono', isEmployee: false },
+      isLoading: false,
+    }),
     useProducts: () => queryResult,
     useCreateProduct: mutation,
     useUpdateProduct: mutation,

@@ -8,6 +8,8 @@
  * - Counting deletions ("baixar") ALWAYS require a marked reason ("motivo"):
  *   no delete happens without confirming the "Motivo da baixa" dialog, and the
  *   created movement carries the reason string plus the proper destination.
+ * - A QR answered with HTTP 410 (label already used, UsedLabelInfo) shows a
+ *   distinct "já usada" warning and the label is never selected.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor, cleanup } from '@testing-library/react';
@@ -68,6 +70,21 @@ vi.mock('@/lib/api', () => {
       gets.push(url);
       if (url.startsWith('/stock-items/qr/')) {
         const code = url.split('/').pop()!.toUpperCase();
+        // QR de etiqueta JÁ baixada: mesmo corpo do HTTP 410 real (UsedLabelInfo).
+        if (code === 'ZZ4100') {
+          throw {
+            response: {
+              status: 410,
+              data: {
+                used: true,
+                productName: 'Queijo',
+                destination: 'Salão',
+                userName: 'Robson',
+                removedAt: '2026-10-15',
+              },
+            },
+          };
+        }
         const item = items.find((i) => i.qrCode === code);
         if (!item) throw new Error('not found');
         return { data: { ...item } };
@@ -330,5 +347,31 @@ describe('Counting write-offs require a motivo', () => {
     expect(mockApi.__movements[0].body).toEqual(
       expect.objectContaining({ reason: 'Contagem — Contaminada', destination: 'Perda' }),
     );
+  });
+});
+
+describe('QR of an already used label (HTTP 410)', () => {
+  it('shows the "já usada" warning and does NOT add the label to the selection', async () => {
+    renderPage();
+
+    // 'ZZ4100' is the code the api mock answers with 410 + UsedLabelInfo.
+    fireEvent.change(screen.getByPlaceholderText('Ex: AB1234'), {
+      target: { value: 'ZZ4100' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
+
+    await waitFor(() => expect(mockApi.__gets).toContain('/stock-items/qr/ZZ4100'));
+
+    const warning = await screen.findByText(/Etiqueta já usada/);
+    expect(warning.textContent).toContain('Queijo');
+    expect(warning.textContent).toContain('destino: Salão');
+    expect(warning.textContent).toContain('por Robson');
+    expect(warning.textContent).toContain('15/10/2026');
+    // aviso distinto do erro genérico de QR desconhecido
+    expect(screen.queryByText('Etiqueta não encontrada.')).toBeNull();
+
+    // a etiqueta NÃO entrou na seleção
+    expect(screen.queryByText(/Etiquetas selecionadas/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'remover etiqueta' })).toBeNull();
   });
 });

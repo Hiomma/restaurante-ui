@@ -87,6 +87,16 @@ export interface Portioning {
   supplier?: string;
   portionsCount: number;
   portionWeightGrams: number;
+  /**
+   * Matéria-prima porcionada (produto comprado). Diferente de `product`, que
+   * passa a apontar para o produto final/porcionado quando há outputs — o
+   * relatório de Perdas usa `rawProduct` para mostrar de qual matéria-prima
+   * (e de qual fornecedor) vieram as perdas.
+   */
+  rawProduct?: {
+    productId: string;
+    productName: string;
+  };
   date: string;
   lote?: string;
   employeeName?: string;
@@ -134,4 +144,23 @@ export interface StockMovement {
   userName?: string;
   date: string;
   createdAt: string;
+}
+
+/**
+ * Resposta da API (HTTP 410) quando um QR consultado pertence a uma etiqueta
+ * que JÁ foi baixada/usada: informa para onde foi, por quem e quando — em vez
+ * de um 404 sem contexto.
+ */
+export interface UsedLabelInfo {
+  used: true;
+  message?: string;
+  qrCode?: string;
+  productName?: string;
+  type?: 'raw' | 'portioned';
+  weightGrams?: number;
+  destination?: string;
+  /** Usuário que deu baixa na etiqueta. */
+  userName?: string;
+  removedAt?: string;
+  reason?: string;
 }

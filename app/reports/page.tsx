@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { Suspense, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Box,
   Typography,
@@ -40,12 +41,15 @@ import {
   lifeStatus,
   downloadCsv,
   printReport,
+  movementTypeView,
+  stripBatchCodes,
 } from '@/lib/utils';
 import {
   useProducts,
   useStockItems,
   useStockMovements,
   usePortionings,
+  useMovementDestinations,
 } from '@/lib/queries';
 import type { Product, StockItem, StockMovement, Portioning } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
@@ -133,6 +137,22 @@ const REPORT_TAB_NAMES = [
   'Produção',
 ];
 
+/** Destinos fixos de movimentação (mesmos valores do cadastro). */
+const FIXED_MOVE_DESTINATIONS = ['Salão', 'Bar', 'Cozinha'];
+
+/** Destinos fixos de baixa (writeoff). */
+const FIXED_WRITEOFF_DESTINATIONS = ['Perda', 'Não encontrado'];
+
+/** Abre a aba correspondente ao parâmetro `?tab=` da URL. */
+const REPORT_TABS_BY_PARAM: Record<string, number> = {
+  perdas: 0,
+  compras: 1,
+  recebimento: 2,
+  movimentacoes: 3,
+  estoque: 4,
+  producao: 5,
+};
+
 const comprasStatusOptions = [
   { value: '', label: 'Todos os status' },
   { value: 'comprar', label: 'Comprar' },
@@ -151,7 +171,7 @@ const movTypeOptions = [
   { value: '', label: 'Todos os tipos' },
   { value: 'entry', label: 'Entrada' },
   { value: 'exit', label: 'Saída' },
-  { value: 'move', label: 'Mover' },
+  { value: 'move', label: 'Movimentação' },
 ];
 
 const estStatusOptions = [
@@ -181,16 +201,43 @@ const normalizeText = (s: string) =>
     .toLowerCase();
 
 /**
- * Destino de uma movimentação: usa o campo novo `destination` ou infere do
- * motivo legado ("Mover — Salão", "Baixar — Bar", "Contagem — Não encontrado").
+ * Nome exibido no relatório de Perdas: a MATÉRIA-PRIMA que foi porcionada
+ * (`rawProduct`). `product` aponta para o produto final quando há outputs.
  */
-function movementDestination(m: StockMovement): string {
+function perdasProductName(pt: Portioning): string {
+  return pt.rawProduct?.productName ?? pt.product.productName;
+}
+
+/** Chave de agrupamento do relatório de Perdas (matéria-prima). */
+function perdasProductKey(pt: Portioning): string {
+  return pt.rawProduct?.productId ?? pt.product.productId;
+}
+
+/**
+ * Destino de uma movimentação, restrito aos valores CADASTRADOS
+ * (fixos + baixas + destinos custom). `m.destination` cadastrado é usado
+ * direto; senão tenta derivar do motivo legado ("Mover — Salão",
+ * "Baixar — Bar" — aceitando —, – e -) desde que o derivado também esteja
+ * cadastrado; caso contrário, '—'.
+ */
+function movementDestination(
+  m: StockMovement,
+  registered: Map<string, string>,
+): string {
+  const lookup = (value: string): string | undefined =>
+    registered.get(normalizeText(value).replace(/\s+/g, ' ').trim());
+
   const dest = (m.destination ?? '').trim();
-  if (dest) return dest;
-  const reason = (m.reason ?? '').trim();
-  if (!reason) return '—';
-  const match = reason.match(/^\s*\S+\s*[—–-]\s*(.+)$/);
-  return match ? match[1].trim() : 'Outros';
+  if (dest) {
+    const hit = lookup(dest);
+    if (hit) return hit;
+  }
+  const match = stripBatchCodes(m.reason).match(/^\s*\S+\s*[—–-]\s*(.+)$/);
+  if (match) {
+    const hit = lookup(match[1]);
+    if (hit) return hit;
+  }
+  return '—';
 }
 
 function buyStatusOf(product: Product, weight: number): BuyStatus {
@@ -202,15 +249,6 @@ function recvStatusChip(status: StockItem['status']) {
   const tone: ChipTone =
     status === 'in_stock' ? 'green' : status === 'used' ? 'gray' : 'red';
   return <ToneChip label={recvStatusLabel[status]} tone={tone} />;
-}
-
-function movementTypeChip(type: StockMovement['movementType']) {
-  if (type === 'move') return <ToneChip label="Mover" tone="blue" />;
-  return type === 'entry' ? (
-    <ToneChip label="Entrada" tone="green" />
-  ) : (
-    <ToneChip label="Saída" tone="amber" />
-  );
 }
 
 function ToneChip({ label, tone }: { label: string; tone: ChipTone }) {
@@ -475,12 +513,45 @@ function DateRangeField({
 }
 
 export default function ReportsPage() {
-  const [tab, setTab] = useState(0);
+  // `useSearchParams()` em componente de página exige <Suspense> (Next 16).
+  return (
+    <Suspense
+      fallback={
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress />
+        </Box>
+      }
+    >
+      <ReportsContent />
+    </Suspense>
+  );
+}
+
+function ReportsContent() {
+  const searchParams = useSearchParams();
+  // Abre a aba indicada por `?tab=` na montagem (ex.: /reports?tab=compras).
+  const [tab, setTab] = useState(
+    () => REPORT_TABS_BY_PARAM[(searchParams.get('tab') ?? '').trim().toLowerCase()] ?? 0,
+  );
 
   const { data: products = [], isLoading: lp } = useProducts();
   const { data: stockItems = [], isLoading: li } = useStockItems();
   const { data: movements = [], isLoading: lm } = useStockMovements();
   const { data: portionings = [], isLoading: lt } = usePortionings();
+  const { data: customDestinations = [] } = useMovementDestinations();
+
+  // Destinos aceitos na coluna "Destino": fixos + baixas + cadastrados (custom).
+  const registeredDestinations = new Map<string, string>();
+  for (const name of [
+    ...FIXED_MOVE_DESTINATIONS,
+    ...FIXED_WRITEOFF_DESTINATIONS,
+    ...customDestinations.map((d) => d.name),
+  ]) {
+    const clean = name.trim();
+    if (clean) {
+      registeredDestinations.set(normalizeText(clean).replace(/\s+/g, ' '), clean);
+    }
+  }
 
   const [perdasGroup, setPerdasGroup] = useState('');
   const [perdasProduct, setPerdasProduct] = useState('');
@@ -546,7 +617,7 @@ export default function ReportsPage() {
 
   const movDestOptions = [
     { value: '', label: 'Todos os destinos' },
-    ...Array.from(new Set(movements.map((m) => movementDestination(m))))
+    ...Array.from(new Set(movements.map((m) => movementDestination(m, registeredDestinations))))
       .sort((a, b) => a.localeCompare(b, 'pt-BR'))
       .map((d) => ({ value: d, label: d })),
   ];
@@ -611,16 +682,20 @@ export default function ReportsPage() {
   const groupLossMap = new Map<string, LossAgg>();
   const productLossMap = new Map<string, LossAgg & { name: string }>();
   for (const pt of filteredPerdas) {
-    const g = productMap.get(pt.product.productId)?.group ?? 'Outros';
+    const g =
+      productMap.get(perdasProductKey(pt))?.group ??
+      productMap.get(pt.product.productId)?.group ??
+      'Outros';
     const cur = groupLossMap.get(g) ?? { loss: 0, raw: 0, count: 0 };
     cur.loss += pt.lossGrams;
     cur.raw += pt.rawWeightGrams;
     cur.count += 1;
     groupLossMap.set(g, cur);
 
-    const key = pt.product.productId;
+    // Agrupa pela MATÉRIA-PRIMA (rawProduct): é dela que vêm as perdas na limpeza.
+    const key = perdasProductKey(pt);
     const curP = productLossMap.get(key) ?? {
-      name: pt.product.productName,
+      name: perdasProductName(pt),
       loss: 0,
       raw: 0,
       count: 0,
@@ -660,7 +735,7 @@ export default function ReportsPage() {
       ['Data', 'Produto', 'Fornecedor', 'Bruto (g)', 'Limpo (g)', 'Perda (g)', '% Perda'],
       perdasHistory.map((p) => [
         formatDate(p.date),
-        p.product.productName,
+        perdasProductName(p),
         p.supplier || '',
         p.rawWeightGrams,
         p.cleanWeightGrams,
@@ -752,7 +827,7 @@ export default function ReportsPage() {
         return false;
       }
       if (movType && m.movementType !== movType) return false;
-      if (movDest && movementDestination(m) !== movDest) return false;
+      if (movDest && movementDestination(m, registeredDestinations) !== movDest) return false;
       if (
         movMotivo.trim() &&
         !normalizeText(m.reason ?? '').includes(normalizeText(movMotivo.trim()))
@@ -777,22 +852,18 @@ export default function ReportsPage() {
         'Peso Total (g)',
         'Tipo Item',
         'Destino',
-        'Motivo',
+        'Informações',
         'Usuário',
       ],
       movRows.map((m) => [
         formatDate(m.date),
-        m.movementType === 'entry'
-          ? 'Entrada'
-          : m.movementType === 'move'
-            ? 'Mover'
-            : 'Saída',
+        movementTypeView(m).label,
         m.product.productName,
         m.quantity,
         m.weightGrams ?? 0,
         m.itemType === 'raw' ? 'Bruto' : m.itemType === 'portioned' ? 'Porcionado' : '',
-        movementDestination(m),
-        m.reason || '',
+        movementDestination(m, registeredDestinations),
+        stripBatchCodes(m.reason),
         m.userName || '',
       ]),
     );
@@ -1228,7 +1299,7 @@ export default function ReportsPage() {
                       id: 'produto',
                       header: 'Produto',
                       primary: true,
-                      cell: (p) => p.product.productName,
+                      cell: (p) => perdasProductName(p),
                     },
                     {
                       id: 'fornecedor',
@@ -1423,7 +1494,7 @@ export default function ReportsPage() {
                 <SearchField
                   value={movMotivo}
                   onChange={setMovMotivo}
-                  placeholder="Filtrar por motivo..."
+                  placeholder="Filtrar por informações..."
                 />
                 <SelectFilter value={movType} onChange={setMovType} options={movTypeOptions} />
                 <SelectFilter
@@ -1457,13 +1528,31 @@ export default function ReportsPage() {
                     {
                       id: 'tipo',
                       header: 'Tipo',
-                      cell: (m) => movementTypeChip(m.movementType),
+                      cell: (m) => {
+                        const view = movementTypeView(m);
+                        return (
+                          <Chip
+                            label={view.label}
+                            size="small"
+                            sx={{
+                              bgcolor: view.bgcolor,
+                              color: view.color,
+                              fontWeight: 600,
+                              borderRadius: 1.5,
+                            }}
+                          />
+                        );
+                      },
                     },
                     {
                       id: 'produto',
                       header: 'Produto',
                       primary: true,
-                      cell: (m) => m.product.productName,
+                      cell: (m) => (
+                        <Typography variant="body2" fontWeight={500}>
+                          {m.product.productName}
+                        </Typography>
+                      ),
                     },
                     { id: 'qtd', header: 'Qtd. Itens', cell: (m) => m.quantity },
                     {
@@ -1475,16 +1564,20 @@ export default function ReportsPage() {
                       id: 'tipoItem',
                       header: 'Tipo Item',
                       cell: (m) =>
-                        m.itemType === 'raw'
-                          ? 'Bruto'
-                          : m.itemType === 'portioned'
-                            ? 'Porcionado'
-                            : '—',
+                        m.itemType ? (
+                          <Chip
+                            label={m.itemType === 'raw' ? 'Bruto' : 'Porcionado'}
+                            size="small"
+                            sx={{ bgcolor: '#F1F3F5', color: '#495057', borderRadius: 1.5 }}
+                          />
+                        ) : (
+                          '—'
+                        ),
                     },
                     {
                       id: 'destino',
                       header: 'Destino',
-                      cell: (m) => movementDestination(m),
+                      cell: (m) => movementDestination(m, registeredDestinations),
                     },
                     {
                       id: 'usuario',
@@ -1492,10 +1585,10 @@ export default function ReportsPage() {
                       cell: (m) => m.userName || '—',
                     },
                     {
-                      id: 'motivo',
-                      header: 'Motivo',
+                      id: 'informacoes',
+                      header: 'Informações',
                       fullWidthOnMobile: true,
-                      cell: (m) => m.reason || '—',
+                      cell: (m) => stripBatchCodes(m.reason) || '—',
                     },
                   ]}
                 />

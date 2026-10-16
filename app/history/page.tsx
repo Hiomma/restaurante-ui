@@ -23,17 +23,58 @@ import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import DeleteIcon from '@mui/icons-material/Delete';
 import type { StockMovement, StockItem } from '@/types';
-import { useStockMovements, useStockItems, useDeleteStockItem } from '@/lib/queries';
-import { formatDate } from '@/lib/utils';
+import {
+  useStockMovements,
+  useStockItems,
+  useDeleteStockItem,
+  useMe,
+  useProducts,
+} from '@/lib/queries';
+import { formatDate, movementTypeView, stripBatchCodes } from '@/lib/utils';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import LabelPreview, { type LabelData } from '../components/LabelPreview/LabelPreview';
 
 const thSx = { fontWeight: 700, color: '#333' };
 
-function movementTypeMeta(type?: string) {
-  if (type === 'entry') return { label: '↘ Entrada', bgcolor: '#E8F5E9', color: '#2E7D32' };
-  if (type === 'move') return { label: '↔ Mover', bgcolor: '#E3F2FD', color: '#1565C0' };
-  return { label: '↗ Saída', bgcolor: '#FFEBEE', color: '#C62828' };
+/** Timestamp da coluna "Data" (cai na criação se a data não for reconhecida). */
+function dateTimestamp(m: StockMovement): number {
+  const d = Date.parse(m.date);
+  if (!Number.isNaN(d)) return d;
+  const c = Date.parse(m.createdAt);
+  return Number.isNaN(c) ? 0 : c;
+}
+
+/** Horário de criação: desempata movimentações do mesmo dia. */
+function createdAtTimestamp(m: StockMovement): number {
+  const c = Date.parse(m.createdAt);
+  return Number.isNaN(c) ? 0 : c;
+}
+
+/** Última movimentação primeiro, coerente com a ordenação da coluna "Data". */
+function moreRecentFirst(a: StockMovement, b: StockMovement): number {
+  return dateTimestamp(b) - dateTimestamp(a) || createdAtTimestamp(b) - createdAtTimestamp(a);
+}
+
+/** Monta os dados da etiqueta (mesmo layout da pré-visualização) para reimpressão. */
+function toLabelData(
+  item: StockItem,
+  companyName: string,
+  consumeAfterOpeningDays?: number,
+): LabelData {
+  return {
+    key: item._id,
+    companyName,
+    productName: item.product.productName,
+    storage: item.product.productStorage ?? '',
+    weightGrams: item.weightGrams,
+    recebimentoDate: item.manipulationDate,
+    expiryDate: item.expiryDate,
+    lote: item.lote,
+    responsavel: item.employeeName,
+    consumeAfterOpeningDays,
+    qrCode: item.qrCode,
+  };
 }
 
 function InfoField({ label, value }: { label: string; value: string }) {
@@ -106,11 +147,16 @@ function LabelCard({
 
 export default function HistoryPage() {
   const { data: movements, isLoading } = useStockMovements();
+  const { data: me } = useMe();
+  const { data: products } = useProducts();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [detail, setDetail] = useState<StockMovement | null>(null);
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const deleteStockItem = useDeleteStockItem();
+
+  /** Chip de tipo do diálogo: mesmo rótulo/paleta da coluna "Tipo". */
+  const detailType = detail ? movementTypeView(detail) : null;
 
   const batchFromReason = useMemo(() => {
     const match = detail?.reason?.match(/BATCH-[A-Z0-9-]+/i);
@@ -149,9 +195,35 @@ export default function HistoryPage() {
     );
   };
 
-  const handleReprint = () => {
+  /** Etiquetas marcadas: é o que sai na reimpressão. */
+  const labelsToPrint = batchLabels.filter((i) => selectedLabels.includes(i._id));
+
+  /**
+   * Imprime a área de etiquetas, seguindo o padrão do Recebimento: a classe
+   * `printing-labels` marca o body durante a impressão e é removida tanto pelo
+   * `finally` quanto pelo evento `afterprint`.
+   */
+  const printLabels = async () => {
+    const removePrintClass = () => document.body.classList.remove('printing-labels');
+    window.addEventListener('afterprint', removePrintClass, { once: true });
+    document.body.classList.add('printing-labels');
+    try {
+      await new Promise((r) => setTimeout(r, 250));
+      window.print();
+    } finally {
+      window.removeEventListener('afterprint', removePrintClass);
+      removePrintClass();
+    }
+  };
+
+  /**
+   * Reimprime só as etiquetas selecionadas (antes imprimia a página inteira).
+   * O diálogo continua aberto e as etiquetas permanecem no DOM durante toda a
+   * impressão — o estado só muda quando o usuário fecha ou exclui.
+   */
+  const handleReprint = async () => {
     if (selectedLabels.length === 0) return;
-    window.print();
+    await printLabels();
   };
 
   const handleDeleteLabels = async () => {
@@ -172,6 +244,9 @@ export default function HistoryPage() {
       m.date.includes(q)
     );
   });
+
+  /** Última movimentação no topo. */
+  const sorted = filtered ? [...filtered].sort(moreRecentFirst) : undefined;
 
   return (
     <LoggedLayout>
@@ -232,7 +307,7 @@ export default function HistoryPage() {
 
       <ResponsiveTable
         loading={isLoading}
-        rows={filtered}
+        rows={sorted}
         rowKey={(m) => m._id}
         emptyMessage="Nenhuma movimentação encontrada"
         headerCellSx={thSx}
@@ -240,18 +315,21 @@ export default function HistoryPage() {
           {
             id: 'tipo',
             header: 'Tipo',
-            cell: (m) => (
-              <Chip
-                label={movementTypeMeta(m.movementType).label}
-                size="small"
-                sx={{
-                  bgcolor: movementTypeMeta(m.movementType).bgcolor,
-                  color: movementTypeMeta(m.movementType).color,
-                  fontWeight: 600,
-                  borderRadius: 1.5,
-                }}
-              />
-            ),
+            cell: (m) => {
+              const view = movementTypeView(m);
+              return (
+                <Chip
+                  label={view.label}
+                  size="small"
+                  sx={{
+                    bgcolor: view.bgcolor,
+                    color: view.color,
+                    fontWeight: 600,
+                    borderRadius: 1.5,
+                  }}
+                />
+              );
+            },
           },
           {
             id: 'produto',
@@ -292,11 +370,16 @@ export default function HistoryPage() {
             header: 'Motivo',
             sx: { maxWidth: 220 },
             fullWidthOnMobile: true,
-            cell: (m) => (
-              <Typography variant="body2" noWrap title={m.reason || undefined}>
-                {m.reason || '—'}
-              </Typography>
-            ),
+            // Exibição sem os códigos internos de lote (BATCH-*). A
+            // reimpressão continua lendo o motivo original (batchFromReason).
+            cell: (m) => {
+              const reason = stripBatchCodes(m.reason);
+              return (
+                <Typography variant="body2" noWrap title={reason || undefined}>
+                  {reason || '—'}
+                </Typography>
+              );
+            },
           },
           { id: 'data', header: 'Data', cell: (m) => formatDate(m.date) },
         ]}
@@ -320,6 +403,7 @@ export default function HistoryPage() {
         onClose={() => setDetail(null)}
         maxWidth="sm"
         fullWidth
+        className="reprint-dialog"
       >
         <DialogTitle
           sx={{
@@ -330,16 +414,9 @@ export default function HistoryPage() {
           }}
         >
           <Chip
-            label={movementTypeMeta(detail?.movementType).label.replace(/^[^\s]+\s/, '')}
-            color={
-              detail?.movementType === 'entry'
-                ? 'success'
-                : detail?.movementType === 'move'
-                  ? 'info'
-                  : 'error'
-            }
+            label={detailType?.label ?? ''}
             size="small"
-            sx={{ fontWeight: 700 }}
+            sx={{ fontWeight: 700, bgcolor: detailType?.bgcolor, color: detailType?.color }}
           />
           <Typography variant="h6" fontWeight={700} sx={{ flex: 1 }}>
             {detail?.product.productName}
@@ -383,7 +460,10 @@ export default function HistoryPage() {
                 }
               />
               <Box sx={{ gridColumn: '1 / -1' }}>
-                <InfoField label="Motivo" value={detail?.reason || '—'} />
+                <InfoField
+                  label="Motivo"
+                  value={stripBatchCodes(detail?.reason) || '—'}
+                />
               </Box>
             </Box>
 
@@ -416,7 +496,7 @@ export default function HistoryPage() {
                   variant="outlined"
                   startIcon={<PrintIcon />}
                   disabled={selectedLabels.length === 0}
-                  onClick={handleReprint}
+                  onClick={() => void handleReprint()}
                   sx={{ textTransform: 'none', color: '#555', borderColor: '#ddd' }}
                 >
                   Reimprimir ({selectedLabels.length})
@@ -471,6 +551,28 @@ export default function HistoryPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Área de etiquetas da reimpressão. Fica FORA do diálogo (portal, com
+          scroll/position próprios) para as páginas não serem cortadas, e fora
+          da tela enquanto o diálogo está aberto — só aparece na impressão,
+          exatamente como no Recebimento (uma etiqueta de 58mm por página). */}
+      {detail && labelsToPrint.length > 0 && (
+        <Box
+          className="etiquetas-print-area etiquetas-print-area-offscreen"
+          sx={{ gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}
+        >
+          {labelsToPrint.map((item) => (
+            <LabelPreview
+              key={item._id}
+              data={toLabelData(
+                item,
+                me?.company?.name ?? '',
+                products?.find((p) => p._id === item.product.productId)?.consumeAfterOpeningDays,
+              )}
+            />
+          ))}
+        </Box>
+      )}
     </LoggedLayout>
   );
 }

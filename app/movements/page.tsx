@@ -33,7 +33,7 @@ import {
 } from '@/lib/queries';
 import { formatDate, formatWeight, todayISODate } from '@/lib/utils';
 import api from '@/lib/api';
-import type { StockItem } from '@/types';
+import type { StockItem, UsedLabelInfo } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
@@ -77,6 +77,28 @@ const statusLabels: Record<string, string> = {
  * de um motivo marcado antes de ser confirmado.
  */
 const writeoffReasons = ['Perda', 'Não encontrado', 'Vencido', 'Avaria', 'Outro'];
+
+/**
+ * HTTP 410 devolvido quando o QR pertence a uma etiqueta que JÁ foi baixada.
+ * Nesse caso o corpo traz o contexto da baixa (produto, destino, usuário,
+ * data) e o aviso é outro — não é o "não encontrada" genérico.
+ */
+function usedLabelFromError(err: unknown): UsedLabelInfo | null {
+  const response = (err as { response?: { status?: number; data?: UsedLabelInfo } })?.response;
+  if (response?.status === 410 && response.data?.used) return response.data;
+  return null;
+}
+
+/** Aviso de etiqueta já usada, montado só com os campos que vieram no 410. */
+function usedLabelMessage(info: UsedLabelInfo): string {
+  const parts = [
+    info.productName ? `Etiqueta já usada: ${info.productName}` : 'Etiqueta já usada',
+  ];
+  if (info.destination) parts.push(`destino: ${info.destination}`);
+  if (info.userName) parts.push(`por ${info.userName}`);
+  if (info.removedAt) parts.push(`em ${formatDate(info.removedAt)}`);
+  return parts.join(' — ');
+}
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
@@ -181,8 +203,12 @@ export default function MovementsPage() {
       setScanned((prev) => [...prev, item]);
       setQrInput('');
       qrRef.current?.focus();
-    } catch {
-      enqueueSnackbar('Etiqueta não encontrada.', { variant: 'error' });
+    } catch (err) {
+      // 410 = etiqueta já baixada: aviso próprio, sem entrar na seleção.
+      const used = usedLabelFromError(err);
+      enqueueSnackbar(used ? usedLabelMessage(used) : 'Etiqueta não encontrada.', {
+        variant: used ? 'warning' : 'error',
+      });
       setQrInput('');
     } finally {
       setScanning(false);
@@ -339,8 +365,12 @@ export default function MovementsPage() {
       setCountResult(null);
       setCountScanInput('');
       countScanRef.current?.focus();
-    } catch {
-      enqueueSnackbar('Etiqueta não encontrada.', { variant: 'error' });
+    } catch (err) {
+      // 410 = etiqueta já baixada: aviso próprio, sem entrar na contagem.
+      const used = usedLabelFromError(err);
+      enqueueSnackbar(used ? usedLabelMessage(used) : 'Etiqueta não encontrada.', {
+        variant: used ? 'warning' : 'error',
+      });
       setCountScanInput('');
     } finally {
       setCountScanning(false);

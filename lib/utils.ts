@@ -119,11 +119,14 @@ export function agendaStatus(expiryDate: string): 'Vencido' | 'No prazo' {
 
 export type AgendaStatusValue = 'no_prazo' | 'em_andamento' | 'pendente' | 'finalizado';
 
-/** Opções manuais de status da agenda (o "Vencido" é derivado da data). */
+/**
+ * Opções manuais de status da agenda: valem para a COR DA FAIXA do item.
+ * O rótulo exibido é derivado da data (ver `agendaStatusView`) — por isso
+ * "No prazo" NÃO é uma opção manual.
+ */
 export const AGENDA_STATUS_OPTIONS: { value: AgendaStatusValue; label: string }[] = [
   { value: 'pendente', label: 'Pendente' },
   { value: 'em_andamento', label: 'Em andamento' },
-  { value: 'no_prazo', label: 'No prazo' },
   { value: 'finalizado', label: 'Finalizado' },
 ];
 
@@ -145,8 +148,13 @@ export interface AgendaStatusView {
 }
 
 /**
- * Status exibido de um item da agenda: itens finalizados nunca aparecem como
- * vencidos; os demais ficam "Vencido" quando a data de validade passou.
+ * Status exibido de um item da agenda (rótulo FIXO, derivado da data):
+ * - item `finalizado` → "Finalizado" (nunca aparece como vencido);
+ * - data de validade passou → "Vencido";
+ * - caso contrário → "No prazo".
+ *
+ * O status manual armazenado (`value`) continua sendo retornado e serve
+ * apenas para definir a COR DA FAIXA do item na tela.
  */
 export function agendaStatusView(item: {
   expiryDate: string;
@@ -161,14 +169,7 @@ export function agendaStatusView(item: {
   if (days !== null && days < 0) {
     return { label: 'Vencido', value, overdue: true, tone: 'red' };
   }
-  switch (value) {
-    case 'em_andamento':
-      return { label: 'Em andamento', value, overdue: false, tone: 'blue' };
-    case 'no_prazo':
-      return { label: 'No prazo', value, overdue: false, tone: 'green' };
-    default:
-      return { label: 'Pendente', value, overdue: false, tone: 'amber' };
-  }
+  return { label: 'No prazo', value, overdue: false, tone: 'green' };
 }
 
 export function todayISODate(): string {
@@ -201,4 +202,46 @@ export function downloadCsv(
 
 export function printReport(): void {
   window.print();
+}
+
+/**
+ * Rótulo exibido na coluna "Tipo": Entrada, Movimentação, Porcionamento ou
+ * Saída. Porcionamento é identificado pelo motivo (as movimentações de
+ * porcionamento entram como `entry` com motivo "Porcionamento — ...").
+ * Usado no Histórico e nos Relatórios para manter o mesmo padrão.
+ */
+export function movementTypeView(m: {
+  movementType?: string;
+  reason?: string;
+}): {
+  label: 'Entrada' | 'Movimentação' | 'Porcionamento' | 'Saída';
+  bgcolor: string;
+  color: string;
+} {
+  if ((m.reason ?? '').trim().toLowerCase().startsWith('porcionamento')) {
+    return { label: 'Porcionamento', bgcolor: '#EDE7F6', color: '#5E35B1' };
+  }
+  switch (m.movementType) {
+    case 'entry':
+      return { label: 'Entrada', bgcolor: '#E8F5E9', color: '#2E7D32' };
+    case 'move':
+      return { label: 'Movimentação', bgcolor: '#E3F2FD', color: '#1565C0' };
+    default:
+      return { label: 'Saída', bgcolor: '#FFEBEE', color: '#C62828' };
+  }
+}
+
+/**
+ * Remove os códigos internos de lote (`BATCH-RECV-...`, `BATCH-PORT-...`)
+ * dos textos exibidos ao usuário, mantendo o restante das informações.
+ * Usar só na EXIBIÇÃO/exportação — a lógica interna que identifica o lote
+ * (reimpressão) continua lendo o motivo original.
+ */
+export function stripBatchCodes(text?: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\s*[-–—]\s*BATCH-[A-Z0-9-]+/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.])/g, '$1')
+    .trim();
 }

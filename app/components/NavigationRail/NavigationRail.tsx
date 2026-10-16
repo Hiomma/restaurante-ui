@@ -31,6 +31,7 @@ import ReceiptIcon from '@mui/icons-material/Receipt';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import ChangePasswordDialog from '@/app/components/ChangePasswordDialog/ChangePasswordDialog';
 import { clearToken, resetSessionCache } from '@/lib/session';
+import { useAccess } from '@/lib/permissions';
 
 const navItems = [
   { icon: <DashboardIcon />, label: 'Dashboard', path: '/' },
@@ -44,6 +45,9 @@ const navItems = [
   { icon: <EventNoteIcon />, label: 'Agenda', path: '/agenda' },
 ];
 
+/** Itens que o funcionário com acesso restrito não pode ver/navegar. */
+const RESTRICTED_HIDDEN_PATHS = ['/cadastros', '/reports'];
+
 export default function NavigationRail({
   inDrawer = false,
   onNavigate,
@@ -55,6 +59,11 @@ export default function NavigationRail({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  // Funcionário com acesso restrito: sem Cadastros, Relatórios e Alterar Senha.
+  const { restricted } = useAccess();
+  const visibleNavItems = restricted
+    ? navItems.filter((item) => !RESTRICTED_HIDDEN_PATHS.includes(item.path))
+    : navItems;
 
   const handleLogout = () => {
     clearToken();
@@ -100,7 +109,7 @@ export default function NavigationRail({
       </Box>
 
       <List sx={{ flex: 1, px: 1 }}>
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = item.path === '/' ? pathname === '/' : pathname.startsWith(item.path);
           return (
             <ListItem key={item.label} disablePadding sx={{ mb: 0.5 }}>
@@ -136,26 +145,28 @@ export default function NavigationRail({
       <Divider sx={{ borderColor: '#243447' }} />
 
       <List sx={{ px: 1 }}>
-        <ListItem disablePadding sx={{ mb: 0.5 }}>
-          <ListItemButton
-            onClick={() => {
-              setPasswordOpen(true);
-              onNavigate?.();
-            }}
-            sx={{
-              borderRadius: 2,
-              color: '#8899aa',
-              '&:hover': { bgcolor: '#243447' },
-              px: 2,
-              py: 1,
-            }}
-          >
-            <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
-              <LockIcon />
-            </ListItemIcon>
-            <ListItemText primary="Alterar Senha" primaryTypographyProps={{ fontSize: '0.875rem' }} />
-          </ListItemButton>
-        </ListItem>
+        {!restricted && (
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
+            <ListItemButton
+              onClick={() => {
+                setPasswordOpen(true);
+                onNavigate?.();
+              }}
+              sx={{
+                borderRadius: 2,
+                color: '#8899aa',
+                '&:hover': { bgcolor: '#243447' },
+                px: 2,
+                py: 1,
+              }}
+            >
+              <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
+                <LockIcon />
+              </ListItemIcon>
+              <ListItemText primary="Alterar Senha" primaryTypographyProps={{ fontSize: '0.875rem' }} />
+            </ListItemButton>
+          </ListItem>
+        )}
         <ListItem disablePadding>
           <ListItemButton
             onClick={handleLogout}
@@ -179,7 +190,10 @@ export default function NavigationRail({
         v{packageJson.version} — EstoqueApp
       </Typography>
 
-      <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
+      <ChangePasswordDialog
+        open={!restricted && passwordOpen}
+        onClose={() => setPasswordOpen(false)}
+      />
     </Box>
   );
 }

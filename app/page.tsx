@@ -279,6 +279,21 @@ export default function DashboardPage() {
               >
                 Ver Estoque
               </Button>
+              <Button
+                variant="outlined"
+                onClick={() => router.push('/reports?tab=estoque')}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: 1.5,
+                  color: '#C62828',
+                  borderColor: '#C62828',
+                  flexShrink: 0,
+                  px: 2.5,
+                  '&:hover': { borderColor: '#C62828', bgcolor: 'rgba(198,40,40,0.06)' },
+                }}
+              >
+                Ver relatório
+              </Button>
             </Box>
           )}
 
@@ -307,7 +322,7 @@ export default function DashboardPage() {
               </Box>
               <Button
                 variant="outlined"
-                onClick={() => router.push('/reports')}
+                onClick={() => router.push('/reports?tab=compras')}
                 sx={{
                   textTransform: 'none',
                   borderRadius: 1.5,
@@ -370,6 +385,20 @@ export default function DashboardPage() {
                   <Typography variant="h6" fontWeight="bold">
                     Lista de Compras
                   </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => router.push('/reports?tab=compras')}
+                    sx={{
+                      ml: 'auto',
+                      textTransform: 'none',
+                      color: '#1976D2',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    Ver relatório de compras
+                  </Button>
                 </Box>
                 <Box sx={{ px: 2.5, pb: 2.5 }}>
                   <ResponsiveTable
@@ -406,6 +435,20 @@ export default function DashboardPage() {
                   <Typography variant="h6" fontWeight="bold">
                     Lista de Produção
                   </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => router.push('/reports?tab=producao')}
+                    sx={{
+                      ml: 'auto',
+                      textTransform: 'none',
+                      color: '#2E7D32',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    Ver relatório de produção
+                  </Button>
                 </Box>
                 <Box sx={{ px: 2.5, pb: 2.5 }}>
                   <ResponsiveTable
@@ -522,6 +565,18 @@ export default function DashboardPage() {
                   <Typography variant="h6" fontWeight="bold">
                     Atenção Urgente
                   </Typography>
+                  <Button
+                    size="small"
+                    onClick={() => router.push('/reports?tab=estoque')}
+                    sx={{
+                      ml: 'auto',
+                      textTransform: 'none',
+                      color: '#C62828',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Ver relatório
+                  </Button>
                 </Box>
                 <Box sx={{ px: 2.5, pb: 2.5 }}>
                   <ResponsiveTable

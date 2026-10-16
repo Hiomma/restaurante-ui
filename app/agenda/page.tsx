@@ -41,6 +41,7 @@ import {
   todayISODate,
 } from '@/lib/utils';
 import type { AgendaItem, AgendaStatus } from '@/types';
+import { useAccess } from '@/lib/permissions';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import BrDateField from '../components/BrDateField/BrDateField';
@@ -111,6 +112,25 @@ function StatusChip({ item }: { item: AgendaItem }) {
   );
 }
 
+/**
+ * Cor de TODA a faixa do item (linha da tabela e área expandida), conforme o
+ * status manual escolhido: pendente → âmbar, em andamento → azul, finalizado →
+ * cinza. Item VENCIDO (data passada e ainda não finalizado) sobrepõe as demais
+ * com o tom vermelho.
+ */
+function agendaBandColor(item: AgendaItem): string {
+  if (agendaStatusView(item).overdue) return '#FFF5F5';
+  switch (item.status) {
+    case 'em_andamento':
+      return '#E3F2FD';
+    case 'finalizado':
+      return '#F5F5F5';
+    case 'pendente':
+    default:
+      return '#FFF8E1';
+  }
+}
+
 /** Select de mudança de status do item da agenda. */
 function StatusSelect({
   item,
@@ -121,11 +141,15 @@ function StatusSelect({
   onChange: (status: AgendaStatus) => void;
   minWidth?: number;
 }) {
+  // Itens antigos podem ter "no_prazo" (opção removida): exibe como Pendente
+  // para o select nunca ficar sem valor correspondente.
+  const stored = item.status ?? 'pendente';
+  const value = AGENDA_STATUS_OPTIONS.some((o) => o.value === stored) ? stored : 'pendente';
   return (
     <TextField
       select
       size="small"
-      value={item.status ?? 'pendente'}
+      value={value}
       onChange={(e) => onChange(e.target.value as AgendaStatus)}
       sx={{
         minWidth,
@@ -163,6 +187,8 @@ export default function AgendaPage() {
   const createItem = useCreateAgendaItem();
   const updateItem = useUpdateAgendaItem();
   const deleteItem = useDeleteAgendaItem();
+  // Funcionário com acesso restrito: a Agenda é somente leitura.
+  const { restricted } = useAccess();
 
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -229,10 +255,12 @@ export default function AgendaPage() {
       cell: (item) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <StatusChip item={item} />
-          <StatusSelect
-            item={item}
-            onChange={(status) => handleStatusChange(item, status)}
-          />
+          {!restricted && (
+            <StatusSelect
+              item={item}
+              onChange={(status) => handleStatusChange(item, status)}
+            />
+          )}
         </Box>
       ),
     },
@@ -265,7 +293,11 @@ export default function AgendaPage() {
 
   const openEdit = (item: AgendaItem) => {
     setEditing(item);
-    setDialogStatus(item.status ?? 'pendente');
+    // "no_prazo" (status legado, opção removida) é tratado como Pendente.
+    const stored = item.status ?? 'pendente';
+    setDialogStatus(
+      AGENDA_STATUS_OPTIONS.some((o) => o.value === stored) ? stored : 'pendente',
+    );
     form.reset({
       name: item.name,
       datePerformed: toInputDate(item.datePerformed),
@@ -327,9 +359,11 @@ export default function AgendaPage() {
             </Typography>
           </Box>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
-          Novo Item
-        </Button>
+        {!restricted && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
+            Novo Item
+          </Button>
+        )}
       </Box>
 
       <TextField
@@ -374,9 +408,7 @@ export default function AgendaPage() {
             </IconButton>
           );
         }}
-        rowSx={(item) => ({
-          bgcolor: agendaStatusView(item).overdue ? '#FFF5F5' : undefined,
-        })}
+        rowSx={(item) => ({ bgcolor: agendaBandColor(item) })}
         expandedRow={(item) => {
           if (expandedId !== item._id) return null;
           const days = daysUntil(item.expiryDate);
@@ -386,7 +418,10 @@ export default function AgendaPage() {
                 display: 'grid',
                 gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
                 gap: 2,
-                px: 1,
+                px: 1.5,
+                py: 1,
+                borderRadius: 2,
+                bgcolor: agendaBandColor(item),
               }}
             >
               <Box>
@@ -403,11 +438,13 @@ export default function AgendaPage() {
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
                   <StatusChip item={item} />
-                  <StatusSelect
-                    item={item}
-                    onChange={(status) => handleStatusChange(item, status)}
-                    minWidth={160}
-                  />
+                  {!restricted && (
+                    <StatusSelect
+                      item={item}
+                      onChange={(status) => handleStatusChange(item, status)}
+                      minWidth={160}
+                    />
+                  )}
                 </Box>
               </Box>
               <DetailValue
@@ -437,24 +474,28 @@ export default function AgendaPage() {
             </Box>
           );
         }}
-        actions={(item) => (
-          <>
-            <IconButton
-              size="small"
-              onClick={() => openEdit(item)}
-              sx={{ color: '#666' }}
-            >
-              <EditIcon fontSize="small" />
-            </IconButton>
-            <IconButton
-              size="small"
-              onClick={() => setDeleteTarget(item._id)}
-              sx={{ color: '#d32f2f' }}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </>
-        )}
+        actions={
+          restricted
+            ? undefined
+            : (item) => (
+                <>
+                  <IconButton
+                    size="small"
+                    onClick={() => openEdit(item)}
+                    sx={{ color: '#666' }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton
+                    size="small"
+                    onClick={() => setDeleteTarget(item._id)}
+                    sx={{ color: '#d32f2f' }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </>
+              )
+        }
       />
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
