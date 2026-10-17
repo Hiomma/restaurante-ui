@@ -31,6 +31,7 @@ import {
   useProducts,
 } from '@/lib/queries';
 import { formatDate, movementTypeView, stripBatchCodes } from '@/lib/utils';
+import { printEtiquetasNativas } from '@/lib/printService';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import LabelPreview, { type LabelData } from '../components/LabelPreview/LabelPreview';
@@ -199,15 +200,34 @@ export default function HistoryPage() {
   const labelsToPrint = batchLabels.filter((i) => selectedLabels.includes(i._id));
 
   /**
-   * Imprime a área de etiquetas, seguindo o padrão do Recebimento: a classe
-   * `printing-labels` marca o body durante a impressão e é removida tanto pelo
-   * `finally` quanto pelo evento `afterprint`.
+   * Mesmo array (e mesmo conteúdo) que alimenta a área
+   * `.etiquetas-print-area`: é ele que vai para o serviço de impressão
+   * nativo e, no fallback, para o `window.print()` do navegador.
    */
-  const printLabels = async () => {
+  const printAreaLabels = labelsToPrint.map((item) =>
+    toLabelData(
+      item,
+      me?.company?.name ?? '',
+      products?.find((p) => p._id === item.product.productId)?.consumeAfterOpeningDays,
+    ),
+  );
+
+  /**
+   * Imprime a área de etiquetas, seguindo o padrão do Recebimento: antes de
+   * tudo tenta o serviço de impressão local (Zebra ZD220) com o MESMO
+   * conteúdo da tela — sucesso pula o `window.print()`, falha segue o
+   * diálogo do navegador. A classe `printing-labels` marca o body durante a
+   * tentativa e é removida tanto pelo `finally` quanto pelo evento
+   * `afterprint` — nos dois caminhos.
+   */
+  const printLabels = async (labels: LabelData[]) => {
     const removePrintClass = () => document.body.classList.remove('printing-labels');
     window.addEventListener('afterprint', removePrintClass, { once: true });
     document.body.classList.add('printing-labels');
     try {
+      // Impressão nativa (serviço em 127.0.0.1:17421) → sai sem diálogo.
+      if (await printEtiquetasNativas(labels)) return;
+      // Fallback: diálogo do navegador sobre a área .etiquetas-print-area.
       await new Promise((r) => setTimeout(r, 250));
       window.print();
     } finally {
@@ -223,7 +243,7 @@ export default function HistoryPage() {
    */
   const handleReprint = async () => {
     if (selectedLabels.length === 0) return;
-    await printLabels();
+    await printLabels(printAreaLabels);
   };
 
   const handleDeleteLabels = async () => {
@@ -561,15 +581,8 @@ export default function HistoryPage() {
           className="etiquetas-print-area etiquetas-print-area-offscreen"
           sx={{ gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}
         >
-          {labelsToPrint.map((item) => (
-            <LabelPreview
-              key={item._id}
-              data={toLabelData(
-                item,
-                me?.company?.name ?? '',
-                products?.find((p) => p._id === item.product.productId)?.consumeAfterOpeningDays,
-              )}
-            />
+          {printAreaLabels.map((label) => (
+            <LabelPreview key={label.key} data={label} />
           ))}
         </Box>
       )}

@@ -93,6 +93,7 @@ vi.mock('@/lib/api', () => {
 import LoginPage from '../login/page';
 import ReceivingPage from './page';
 import { getStoredToken } from '@/lib/session';
+import { printEtiquetasNativas } from '@/lib/printService';
 
 /** Mirrors app/Providers.tsx: one QueryClient per app session, 60s staleTime. */
 function makeClient() {
@@ -213,5 +214,44 @@ describe('Recebimento session isolation (BUG 2)', () => {
     expect(screen.queryByDisplayValue('Zora Robson')).toBeNull();
     expect(screen.getByDisplayValue('Zora Patrick')).toBeTruthy();
     view.unmount();
+  });
+});
+
+/**
+ * ReceivingPage agora tenta o serviço de impressão local
+ * (`lib/printService.ts`) antes do `window.print()`. Em teste esse caminho
+ * deve ser um no-op: retorna `false` sem tocar na rede, então o fluxo da
+ * página (fallback para `window.print()`) continua idêntico ao de antes —
+ * nenhum teste pode acabar falando com 127.0.0.1:17421.
+ */
+describe('printEtiquetasNativas (guarda NODE_ENV)', () => {
+  it('retorna false sem nenhuma requisição quando NODE_ENV é test', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const printed = await printEtiquetasNativas([
+        {
+          key: 'l1',
+          companyName: 'Restaurante Teste',
+          productName: 'Frango Congelado',
+          storage: 'Congelado',
+          weightGrams: 250,
+          recebimentoDate: '2026-10-17',
+          expiryDate: '2026-11-17',
+          lote: 'L001',
+          responsavel: 'Zora Robson',
+          consumeAfterOpeningDays: 3,
+          qrCode: 'ABC123',
+        },
+      ]);
+
+      // false → a página segue o fallback do navegador, como antes.
+      expect(printed).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
   });
 });

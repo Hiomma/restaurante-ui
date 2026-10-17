@@ -23,6 +23,7 @@ import {
   useSuppliers,
   useMovementDestinations,
 } from '@/lib/queries';
+import { printEtiquetasNativas } from '@/lib/printService';
 import { todayISODate } from '@/lib/utils';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import BrDateField from '../components/BrDateField/BrDateField';
@@ -214,14 +215,19 @@ export default function ReceivingPage() {
 
   /**
    * Imprime a pré-visualização já gerada (sem regerar QR nem re-renderizar).
-   * A classe `printing-labels` marca o body enquanto o diálogo está aberto e
-   * é removida tanto pelo `finally` quanto pelo evento `afterprint`.
+   * Antes de tudo tenta o serviço de impressão local (Zebra ZD220) com o
+   * MESMO conteúdo da tela: se ele confirmar, o `window.print()` é pulado.
+   * A classe `printing-labels` marca o body durante a tentativa e é removida
+   * tanto pelo `finally` quanto pelo evento `afterprint` — nos dois caminhos.
    */
-  const printLabels = async () => {
+  const printLabels = async (labels: LabelData[]) => {
     const removePrintClass = () => document.body.classList.remove('printing-labels');
     window.addEventListener('afterprint', removePrintClass, { once: true });
     document.body.classList.add('printing-labels');
     try {
+      // Impressão nativa (serviço em 127.0.0.1:17421) → sai sem diálogo.
+      if (await printEtiquetasNativas(labels)) return;
+      // Fallback: diálogo do navegador sobre a área .etiquetas-print-area.
       await new Promise((r) => setTimeout(r, 250));
       window.print();
     } finally {
@@ -232,6 +238,8 @@ export default function ReceivingPage() {
 
   const handleSaveAndPrint = async () => {
     if (!pending || pending.length === 0) return;
+    // Mesmo conteúdo da área .etiquetas-print-area (impressão nativa).
+    const labels = pending.map((p) => p.label);
     setSaving(true);
     try {
       // O QR do cliente já vai no payload: o servidor grava o mesmo código
@@ -274,7 +282,7 @@ export default function ReceivingPage() {
       setNumeroNF('');
 
       // As etiquetas continuam na tela durante todo o diálogo de impressão.
-      await printLabels();
+      await printLabels(labels);
 
       setPending(null);
     } catch {
