@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -23,7 +23,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { productSchema } from '@/lib/validation';
-import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from '@/lib/queries';
+import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useGroups } from '@/lib/queries';
 import ConfirmDialog from '@/app/components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
 
@@ -81,6 +81,7 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
 export default function ProductsRegistry() {
   const [search, setSearch] = useState('');
   const { data: products, isLoading } = useProducts();
+  const { data: groups } = useGroups();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -94,12 +95,14 @@ export default function ProductsRegistry() {
     defaultValues: {
       name: '',
       group: '',
+      groupId: '',
       category: 'Materia Prima',
       storageMethod: '',
       shelfLifeDays: undefined,
       minQuantity: undefined,
       minPortionedQuantity: undefined,
       consumeAfterOpeningDays: undefined,
+      allowLooseLabel: false,
     },
   });
 
@@ -113,17 +116,32 @@ export default function ProductsRegistry() {
     );
   });
 
+  const groupOptions = (groups ?? []).map((g) => ({ value: g._id, label: g.name }));
+
+  // Sincroniza o campo `group` (string, obrigatório) com o nome do grupo
+  // cadastrado selecionado, para que a validação do formulário passe. Só
+  // escreve quando há grupo cadastrado selecionado — produtos antigos sem
+  // `groupId` mantêm o `group` original gravado.
+  useEffect(() => {
+    const gid = form.watch('groupId');
+    if (!gid) return;
+    const selected = groupOptions.find((o) => o.value === gid);
+    if (selected) form.setValue('group', selected.label);
+  }, [form, groupOptions]);
+
   const openCreate = () => {
     setEditing(null);
     form.reset({
       name: '',
       group: '',
+      groupId: '',
       category: 'Materia Prima',
       storageMethod: '',
       shelfLifeDays: undefined,
       minQuantity: undefined,
       minPortionedQuantity: undefined,
       consumeAfterOpeningDays: undefined,
+      allowLooseLabel: false,
     });
     setDialogOpen(true);
   };
@@ -133,21 +151,36 @@ export default function ProductsRegistry() {
     form.reset({
       name: p.name,
       group: p.group,
+      // Produto antigo sem referência: casa o `group` gravado pelo nome com
+      // um grupo cadastrado, para o select exibir o valor atual.
+      groupId:
+        p.groupId || (groups ?? []).find((g) => g.name === p.group)?._id || '',
       category: p.category || 'Materia Prima',
       storageMethod: p.storageMethod,
       shelfLifeDays: p.shelfLifeDays,
       minQuantity: p.minQuantity || undefined,
       minPortionedQuantity: p.minPortionedQuantity || undefined,
       consumeAfterOpeningDays: p.consumeAfterOpeningDays || undefined,
+      allowLooseLabel: !!p.allowLooseLabel,
     });
     setDialogOpen(true);
   };
 
   const onSubmit = async (data: any) => {
+    // Quando um grupo cadastrado é selecionado, grava seu nome no campo
+    // `group` (compatível com relatórios/estoque) e sua referência em
+    // `groupId`, permitindo incluir/excluir grupos pelo cadastro próprio.
+    const selectedGroup = (groups ?? []).find((g) => g._id === data.groupId);
+    const payload: any = {
+      ...data,
+      group: selectedGroup ? selectedGroup.name : data.group || '',
+      allowLooseLabel: !!data.allowLooseLabel,
+    };
+    if (!payload.groupId) delete payload.groupId;
     if (editing) {
-      await updateProduct.mutateAsync({ id: editing._id, data });
+      await updateProduct.mutateAsync({ id: editing._id, data: payload });
     } else {
-      await createProduct.mutateAsync(data);
+      await createProduct.mutateAsync(payload);
     }
     setDialogOpen(false);
   };
@@ -320,8 +353,8 @@ export default function ProductsRegistry() {
               <TextField
                 select
                 size="small"
-                value={form.watch('group') || ''}
-                {...form.register('group')}
+                value={form.watch('groupId') || ''}
+                {...form.register('groupId')}
                 error={!!form.formState.errors.group}
                 helperText={form.formState.errors.group?.message}
                 fullWidth
@@ -334,6 +367,7 @@ export default function ProductsRegistry() {
                         Selecione o grupo
                       </Box>
                     ) : (
+                      groupOptions.find((o) => o.value === value)?.label ??
                       String(value)
                     ),
                 }}
@@ -341,11 +375,28 @@ export default function ProductsRegistry() {
                 <MenuItem value="" disabled>
                   Selecione o grupo
                 </MenuItem>
-                {groups.map((g) => (
-                  <MenuItem key={g} value={g}>{g}</MenuItem>
+                {groupOptions.map((o) => (
+                  <MenuItem key={o.value} value={o.value}>
+                    {o.label}
+                  </MenuItem>
                 ))}
               </TextField>
+              {groups?.length === 0 && (
+                <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+                  Nenhum grupo cadastrado. Cadastre em Cadastros → Grupos.
+                </Typography>
+              )}
             </Box>
+            {/* Mantém o campo `group` (exigido pelo schema/relatórios) preenchido com
+                 o nome do grupo cadastrado selecionado. */}
+            <input
+              type="hidden"
+              {...form.register('group')}
+              value={
+                groupOptions.find((o) => o.value === form.watch('groupId'))?.label ??
+                (form.watch('group') || '')
+              }
+            />
 
             <Box>
               <FieldLabel required>Categoria</FieldLabel>
@@ -462,6 +513,31 @@ export default function ProductsRegistry() {
                 fullWidth
                 sx={fieldSx}
               />
+            </Box>
+
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                pt: 1,
+                borderTop: '1px solid #eef1f5',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <input
+                  type="checkbox"
+                  {...form.register('allowLooseLabel')}
+                  style={{ width: 20, height: 20 }}
+                />
+                <Typography variant="body2" fontWeight={600}>
+                  Permitir etiqueta avulsa
+                </Typography>
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                Quando marcado, este produto permite gerar etiqueta avulsa (fora da
+                produção), respeitando lote e validade gerados automaticamente.
+              </Typography>
             </Box>
           </Box>
         </DialogContent>

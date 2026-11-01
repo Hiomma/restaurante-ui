@@ -41,12 +41,14 @@ const emptyToUndefined = (v: unknown) =>
 export const productSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   group: z.string().min(1, 'Group is required'),
+  groupId: z.string().optional(),
   category: z.string().optional(),
   storageMethod: z.string().min(1, 'Storage method is required'),
   shelfLifeDays: z.preprocess(emptyToUndefined, z.number({ message: 'Shelf life is required' }).min(0)),
   minQuantity: z.preprocess(emptyToUndefined, z.number().min(0).optional()),
   minPortionedQuantity: z.preprocess(emptyToUndefined, z.number().min(0).optional()),
   consumeAfterOpeningDays: z.preprocess(emptyToUndefined, z.number().min(0).optional()),
+  allowLooseLabel: z.boolean().optional(),
 });
 
 export const portioningSchema = z.object({

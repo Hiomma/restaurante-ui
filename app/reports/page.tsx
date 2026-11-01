@@ -28,17 +28,9 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import ScaleIcon from '@mui/icons-material/Scale';
 import PercentIcon from '@mui/icons-material/Percent';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import ScheduleIcon from '@mui/icons-material/Schedule';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import { BarChart } from '@mui/x-charts/BarChart';
 import {
-  formatWeight,
   formatKg,
   formatDate,
-  daysUntil,
-  lifeStatus,
   downloadCsv,
   printReport,
   movementTypeView,
@@ -88,18 +80,6 @@ const kpiGrid4 = {
   mb: 2,
 } as const;
 
-const kpiGrid5 = {
-  display: 'grid',
-  gridTemplateColumns: {
-    xs: '1fr',
-    sm: '1fr 1fr',
-    lg: 'repeat(3, 1fr)',
-    xl: 'repeat(5, 1fr)',
-  },
-  gap: 2,
-  mb: 2,
-} as const;
-
 const chipTones = {
   green: { bgcolor: '#E8F5E9', color: '#2E7D32' },
   red: { bgcolor: '#FFEBEE', color: '#C62828' },
@@ -114,16 +94,17 @@ type BuyStatus = 'comprar' | 'sem' | 'ok';
 
 type ProductAgg = {
   product: Product;
-  allItems: StockItem[];
-  items: StockItem[];
   weight: number;
   rawCount: number;
   portionedCount: number;
   count: number;
 };
 
+/** Agregado de perdas/ganhos de uma matéria-prima no relatório de Perdas. */
 type LossAgg = {
   loss: number;
+  /** Soma de `gainGrams` (rendimento acima do peso bruto). */
+  gain: number;
   raw: number;
   count: number;
 };
@@ -133,7 +114,6 @@ const REPORT_TAB_NAMES = [
   'Compras',
   'Recebimento',
   'Movimentações',
-  'Estoque',
   'Produção',
 ];
 
@@ -149,8 +129,7 @@ const REPORT_TABS_BY_PARAM: Record<string, number> = {
   compras: 1,
   recebimento: 2,
   movimentacoes: 3,
-  estoque: 4,
-  producao: 5,
+  producao: 4,
 };
 
 const comprasStatusOptions = [
@@ -172,15 +151,6 @@ const movTypeOptions = [
   { value: 'entry', label: 'Entrada' },
   { value: 'exit', label: 'Saída' },
   { value: 'move', label: 'Movimentação' },
-];
-
-const estStatusOptions = [
-  { value: '', label: 'Todos os status' },
-  { value: 'in_stock', label: 'Em estoque' },
-  { value: 'expiring', label: 'Vencendo na semana' },
-  { value: 'expired', label: 'Vencidos' },
-  { value: 'used', label: 'Utilizados' },
-  { value: 'discarded', label: 'Descartados' },
 ];
 
 const recvStatusLabel: Record<StockItem['status'], string> = {
@@ -211,6 +181,13 @@ function perdasProductName(pt: Portioning): string {
 /** Chave de agrupamento do relatório de Perdas (matéria-prima). */
 function perdasProductKey(pt: Portioning): string {
   return pt.rawProduct?.productId ?? pt.product.productId;
+}
+
+/**
+ * Lote de ORIGEM da matéria-prima escaneada no porcionamento (`rawLote`).
+ */
+function perdasRawLote(pt: Portioning): string {
+  return pt.rawLote ?? '';
 }
 
 /**
@@ -556,6 +533,7 @@ function ReportsContent() {
   const [perdasGroup, setPerdasGroup] = useState('');
   const [perdasProduct, setPerdasProduct] = useState('');
   const [perdasSupplier, setPerdasSupplier] = useState('');
+  const [perdasLote, setPerdasLote] = useState('');
   const [perdasFrom, setPerdasFrom] = useState('');
   const [perdasTo, setPerdasTo] = useState('');
 
@@ -573,11 +551,6 @@ function ReportsContent() {
   const [movMotivo, setMovMotivo] = useState('');
   const [movFrom, setMovFrom] = useState('');
   const [movTo, setMovTo] = useState('');
-
-  const [estSearch, setEstSearch] = useState('');
-  const [estGroup, setEstGroup] = useState('');
-  const [estStatus, setEstStatus] = useState('');
-  const [expanded, setExpanded] = useState<string | null>(null);
 
   const [prodSearch, setProdSearch] = useState('');
   const [prodGroup, setProdGroup] = useState('');
@@ -615,6 +588,14 @@ function ReportsContent() {
       .map((s) => ({ value: s, label: s })),
   ];
 
+  // Lotes GERADOS no porcionamento (pt.lote) presentes nos dados.
+  const perdasLoteOptions = [
+    { value: '', label: 'Todos os lotes' },
+    ...Array.from(new Set(portionings.map((pt) => (pt.lote ?? '').trim()).filter(Boolean)))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map((l) => ({ value: l, label: l })),
+  ];
+
   const movDestOptions = [
     { value: '', label: 'Todos os destinos' },
     ...Array.from(new Set(movements.map((m) => movementDestination(m, registeredDestinations))))
@@ -623,14 +604,12 @@ function ReportsContent() {
   ];
 
   const inStockItems = stockItems.filter((i) => i.status === 'in_stock');
-  const rawInStockItems = inStockItems.filter((i) => i.type === 'raw');
   const portionedInStock = inStockItems.filter((i) => i.type === 'portioned');
-  const rawInStockWeight = rawInStockItems.reduce((s, i) => s + i.weightGrams, 0);
-  const portionedInStockWeight = portionedInStock.reduce((s, i) => s + i.weightGrams, 0);
 
   const aggs: ProductAgg[] = products.map((product) => {
-    const allItems = stockItems.filter((i) => i.product.productId === product._id);
-    const items = allItems.filter((i) => i.status === 'in_stock');
+    const items = stockItems.filter(
+      (i) => i.product.productId === product._id && i.status === 'in_stock',
+    );
     let weight = 0;
     let rawCount = 0;
     let portionedCount = 0;
@@ -639,7 +618,7 @@ function ReportsContent() {
       if (item.type === 'raw') rawCount += 1;
       else portionedCount += 1;
     }
-    return { product, allItems, items, weight, rawCount, portionedCount, count: items.length };
+    return { product, weight, rawCount, portionedCount, count: items.length };
   });
 
   const latestPortioning = new Map<string, Portioning>();
@@ -662,6 +641,7 @@ function ReportsContent() {
     }
     if (perdasProduct && pt.product.productId !== perdasProduct) return false;
     if (perdasSupplier && (pt.supplier ?? '').trim() !== perdasSupplier) return false;
+    if (perdasLote && (pt.lote ?? '').trim() !== perdasLote) return false;
     if (perdasFrom && perdasTo) {
       const d = pt.date.slice(0, 10);
       if (d < perdasFrom || d > perdasTo) return false;
@@ -679,51 +659,34 @@ function ReportsContent() {
   }
   const generalLossPct = rawSum > 0 ? (lossSum / rawSum) * 100 : 0;
 
-  const groupLossMap = new Map<string, LossAgg>();
+  // Agrupa pela MATÉRIA-PRIMA (rawProduct): é dela que vêm as perdas na limpeza.
   const productLossMap = new Map<string, LossAgg & { name: string }>();
   for (const pt of filteredPerdas) {
-    const g =
-      productMap.get(perdasProductKey(pt))?.group ??
-      productMap.get(pt.product.productId)?.group ??
-      'Outros';
-    const cur = groupLossMap.get(g) ?? { loss: 0, raw: 0, count: 0 };
-    cur.loss += pt.lossGrams;
-    cur.raw += pt.rawWeightGrams;
-    cur.count += 1;
-    groupLossMap.set(g, cur);
-
-    // Agrupa pela MATÉRIA-PRIMA (rawProduct): é dela que vêm as perdas na limpeza.
     const key = perdasProductKey(pt);
     const curP = productLossMap.get(key) ?? {
       name: perdasProductName(pt),
       loss: 0,
+      gain: 0,
       raw: 0,
       count: 0,
     };
     curP.loss += pt.lossGrams;
+    curP.gain += pt.gainGrams ?? 0;
     curP.raw += pt.rawWeightGrams;
     curP.count += 1;
     productLossMap.set(key, curP);
   }
-
-  const groupLossRows = Array.from(groupLossMap.entries())
-    .map(([group, v]) => ({
-      group,
-      loss: v.loss,
-      raw: v.raw,
-      count: v.count,
-      pct: v.raw > 0 ? (v.loss / v.raw) * 100 : 0,
-    }))
-    .sort((a, b) => b.loss - a.loss);
 
   const productLossRows = Array.from(productLossMap.entries())
     .map(([productId, v]) => ({
       productId,
       name: v.name,
       loss: v.loss,
+      gain: v.gain,
       raw: v.raw,
       count: v.count,
       pct: v.raw > 0 ? (v.loss / v.raw) * 100 : 0,
+      gainPct: v.raw > 0 ? (v.gain / v.raw) * 100 : 0,
     }))
     .sort((a, b) => b.loss - a.loss);
 
@@ -732,7 +695,17 @@ function ReportsContent() {
   const exportPerdas = () => {
     downloadCsv(
       'relatorio-perdas',
-      ['Data', 'Produto', 'Fornecedor', 'Bruto (g)', 'Limpo (g)', 'Perda (g)', '% Perda'],
+      [
+        'Data',
+        'Produto',
+        'Fornecedor',
+        'Bruto (g)',
+        'Limpo (g)',
+        'Perda (g)',
+        '% Perda',
+        'Ganho (g)',
+        'Lote Origem',
+      ],
       perdasHistory.map((p) => [
         formatDate(p.date),
         perdasProductName(p),
@@ -741,6 +714,8 @@ function ReportsContent() {
         p.cleanWeightGrams,
         p.lossGrams,
         (p.lossPercentage ?? 0).toFixed(1),
+        p.gainGrams ?? 0,
+        perdasRawLote(p),
       ]),
     );
   };
@@ -865,45 +840,6 @@ function ReportsContent() {
         movementDestination(m, registeredDestinations),
         stripBatchCodes(m.reason),
         m.userName || '',
-      ]),
-    );
-  };
-
-  const stockExpiring = inStockItems.filter((i) => lifeStatus(i) === 'expiring').length;
-  const stockExpired = inStockItems.filter((i) => lifeStatus(i) === 'expired').length;
-  const needBuy = aggs.filter(
-    (a) => a.product.minQuantity > 0 && a.weight < a.product.minQuantity,
-  ).length;
-
-  const matchesEstStatus = (a: ProductAgg): boolean => {
-    if (!estStatus) return true;
-    if (estStatus === 'in_stock') return a.allItems.some((i) => i.status === 'in_stock');
-    if (estStatus === 'used') return a.allItems.some((i) => i.status === 'used');
-    if (estStatus === 'discarded') return a.allItems.some((i) => i.status === 'discarded');
-    if (estStatus === 'expiring') return a.allItems.some((i) => lifeStatus(i) === 'expiring');
-    if (estStatus === 'expired') return a.allItems.some((i) => lifeStatus(i) === 'expired');
-    return true;
-  };
-
-  const estRows = aggs.filter((a) => {
-    const q = estSearch.trim().toLowerCase();
-    if (q && !a.product.name.toLowerCase().includes(q)) return false;
-    if (estGroup && a.product.group !== estGroup) return false;
-    return matchesEstStatus(a);
-  });
-
-  const exportEstoque = () => {
-    downloadCsv(
-      'relatorio-estoque',
-      ['Produto', 'Grupo', 'Etiquetas', 'Peso (g)', 'Bruto', 'Porcionado', 'Mínimo Port.'],
-      estRows.map((a) => [
-        a.product.name,
-        a.product.group,
-        a.count,
-        a.weight,
-        a.rawCount,
-        a.portionedCount,
-        a.product.minPortionedQuantity || 0,
       ]),
     );
   };
@@ -1077,11 +1013,6 @@ function ReportsContent() {
           iconPosition="start"
         />
         <Tab
-          label="Estoque"
-          icon={<InventoryIcon sx={{ fontSize: 18 }} />}
-          iconPosition="start"
-        />
-        <Tab
           label="Produção"
           icon={<ContentCutIcon sx={{ fontSize: 18 }} />}
           iconPosition="start"
@@ -1120,6 +1051,12 @@ function ReportsContent() {
                   onChange={setPerdasSupplier}
                   options={perdasSupplierOptions}
                   minWidth={210}
+                />
+                <SelectFilter
+                  value={perdasLote}
+                  onChange={setPerdasLote}
+                  options={perdasLoteOptions}
+                  minWidth={180}
                 />
                 <DateRangeField
                   from={perdasFrom}
@@ -1165,121 +1102,63 @@ function ReportsContent() {
               </Box>
 
               <Box sx={{ ...cardSx, p: 2, mb: 2 }}>
-                <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
-                  Perda em Gramas por Grupo
+                <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
+                  Perda por Produto
                 </Typography>
-                {groupLossRows.length === 0 ? (
-                  <Box
-                    sx={{
-                      height: 300,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Typography color="text.secondary">Sem dados</Typography>
-                  </Box>
-                ) : (
-                  <BarChart
-                    height={300}
-                    hideLegend
-                    series={[
-                      {
-                        data: groupLossRows.map((r) => r.loss),
-                        color: '#22C55E',
-                        label: 'Perda (g)',
-                      },
-                    ]}
-                    xAxis={[
-                      { scaleType: 'band', data: groupLossRows.map((r) => r.group) },
-                    ]}
-                    yAxis={[
-                      {
-                        valueFormatter: (v: number) =>
-                          `${new Intl.NumberFormat('pt-BR').format(v)}g`,
-                      },
-                    ]}
-                    grid={{ horizontal: true, vertical: false }}
-                    margin={{ top: 10, right: 16, bottom: 30, left: 56 }}
-                    sx={{
-                      '& .MuiChartsGrid-line': {
-                        strokeDasharray: '4 4',
-                      },
-                    }}
-                  />
-                )}
-              </Box>
-
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                  gap: 2,
-                  mb: 2,
-                }}
-              >
-                <Box sx={{ ...cardSx, p: 2 }}>
-                  <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
-                    Perda por Grupo
-                  </Typography>
-                  <ResponsiveTable
-                    paper={false}
-                    size="small"
-                    loading={loading}
-                    headerCellSx={thSx}
-                    rows={groupLossRows}
-                    rowKey={(r) => r.group}
-                    columns={[
-                      { id: 'grupo', header: 'Grupo', primary: true, cell: (r) => r.group },
-                      {
-                        id: 'perda',
-                        header: 'Perda (g)',
-                        cell: (r) => (
-                          <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                            {fmtG(r.loss)}
+                <ResponsiveTable
+                  paper={false}
+                  size="small"
+                  loading={loading}
+                  headerCellSx={thSx}
+                  rows={productLossRows}
+                  rowKey={(r) => r.productId}
+                  columns={[
+                    { id: 'produto', header: 'Produto', primary: true, cell: (r) => r.name },
+                    {
+                      id: 'perda',
+                      header: 'Perda (g)',
+                      cell: (r) => (
+                        <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                          {fmtG(r.loss)}
+                        </Typography>
+                      ),
+                    },
+                    {
+                      id: 'pct',
+                      header: '% Perda',
+                      cell: (r) => <ToneChip label={`${r.pct.toFixed(1)}%`} tone="green" />,
+                    },
+                    {
+                      // Saldo por matéria-prima: azul com "+" quando houve ganho
+                      // (rendimento acima do bruto); vermelho com "−" quando houve perda.
+                      id: 'ganho',
+                      header: 'Ganho (g)',
+                      cell: (r) =>
+                        r.gain > 0 ? (
+                          <Typography fontWeight={700} sx={{ color: '#1565C0' }}>
+                            {`+${fmtG(r.gain)}`}
                           </Typography>
-                        ),
-                      },
-                      {
-                        id: 'pct',
-                        header: '% Perda',
-                        cell: (r) => <ToneChip label={`${r.pct.toFixed(1)}%`} tone="green" />,
-                      },
-                      { id: 'registos', header: 'Registos', cell: (r) => r.count },
-                    ]}
-                  />
-                </Box>
-
-                <Box sx={{ ...cardSx, p: 2 }}>
-                  <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
-                    Perda por Produto
-                  </Typography>
-                  <ResponsiveTable
-                    paper={false}
-                    size="small"
-                    loading={loading}
-                    headerCellSx={thSx}
-                    rows={productLossRows}
-                    rowKey={(r) => r.productId}
-                    columns={[
-                      { id: 'produto', header: 'Produto', primary: true, cell: (r) => r.name },
-                      {
-                        id: 'perda',
-                        header: 'Perda (g)',
-                        cell: (r) => (
+                        ) : r.loss > 0 ? (
                           <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                            {fmtG(r.loss)}
+                            {`-${fmtG(r.loss)}`}
                           </Typography>
+                        ) : (
+                          '—'
                         ),
-                      },
-                      {
-                        id: 'pct',
-                        header: '% Perda',
-                        cell: (r) => <ToneChip label={`${r.pct.toFixed(1)}%`} tone="green" />,
-                      },
-                    ]}
-                  />
-                </Box>
+                    },
+                    {
+                      id: 'pctGanho',
+                      header: '% Ganho',
+                      cell: (r) =>
+                        r.gain > 0 ? (
+                          <ToneChip label={`${r.gainPct.toFixed(1)}%`} tone="blue" />
+                        ) : (
+                          '—'
+                        ),
+                    },
+                    { id: 'registos', header: 'Registos', cell: (r) => r.count },
+                  ]}
+                />
               </Box>
 
               <Box sx={{ ...cardSx, p: 2 }}>
@@ -1305,6 +1184,12 @@ function ReportsContent() {
                       id: 'fornecedor',
                       header: 'Fornecedor',
                       cell: (p) => p.supplier || '—',
+                    },
+                    { id: 'lote', header: 'Lote', cell: (p) => p.lote || '—' },
+                    {
+                      id: 'loteOrigem',
+                      header: 'Lote Origem',
+                      cell: (p) => perdasRawLote(p) || '—',
                     },
                     { id: 'bruto', header: 'Bruto', cell: (p) => `${p.rawWeightGrams}g` },
                     { id: 'limpo', header: 'Limpo', cell: (p) => `${p.cleanWeightGrams}g` },
@@ -1597,233 +1482,6 @@ function ReportsContent() {
           )}
 
           {tab === 4 && (
-            <Box>
-              <Box sx={kpiGrid5}>
-                <KpiCard
-                  label="Total Bruto"
-                  value={rawInStockItems.length}
-                  caption={formatKg(rawInStockWeight)}
-                  icon={<Inventory2Icon />}
-                  iconBg="#E3F2FD"
-                  iconColor="#1976D2"
-                />
-                <KpiCard
-                  label="Total Porcionado"
-                  value={portionedInStock.length}
-                  caption={formatKg(portionedInStockWeight)}
-                  icon={<ContentCutIcon />}
-                  iconBg="#E8F5E9"
-                  iconColor="#2E7D32"
-                />
-                <KpiCard
-                  label="Vencendo na Semana"
-                  value={stockExpiring}
-                  caption="itens"
-                  icon={<ScheduleIcon />}
-                  iconBg="#FFF3E0"
-                  iconColor="#E65100"
-                />
-                <KpiCard
-                  label="Vencidos"
-                  value={stockExpired}
-                  caption="itens"
-                  icon={<ErrorOutlineIcon />}
-                  iconBg="#FFEBEE"
-                  iconColor="#C62828"
-                />
-                <KpiCard
-                  label="Precisam Comprar"
-                  value={needBuy}
-                  caption="produtos"
-                  icon={<ShoppingCartIcon />}
-                  iconBg="#FFEBEE"
-                  iconColor="#C62828"
-                />
-              </Box>
-
-              <Box sx={toolbarSx} className="no-print">
-                <SearchField
-                  value={estSearch}
-                  onChange={setEstSearch}
-                  placeholder="Buscar por produto..."
-                />
-                <SelectFilter value={estGroup} onChange={setEstGroup} options={groupOptions} />
-                <SelectFilter
-                  value={estStatus}
-                  onChange={setEstStatus}
-                  options={estStatusOptions}
-                />
-                <Box sx={{ ml: 'auto' }}>
-                  <ExportButtons onExcel={exportEstoque} onPdf={printReport} />
-                </Box>
-              </Box>
-
-              <Box>
-                {estRows.length === 0 ? (
-                  <Box sx={{ ...cardSx, p: 4 }}>
-                    <Typography color="text.secondary" sx={{ textAlign: 'center' }}>
-                      Nenhum produto encontrado
-                    </Typography>
-                  </Box>
-                ) : (
-                  estRows.map((a) => {
-                    const isBelow =
-                      a.product.minQuantity > 0 && a.weight < a.product.minQuantity;
-                    const expCount = a.items.filter((i) => lifeStatus(i) === 'expiring').length;
-                    const expdCount = a.items.filter((i) => lifeStatus(i) === 'expired').length;
-                    const isOpen = expanded === a.product._id;
-                    const sortedItems = [...a.items].sort((x, y) =>
-                      y.manipulationDate.localeCompare(x.manipulationDate),
-                    );
-                    return (
-                      <Box key={a.product._id} sx={{ ...cardSx, p: 2, mb: 1.5 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            justifyContent: 'space-between',
-                            gap: 2,
-                          }}
-                        >
-                          <Box sx={{ minWidth: 0, flex: 1 }}>
-                            <Box
-                              sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
-                            >
-                              <Typography variant="subtitle1" fontWeight={700}>
-                                {a.product.name}
-                              </Typography>
-                              <ToneChip label={a.product.group} tone="blue" />
-                              {isBelow && <SolidRedChip label="Comprar" />}
-                              {expdCount > 0 && (
-                                <ToneChip label={`${expdCount} vencidos`} tone="red" />
-                              )}
-                              {expCount > 0 && (
-                                <ToneChip label={`${expCount} vencendo`} tone="amber" />
-                              )}
-                              {a.count > 0 && expdCount === 0 && expCount === 0 && (
-                                <ToneChip label="Em estoque" tone="green" />
-                              )}
-                            </Box>
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                {a.count} etiquetas
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {formatKg(a.weight)} total
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {a.rawCount} bruto
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {a.portionedCount} porcionado
-                              </Typography>
-                              {a.product.minPortionedQuantity > 0 && (
-                                <Typography variant="caption" fontWeight={700} color="text.secondary">
-                                  {a.portionedCount}/{a.product.minPortionedQuantity} min.
-                                </Typography>
-                              )}
-                            </Box>
-                          </Box>
-                          <Button
-                            size="small"
-                            onClick={() => setExpanded(isOpen ? null : a.product._id)}
-                            endIcon={
-                              isOpen ? (
-                                <KeyboardArrowUpIcon fontSize="small" />
-                              ) : (
-                                <KeyboardArrowDownIcon fontSize="small" />
-                              )
-                            }
-                            sx={{
-                              bgcolor: '#1976D2',
-                              color: '#fff',
-                              textTransform: 'none',
-                              borderRadius: 1.5,
-                              flexShrink: 0,
-                              '&:hover': { bgcolor: '#1565C0' },
-                            }}
-                          >
-                            {isOpen ? 'Fechar' : 'Expandir'}
-                          </Button>
-                        </Box>
-
-                        {isOpen && (
-                          <Box sx={{ mt: 2 }}>
-                            {sortedItems.length === 0 ? (
-                              <Typography variant="body2" color="text.secondary">
-                                Nenhum item em estoque
-                              </Typography>
-                            ) : (
-                              <ResponsiveTable
-                                paper={false}
-                                size="small"
-                                loading={loading}
-                                headerCellSx={thSx}
-                                rows={sortedItems}
-                                rowKey={(item) => item._id}
-                                emptyMessage="Nenhum item em estoque"
-                                columns={[
-                                  {
-                                    id: 'tipo',
-                                    header: 'Tipo',
-                                    cell: (item) => (item.type === 'raw' ? 'Bruto' : 'Porcionado'),
-                                  },
-                                  {
-                                    id: 'peso',
-                                    header: 'Peso',
-                                    cell: (item) => formatWeight(item.weightGrams),
-                                  },
-                                  { id: 'lote', header: 'Lote', cell: (item) => item.lote || '—' },
-                                  { id: 'nf', header: 'NF', cell: (item) => item.nf || '—' },
-                                  {
-                                    id: 'recebimento',
-                                    header: 'Recebimento',
-                                    cell: (item) => formatDate(item.manipulationDate),
-                                  },
-                                  {
-                                    id: 'validade',
-                                    header: 'Validade',
-                                    cell: (item) => formatDate(item.expiryDate),
-                                  },
-                                  {
-                                    id: 'status',
-                                    header: 'Status',
-                                    cell: (item) => {
-                                      const days = daysUntil(item.expiryDate);
-                                      const st = lifeStatus(item);
-                                      const tone: ChipTone =
-                                        st === 'expired'
-                                          ? 'red'
-                                          : st === 'expiring'
-                                            ? 'amber'
-                                            : 'green';
-                                      return days === null ? (
-                                        <ToneChip label="—" tone="gray" />
-                                      ) : (
-                                        <ToneChip label={`${days}d`} tone={tone} />
-                                      );
-                                    },
-                                  },
-                                  {
-                                    id: 'qr',
-                                    header: 'QR',
-                                    fullWidthOnMobile: true,
-                                    cell: (item) => item.qrCode || '—',
-                                  },
-                                ]}
-                              />
-                            )}
-                          </Box>
-                        )}
-                      </Box>
-                    );
-                  })
-                )}
-              </Box>
-            </Box>
-          )}
-
-          {tab === 5 && (
             <Box>
               <Box sx={kpiGrid4}>
                 <KpiCard

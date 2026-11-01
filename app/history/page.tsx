@@ -22,21 +22,42 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import DeleteIcon from '@mui/icons-material/Delete';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import DownloadIcon from '@mui/icons-material/Download';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import type { StockMovement, StockItem } from '@/types';
 import {
   useStockMovements,
   useStockItems,
+  usePortionings,
   useDeleteStockItem,
   useMe,
   useProducts,
 } from '@/lib/queries';
-import { formatDate, movementTypeView, stripBatchCodes } from '@/lib/utils';
+import {
+  formatDate,
+  formatPercent,
+  movementTypeView,
+  stripBatchCodes,
+  downloadCsv,
+  printReport,
+} from '@/lib/utils';
 import { printEtiquetasNativas } from '@/lib/printService';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import BrDateField from '../components/BrDateField/BrDateField';
 import LabelPreview, { type LabelData } from '../components/LabelPreview/LabelPreview';
 
 const thSx = { fontWeight: 700, color: '#333' };
+
+/** Botões de exportação (Excel/PDF) do relatório — mesmo tom neutro dos Relatórios. */
+const exportBtnSx = {
+  color: '#495057',
+  borderColor: '#CED4DA',
+  textTransform: 'none',
+  borderRadius: 1.5,
+  '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5', color: '#212529' },
+} as const;
 
 /** Timestamp da coluna "Data" (cai na criação se a data não for reconhecida). */
 function dateTimestamp(m: StockMovement): number {
@@ -156,6 +177,18 @@ export default function HistoryPage() {
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const deleteStockItem = useDeleteStockItem();
 
+  // ===== Relatório de Produção e Baixas =====
+  const { data: portionings, isLoading: loadingPortionings } = usePortionings();
+  // Sem filtro: TODOS os itens, para contar estoque e baixas por produto
+  // (o useStockItems do diálogo muda de chave quando um detalhe é aberto).
+  const { data: allStockItems = [], isLoading: loadingStockItems } = useStockItems();
+
+  const [relGroup, setRelGroup] = useState('');
+  const [relProduct, setRelProduct] = useState('');
+  const [relSupplier, setRelSupplier] = useState('');
+  const [relFrom, setRelFrom] = useState('');
+  const [relTo, setRelTo] = useState('');
+
   /** Chip de tipo do diálogo: mesmo rótulo/paleta da coluna "Tipo". */
   const detailType = detail ? movementTypeView(detail) : null;
 
@@ -267,6 +300,122 @@ export default function HistoryPage() {
 
   /** Última movimentação no topo. */
   const sorted = filtered ? [...filtered].sort(moreRecentFirst) : undefined;
+
+  // ===== Cálculos do Relatório de Produção e Baixas =====
+
+  const productList = products ?? [];
+  const productMap = new Map(productList.map((p) => [p._id, p]));
+
+  // Opções dos filtros (mesma origem da aba Perdas): grupos vêm do cadastro
+  // de produtos; produtos e fornecedores vêm dos porcionamentos.
+  const relGroupOptions = [
+    { value: '', label: 'Todos os grupos' },
+    ...Array.from(new Set(productList.map((p) => p.group)))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map((g) => ({ value: g, label: g })),
+  ];
+
+  const relProductOptions = [
+    { value: '', label: 'Todos os produtos' },
+    ...Array.from(
+      new Map(
+        (portionings ?? []).map((pt) => [pt.product.productId, pt.product.productName]),
+      ).entries(),
+    )
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
+  ];
+
+  const relSupplierOptions = [
+    { value: '', label: 'Todos os fornecedores' },
+    ...Array.from(
+      new Set((portionings ?? []).map((pt) => (pt.supplier ?? '').trim()).filter(Boolean)),
+    )
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      .map((s) => ({ value: s, label: s })),
+  ];
+
+  // Mesmos filtros da aba Perdas: grupo (via cadastro), produto, fornecedor e
+  // período aplicados sobre a DATA do porcionamento.
+  const filteredPortionings = (portionings ?? []).filter((pt) => {
+    if (relGroup && (productMap.get(pt.product.productId)?.group ?? '') !== relGroup) {
+      return false;
+    }
+    if (relProduct && pt.product.productId !== relProduct) return false;
+    if (relSupplier && (pt.supplier ?? '').trim() !== relSupplier) return false;
+    const d = pt.date.slice(0, 10);
+    if (relFrom && d < relFrom) return false;
+    if (relTo && d > relTo) return false;
+    return true;
+  });
+
+  /**
+   * "Produzido": soma das PORÇÕES por produto final, agrupado por produto.
+   * Quando o porcionamento tem `outputs` (vários produtos gerados), soma o
+   * `portionsCount` de cada saída; sem outputs, soma o `portionsCount` do
+   * próprio porcionamento.
+   */
+  const producedMap = new Map<string, { name: string; produced: number }>();
+  const addProduced = (productId: string, name: string, qty: number) => {
+    const cur = producedMap.get(productId) ?? { name, produced: 0 };
+    cur.produced += qty;
+    producedMap.set(productId, cur);
+  };
+  for (const pt of filteredPortionings) {
+    if (pt.outputs && pt.outputs.length > 0) {
+      for (const o of pt.outputs) addProduced(o.productId, o.productName, o.portionsCount ?? 0);
+    } else {
+      addProduced(pt.product.productId, pt.product.productName, pt.portionsCount ?? 0);
+    }
+  }
+
+  // Estoque e baixas: apenas itens PORCIONADOS do produto resultante dos
+  // filtros acima (1 linha por produto).
+  const productionRows = Array.from(producedMap.entries())
+    .map(([productId, v]) => {
+      const items = allStockItems.filter(
+        (i) => i.type === 'portioned' && i.product.productId === productId,
+      );
+      const inStock = items.filter((i) => i.status === 'in_stock').length;
+      const discarded = items.filter((i) => i.status === 'discarded').length;
+      const group = productMap.get(productId)?.group ?? items[0]?.product.productGroup ?? '—';
+      return {
+        productId,
+        name: v.name,
+        group,
+        produced: v.produced,
+        inStock,
+        discarded,
+        // % de baixa em relação ao total de itens produzidos do produto.
+        pct: v.produced > 0 ? (discarded / v.produced) * 100 : 0,
+      };
+    })
+    // O filtro de grupo também vale para as linhas montadas pelos outputs.
+    .filter((r) => !relGroup || r.group === relGroup)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  // Totais gerais (rodapé): % de baixas sobre o TOTAL de itens produzidos.
+  const totalProduced = productionRows.reduce((s, r) => s + r.produced, 0);
+  const totalInStock = productionRows.reduce((s, r) => s + r.inStock, 0);
+  const totalDiscarded = productionRows.reduce((s, r) => s + r.discarded, 0);
+  const totalPct = totalProduced > 0 ? (totalDiscarded / totalProduced) * 100 : 0;
+
+  /** Exporta o relatório filtrado para Excel (CSV separado por ";"). */
+  const exportProducaoBaixas = () => {
+    downloadCsv(
+      'relatorio-producao-e-baixas',
+      ['Produto', 'Grupo', 'Produzido', 'Em estoque', 'Baixas', '% Baixa'],
+      productionRows.map((r) => [
+        r.name,
+        r.group,
+        r.produced,
+        r.inStock,
+        r.discarded,
+        r.pct.toFixed(1),
+      ]),
+    );
+  };
 
   return (
     <LoggedLayout>
@@ -417,6 +566,184 @@ export default function HistoryPage() {
           </IconButton>
         )}
       />
+
+      {/* ===== Relatório de Produção e Baixas ===== */}
+      <Box
+        className="producao-baixas-report"
+        sx={{ mt: 4, bgcolor: '#fff', borderRadius: 2, border: '1px solid #e8ecf1', p: 2 }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
+            flexWrap: 'wrap',
+            mb: 2,
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" fontWeight={700}>
+              Relatório de Produção e Baixas
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#666' }}>
+              Itens porcionados, quantidade ainda em estoque e baixas com o percentual
+              correspondente sobre o total produzido
+            </Typography>
+          </Box>
+          <Box className="no-print" sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<DownloadIcon fontSize="small" />}
+              onClick={exportProducaoBaixas}
+              sx={exportBtnSx}
+            >
+              Excel
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<PictureAsPdfIcon fontSize="small" />}
+              onClick={printReport}
+              sx={exportBtnSx}
+            >
+              PDF
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Filtros no mesmo estilo da aba Perdas: grupo, produto, fornecedor e período. */}
+        <Box
+          className="no-print"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1.5,
+            mb: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <FilterListIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+            <Typography variant="subtitle2" fontWeight={700}>
+              Filtros:
+            </Typography>
+          </Box>
+          <TextField
+            select
+            size="small"
+            value={relGroup}
+            onChange={(e) => {
+              setRelGroup(e.target.value);
+              setRelProduct('');
+            }}
+            sx={{ width: 190, bgcolor: '#fff', borderRadius: 2, flexShrink: 0 }}
+          >
+            {relGroupOptions.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            value={relProduct}
+            onChange={(e) => setRelProduct(e.target.value)}
+            sx={{ width: 210, bgcolor: '#fff', borderRadius: 2, flexShrink: 0 }}
+          >
+            {relProductOptions.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            value={relSupplier}
+            onChange={(e) => setRelSupplier(e.target.value)}
+            sx={{ width: 210, bgcolor: '#fff', borderRadius: 2, flexShrink: 0 }}
+          >
+            {relSupplierOptions.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            <BrDateField
+              label="Data inicial"
+              value={relFrom}
+              onChange={setRelFrom}
+              fullWidth={false}
+            />
+            <Typography variant="body2" sx={{ color: '#666' }}>
+              até
+            </Typography>
+            <BrDateField
+              label="Data final"
+              value={relTo}
+              onChange={setRelTo}
+              fullWidth={false}
+            />
+          </Box>
+        </Box>
+
+        <ResponsiveTable
+          loading={loadingPortionings || loadingStockItems}
+          rows={productionRows}
+          rowKey={(r) => r.productId}
+          emptyMessage="Nenhum produto porcionado para os filtros selecionados"
+          headerCellSx={thSx}
+          footerNote={
+            productionRows.length > 0 ? (
+              <Typography variant="body2" fontWeight={700}>
+                Total geral: {totalProduced} produzidos · {totalInStock} em estoque ·{' '}
+                {totalDiscarded} baixas ({formatPercent(totalPct)} do total produzido)
+              </Typography>
+            ) : undefined
+          }
+          columns={[
+            {
+              id: 'produto',
+              header: 'Produto',
+              primary: true,
+              cell: (r) => (
+                <Typography variant="body2" fontWeight={500}>
+                  {r.name}
+                </Typography>
+              ),
+            },
+            { id: 'grupo', header: 'Grupo', cell: (r) => r.group },
+            {
+              id: 'produzido',
+              header: 'Produzido',
+              align: 'right',
+              cell: (r) => r.produced,
+            },
+            {
+              id: 'estoque',
+              header: 'Em estoque',
+              align: 'right',
+              cell: (r) => r.inStock,
+            },
+            {
+              id: 'baixas',
+              header: 'Baixas',
+              align: 'right',
+              cell: (r) => r.discarded,
+            },
+            {
+              id: 'pct-baixa',
+              header: '% Baixa',
+              align: 'right',
+              cell: (r) => formatPercent(r.pct),
+            },
+          ]}
+        />
+      </Box>
 
       <Dialog
         open={!!detail}

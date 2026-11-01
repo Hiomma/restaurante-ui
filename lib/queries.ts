@@ -5,6 +5,7 @@ import type {
   User,
   AgendaItem,
   Employee,
+  Group,
   MovementDestination,
   Supplier,
   Product,
@@ -167,6 +168,39 @@ export function useUpdateMovementDestination() {
   });
 }
 
+// Groups (Grupos de produtos)
+export function useGroups() {
+  return useQuery({
+    queryKey: ['groups'],
+    queryFn: () => api.get('/groups').then((res) => res.data as Group[]),
+  });
+}
+
+export function useCreateGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string }) => api.post('/groups', data).then((res) => res.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
+  });
+}
+
+export function useUpdateGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      api.put(`/groups/${id}`, data).then((res) => res.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
+  });
+}
+
+export function useDeleteGroup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/groups/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['groups'] }),
+  });
+}
+
 // Suppliers (Fornecedores)
 export function useSuppliers() {
   return useQuery({
@@ -303,7 +337,13 @@ export function useUpdateStockItem() {
 export function useDeleteStockItem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete(`/stock-items/${id}`),
+    mutationFn: (input: string | { id: string; destination?: string }) => {
+      const id = typeof input === 'string' ? input : input.id;
+      const destination = typeof input === 'string' ? undefined : input.destination;
+      return api.delete(`/stock-items/${id}`, {
+        params: destination ? { destination } : undefined,
+      });
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['stock-items'] }),
   });
 }

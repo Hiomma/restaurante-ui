@@ -50,16 +50,24 @@ export interface MovementDestination {
   createdAt: string;
 }
 
+export interface Group {
+  _id: string;
+  name: string;
+  createdAt: string;
+}
+
 export interface Product {
   _id: string;
   name: string;
   group: string;
+  groupId?: string;
   category?: 'Materia Prima' | 'Porcionado';
   storageMethod: string;
   shelfLifeDays: number;
   minQuantity: number;
   minPortionedQuantity: number;
   consumeAfterOpeningDays: number;
+  allowLooseLabel?: boolean;
   createdAt: string;
 }
 
@@ -99,6 +107,8 @@ export interface Portioning {
   };
   date: string;
   lote?: string;
+  /** Lote de origem da matéria-prima (informado na entrada/recebimento). */
+  rawLote?: string;
   employeeName?: string;
   createdAt: string;
 }

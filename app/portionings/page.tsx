@@ -22,6 +22,8 @@ import ContentCutIcon from '@mui/icons-material/ContentCut';
 import CloseIcon from '@mui/icons-material/Close';
 import QrCodeIcon from '@mui/icons-material/QrCode';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import PrintIcon from '@mui/icons-material/Print';
+import LabelIcon from '@mui/icons-material/Label';
 import { useSnackbar } from 'notistack';
 import {
   usePortionings,
@@ -34,8 +36,10 @@ import {
   useEmployees,
   useMe,
   useSuppliers,
+  useMovementDestinations,
 } from '@/lib/queries';
 import { formatDate, todayISODate, toInputDate } from '@/lib/utils';
+import { printEtiquetasNativas } from '@/lib/printService';
 import { useAccess } from '@/lib/permissions';
 import api from '@/lib/api';
 import type { Portioning, StockItem, UsedLabelInfo } from '@/types';
@@ -45,6 +49,7 @@ import BrDateField from '../components/BrDateField/BrDateField';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
 import QrScannerDialog from '../components/QrScannerDialog/QrScannerDialog';
+import LabelPreview, { type LabelData } from '../components/LabelPreview/LabelPreview';
 
 const fieldSx = {
   '& .MuiOutlinedInput-root': {
@@ -183,6 +188,7 @@ export default function PortioningsPage() {
   const { data: employees } = useEmployees();
   const { data: me } = useMe();
   const { data: suppliers } = useSuppliers();
+  const { data: looseDestinations } = useMovementDestinations();
   const createPortioning = useCreatePortioning();
   const deletePortioning = useDeletePortioning();
   const updateStockItem = useUpdateStockItem();
@@ -208,6 +214,13 @@ export default function PortioningsPage() {
   const [date, setDate] = useState(todayISODate());
   const [submitting, setSubmitting] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [printingLabels, setPrintingLabels] = useState<LabelData[] | null>(null);
+  const [looseLabelOpen, setLooseLabelOpen] = useState(false);
+  const [looseProduct, setLooseProduct] = useState('');
+  const [looseWeight, setLooseWeight] = useState('');
+  const [looseDest, setLooseDest] = useState('');
+  const [looseSaving, setLooseSaving] = useState(false);
+  const [looseLabel, setLooseLabel] = useState<LabelData | null>(null);
 
   const totalGrams = scanned.reduce((sum, item) => sum + item.weightGrams, 0);
   const limpo = Number(cleanWeight) || 0;
@@ -217,6 +230,20 @@ export default function PortioningsPage() {
   const perdaPct = totalGrams > 0 ? (perda / totalGrams) * 100 : 0;
   const supplierOptions = (suppliers ?? []).filter((s) => s.active !== false);
   const product = products?.find((p) => p._id === scanned[0]?.product.productId);
+  const looseProducts = (products ?? []).filter((p) => p.allowLooseLabel === true);
+
+  const fixedLooseDestinations = ['Salão', 'Bar', 'Cozinha'];
+  const looseDestOptions = [
+    ...fixedLooseDestinations,
+    ...(looseDestinations ?? [])
+      .filter(
+        (d) =>
+          d.active &&
+          (d.type ?? 'move') === 'move' &&
+          !fixedLooseDestinations.includes(d.name),
+      )
+      .map((d) => d.name),
+  ];
 
   const totalPortions = outputs.reduce((sum, row) => sum + (parseInt(row.count, 10) || 0), 0);
   const allocatedWeight = outputs.reduce((sum, row) => sum + (Number(row.weight) || 0), 0);
@@ -283,7 +310,11 @@ export default function PortioningsPage() {
         }
         return next;
       });
-      if (!lote && item.lote) setLote(item.lote);
+      // Lote de ORIGEM da matéria-prima fica em `rawLote` (gravado no submit);
+      // o número do lote do porcionamento é criado automaticamente.
+      if (!lote) setLote(generatePortioningLote());
+      // Fornecedor da entrada da matéria-prima (rastreamento de lote de origem).
+      if (!supplier && item.supplier) setSupplier(item.supplier);
       setScanInput('');
     } catch (err) {
       const response = (err as { response?: { status?: number; data?: unknown } }).response;
@@ -377,6 +408,7 @@ export default function PortioningsPage() {
       const nameOf = (id: string) =>
         products?.find((p) => p._id === id)?.name ??
         (first.product.productId === id ? first.product.productName : id);
+      const createdItems: StockItem[] = [];
 
       await createPortioning.mutateAsync({
         productId: rows[0].productId,
@@ -393,6 +425,9 @@ export default function PortioningsPage() {
         // Ganho: peso limpo maior que o bruto (informado apenas quando houver).
         ...(gainGrams > 0 ? { gainGrams } : {}),
         supplier: supplier || undefined,
+        // Lote de origem da matéria-prima (rastreamento): lote da etiqueta
+        // de entrada escaneada.
+        rawLote: scanned[0]?.lote || undefined,
         portionsCount: n,
         date,
         lote,
@@ -419,7 +454,7 @@ export default function PortioningsPage() {
         }
 
         for (let i = 0; i < row.count; i++) {
-          await createStockItem.mutateAsync({
+          const created = await createStockItem.mutateAsync({
             productId: row.productId,
             productName: rowProductName,
             type: 'portioned',
@@ -432,6 +467,7 @@ export default function PortioningsPage() {
             productStorage: rowProduct?.storageMethod ?? first.product.productStorage,
             batchId,
           });
+          createdItems.push(created as StockItem);
         }
 
         await createMovement.mutateAsync({
@@ -457,6 +493,25 @@ export default function PortioningsPage() {
         date,
       });
 
+      // Monta as etiquetas dos itens porcionados para impressão (igual ao recebimento).
+      const labels: LabelData[] = createdItems.map((item, idx) => {
+        const rowProduct = products?.find((p) => p._id === item.product.productId);
+        return {
+          key: `${item._id}-${idx}`,
+          companyName: me?.company?.name ?? '',
+          productName: item.product.productName,
+          storage: item.product.productStorage ?? '',
+          weightGrams: item.weightGrams,
+          recebimentoDate: item.manipulationDate,
+          expiryDate: item.expiryDate,
+          lote: item.lote,
+          responsavel: item.employeeName,
+          consumeAfterOpeningDays: rowProduct?.consumeAfterOpeningDays,
+          qrCode: item.qrCode,
+        };
+      });
+      setPrintingLabels(labels);
+
       enqueueSnackbar('Porcionamento gerado com sucesso.', { variant: 'success' });
       setDialogOpen(false);
       resetForm();
@@ -473,6 +528,116 @@ export default function PortioningsPage() {
     if (deleteTarget) {
       await deletePortioning.mutateAsync(deleteTarget);
       setDeleteTarget(null);
+    }
+  };
+
+  const printLabels = async (labels: LabelData[]) => {
+    const removePrintClass = () => document.body.classList.remove('printing-labels');
+    window.addEventListener('afterprint', removePrintClass, { once: true });
+    document.body.classList.add('printing-labels');
+    try {
+      if (await printEtiquetasNativas(labels)) return;
+      await new Promise((r) => setTimeout(r, 250));
+      window.print();
+    } finally {
+      window.removeEventListener('afterprint', removePrintClass);
+      removePrintClass();
+    }
+  };
+
+  const handlePrintPendingLabels = async () => {
+    if (!printingLabels || printingLabels.length === 0) return;
+    await printLabels(printingLabels);
+    setPrintingLabels(null);
+  };
+
+  function generateTempQr(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
+  /** Número de lote criado automaticamente para cada porcionamento. */
+  function generatePortioningLote(): string {
+    return `P${Date.now().toString(36).toUpperCase()}`;
+  }
+
+  const handleCreateLooseLabel = async () => {
+    if (!looseProduct || !looseWeight || !looseDest) return;
+    const product = products?.find((p) => p._id === looseProduct);
+    if (!product || product.allowLooseLabel !== true) {
+      enqueueSnackbar('Este produto não permite etiqueta avulsa.', {
+        variant: 'error',
+      });
+      return;
+    }
+    setLooseSaving(true);
+    try {
+      const weightGrams = Number(looseWeight);
+      const lote = `AVULSA-${Date.now()}`;
+      const [y, m, d] = todayISODate().split('-').map(Number);
+      const exp = new Date(y, (m || 1) - 1, d || 1);
+      exp.setDate(exp.getDate() + (product.shelfLifeDays ?? 0));
+      const expiryDate = toInputDate(exp.toISOString());
+      const qrCode = generateTempQr();
+      const type = product.category === 'Porcionado' ? 'portioned' : 'raw';
+
+      const created = await createStockItem.mutateAsync({
+        productId: product._id,
+        productName: product.name,
+        type,
+        weightGrams,
+        manipulationDate: todayISODate(),
+        expiryDate,
+        lote,
+        employeeName: me?.name,
+        productGroup: product.group,
+        productStorage: product.storageMethod,
+        destination: looseDest,
+        qrCode,
+      });
+
+      await createMovement.mutateAsync({
+        productId: product._id,
+        productName: product.name,
+        movementType: 'entry',
+        quantity: 1,
+        weightGrams,
+        itemType: type,
+        reason: `Etiqueta avulsa — Destino: ${looseDest} — ${me?.name ?? '-'} — AVULSA-${Date.now()}`,
+        date: todayISODate(),
+      });
+
+      enqueueSnackbar('Etiqueta avulsa gerada e lançada no estoque!', {
+        variant: 'success',
+      });
+
+      const rowProduct = products?.find((p) => p._id === product._id);
+      setLooseLabel({
+        key: `loose-${created._id}`,
+        companyName: me?.company?.name ?? '',
+        productName: created.product.productName,
+        storage: created.product.productStorage ?? '',
+        weightGrams: created.weightGrams,
+        recebimentoDate: created.manipulationDate,
+        expiryDate: created.expiryDate,
+        lote: created.lote,
+        responsavel: created.employeeName,
+        consumeAfterOpeningDays: rowProduct?.consumeAfterOpeningDays,
+        qrCode: created.qrCode,
+      });
+
+      setLooseLabelOpen(false);
+      setLooseProduct('');
+      setLooseWeight('');
+      setLooseDest('');
+    } catch {
+      enqueueSnackbar('Erro ao gerar etiqueta avulsa.', { variant: 'error' });
+    } finally {
+      setLooseSaving(false);
     }
   };
 
@@ -514,6 +679,14 @@ export default function PortioningsPage() {
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
           Novo Porcionamento
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<LabelIcon />}
+          onClick={() => setLooseLabelOpen(true)}
+          sx={containedSx}
+        >
+          Etiqueta Avulsa
         </Button>
       </Box>
 
@@ -1001,6 +1174,178 @@ export default function PortioningsPage() {
       />
 
       <Dialog
+        open={looseLabelOpen}
+        onClose={() => setLooseLabelOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pb: 1,
+          }}
+        >
+          Etiqueta Avulsa
+          <IconButton
+            aria-label="fechar"
+            onClick={() => setLooseLabelOpen(false)}
+            size="small"
+            sx={{ color: '#666', mr: -1 }}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box>
+              <FieldLabel required>Produto</FieldLabel>
+              <TextField
+                select
+                fullWidth
+                size="small"
+                value={looseProduct}
+                onChange={(e) => setLooseProduct(e.target.value)}
+                sx={fieldSx}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (value) =>
+                    !value ? (
+                      <Box component="span" sx={{ color: 'text.disabled' }}>
+                        Selecione o produto
+                      </Box>
+                    ) : (
+                      looseProducts.find((p) => p._id === value)?.name ??
+                      String(value)
+                    ),
+                }}
+              >
+                <MenuItem value="" disabled>Selecione o produto</MenuItem>
+                {looseProducts.map((p) => (
+                  <MenuItem key={p._id} value={p._id}>
+                    {p.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              {looseProducts.length === 0 && (
+                <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+                  Nenhum produto com permissão de etiqueta avulsa. Marque
+                  &quot;Permitir etiqueta avulsa&quot; no cadastro do produto (Cadastros →
+                  Produtos).
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <Box>
+                <FieldLabel required>Peso (g)</FieldLabel>
+                <TextField
+                  type="number"
+                  fullWidth
+                  size="small"
+                  value={looseWeight}
+                  onChange={(e) => setLooseWeight(e.target.value)}
+                  sx={fieldSx}
+                />
+              </Box>
+              <Box>
+                <FieldLabel required>Destino</FieldLabel>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  value={looseDest}
+                  onChange={(e) => setLooseDest(e.target.value)}
+                  sx={fieldSx}
+                  SelectProps={{
+                    displayEmpty: true,
+                    renderValue: (value) =>
+                      !value ? (
+                        <Box component="span" sx={{ color: 'text.disabled' }}>
+                          Selecione o destino
+                        </Box>
+                      ) : (
+                        String(value)
+                      ),
+                  }}
+                >
+                  <MenuItem value="" disabled>Selecione o destino</MenuItem>
+                  {looseDestOptions.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      {name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
+          <Button
+            onClick={() => setLooseLabelOpen(false)}
+            variant="outlined"
+            sx={outlinedCancelSx}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            disabled={!looseProduct || !looseWeight || !looseDest || looseSaving}
+            onClick={handleCreateLooseLabel}
+            sx={containedSx}
+          >
+            Gerar Etiqueta Avulsa
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {looseLabel && (
+        <Box sx={{ mb: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              mb: 2,
+              gap: 1.5,
+            }}
+          >
+            <Typography variant="body1" sx={{ color: '#666' }}>
+              Etiqueta avulsa gerada — {looseLabel.productName}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                onClick={() => setLooseLabel(null)}
+                variant="outlined"
+                sx={outlinedCancelSx}
+              >
+                Fechar
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<PrintIcon />}
+                onClick={() => void printLabels([looseLabel])}
+                sx={containedSx}
+              >
+                Imprimir Etiqueta
+              </Button>
+            </Box>
+          </Box>
+          <Box
+            className="etiquetas-print-area"
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 2,
+              justifyContent: 'center',
+            }}
+          >
+            <LabelPreview key={looseLabel.key} data={looseLabel} />
+          </Box>
+        </Box>
+      )}
+
+      <Dialog
         open={!!viewTarget}
         onClose={() => setViewTarget(null)}
         maxWidth="sm"
@@ -1070,7 +1415,15 @@ export default function PortioningsPage() {
             />
             <DetailRow
               label="Ganho"
-              value={viewTarget ? `${viewTarget.gainGrams ?? 0}g` : '—'}
+              value={
+                viewTarget
+                  ? `${(viewTarget.gainGrams ?? 0).toFixed(0)}g (${
+                      viewTarget.rawWeightGrams > 0
+                        ? (((viewTarget.gainGrams ?? 0) / viewTarget.rawWeightGrams) * 100).toFixed(1)
+                        : 0
+                    }%)`
+                  : '—'
+              }
             />
             <DetailRow
               label="Porções"
@@ -1090,6 +1443,56 @@ export default function PortioningsPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {printingLabels && printingLabels.length > 0 && (
+        <Box>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              mb: 2,
+              mt: 3,
+              flexWrap: 'wrap',
+              gap: 1.5,
+            }}
+          >
+            <Typography variant="body1" sx={{ color: '#666' }}>
+              {printingLabels.length} etiqueta(s) do porcionamento
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                onClick={() => setPrintingLabels(null)}
+                variant="outlined"
+                sx={outlinedCancelSx}
+              >
+                Fechar
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<PrintIcon />}
+                onClick={() => void handlePrintPendingLabels()}
+                sx={containedSx}
+              >
+                Imprimir Etiquetas
+              </Button>
+            </Box>
+          </Box>
+          <Box
+            className="etiquetas-print-area"
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 2,
+              justifyContent: 'center',
+            }}
+          >
+            {printingLabels.map((label) => (
+              <LabelPreview key={label.key} data={label} />
+            ))}
+          </Box>
+        </Box>
+      )}
     </LoggedLayout>
   );
 }

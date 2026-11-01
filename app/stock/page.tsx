@@ -28,8 +28,10 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import {
   useProducts,
   useStockItems,
@@ -37,12 +39,12 @@ import {
   useMovementDestinations,
   useCreateStockMovement,
   useUpdateStockItem,
+  useMe,
 } from '@/lib/queries';
 import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus, todayISODate, downloadCsv } from '@/lib/utils';
 import { useAccess } from '@/lib/permissions';
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
-import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
 
@@ -62,6 +64,13 @@ const chipGray = { bgcolor: '#F1F3F5', color: '#495057', fontWeight: 600, fontSi
 const chipBlue = { bgcolor: '#E3F2FD', color: '#1976D2', fontWeight: 600, fontSize: 12 };
 
 const tableSx = { '& td': { borderBottom: '1px solid #eef1f5' } };
+
+/** Célula da tabela da conferência de estoque (impressão). */
+const confTdStyle: React.CSSProperties = {
+  borderBottom: '1px solid #ccc',
+  padding: '3px 6px',
+  fontSize: 12,
+};
 
 /** Select-all control shown in the table header (and above the mobile list). */
 function SelectAllCheckbox({
@@ -138,6 +147,7 @@ export default function StockPage() {
   const { data: products, isLoading: loadingProducts } = useProducts();
   const { data: items, isLoading: loadingItems } = useStockItems();
   const { data: destinations } = useMovementDestinations();
+  const { data: me } = useMe();
   const deleteItem = useDeleteStockItem();
   const createMovement = useCreateStockMovement();
   const updateItem = useUpdateStockItem();
@@ -150,10 +160,15 @@ export default function StockPage() {
   const [destFilter, setDestFilter] = useState('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteDest, setDeleteDest] = useState('');
+  const [deletePartial, setDeletePartial] = useState(false);
+  const [deletePartialWeight, setDeletePartialWeight] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<'move' | 'writeoff' | null>(null);
   const [bulkDest, setBulkDest] = useState('');
   const [kpiFilter, setKpiFilter] = useState<KpiFilterState>({ life: 'all', type: 'all' });
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [conferenceAt, setConferenceAt] = useState('');
 
   // Clicar de novo no mesmo card limpa só esse filtro; cards de chaves
   // diferentes (ex.: "Vencidos" + "Total Bruto") permanecem combinados.
@@ -347,10 +362,104 @@ export default function StockPage() {
     );
   };
 
+  // Exporta todos os produtos do estoque (incluindo os zerados), ignorando
+  // os filtros ativos: uma linha por produto com os agregados gerais.
+  const exportAllStock = () => {
+    const headers = [
+      'Produto',
+      'Grupo',
+      'Etiquetas',
+      'Peso Total (g)',
+      'Bruto',
+      'Porcionado',
+      'Mínimo (g)',
+      'Status',
+    ];
+    const rows = (products ?? []).map((product) => {
+      const items = allItems.filter(
+        (i) => i.product.productId === product._id && i.status === 'in_stock',
+      );
+      const weight = items.reduce((s, i) => s + i.weightGrams, 0);
+      const raw = items.filter((i) => i.type === 'raw').length;
+      const portioned = items.length - raw;
+      const status = !product.minQuantity
+        ? 'Sem mínimo'
+        : weight < product.minQuantity
+          ? `Comprar (falta ${product.minQuantity - weight}g)`
+          : 'OK';
+      return [
+        product.name,
+        product.group,
+        items.length,
+        weight,
+        raw,
+        portioned,
+        product.minQuantity || 0,
+        status,
+      ];
+    });
+    downloadCsv('estoque-completo', headers, rows);
+  };
+
   const handleDelete = async () => {
-    if (deleteTarget) {
-      await deleteItem.mutateAsync(deleteTarget);
+    if (!deleteTarget || !deleteDest) return;
+    const item = allItems.find((i) => i._id === deleteTarget);
+    if (!item) return;
+
+    const partialGrams = Number(deletePartialWeight);
+    if (
+      deletePartial &&
+      (!partialGrams || partialGrams <= 0 || partialGrams >= item.weightGrams)
+    ) {
+      enqueueSnackbar('Informe um peso de baixa menor que o peso da etiqueta.', {
+        variant: 'error',
+      });
+      return;
+    }
+
+    try {
+      if (deletePartial) {
+        // Descarte PARCIAL: mede o desperdício em peso; a etiqueta continua
+        // no estoque com o restante.
+        const restante = item.weightGrams - partialGrams;
+        await createMovement.mutateAsync({
+          productId: item.product.productId,
+          productName: item.product.productName,
+          movementType: 'exit',
+          quantity: 1,
+          weightGrams: partialGrams,
+          itemType: item.type,
+          destination: deleteDest,
+          reason: `Baixar parcial — ${partialGrams}g de ${item.weightGrams}g — ${deleteDest}`,
+          date: todayISODate(),
+        });
+        await updateItem.mutateAsync({ id: item._id, data: { weightGrams: restante } });
+        enqueueSnackbar(
+          `Baixa parcial: ${partialGrams}g — ${deleteDest}. Restante na etiqueta: ${restante}g.`,
+          { variant: 'success' },
+        );
+      } else {
+        // Descarte TOTAL: movimento de baixa + exclusão com destino no tombstone.
+        await createMovement.mutateAsync({
+          productId: item.product.productId,
+          productName: item.product.productName,
+          movementType: 'exit',
+          quantity: 1,
+          weightGrams: item.weightGrams,
+          itemType: item.type,
+          destination: deleteDest,
+          reason: `Baixar — ${deleteDest}`,
+          date: todayISODate(),
+        });
+        await deleteItem.mutateAsync({ id: deleteTarget, destination: deleteDest });
+        enqueueSnackbar(`Etiqueta baixada — ${deleteDest}.`, { variant: 'success' });
+      }
       setDeleteTarget(null);
+      setDeleteDest('');
+      setDeletePartial(false);
+      setDeletePartialWeight('');
+    } catch {
+      enqueueSnackbar('Erro ao excluir etiqueta.', { variant: 'error' });
     }
   };
 
@@ -381,6 +490,11 @@ export default function StockPage() {
     ]),
   );
 
+  // O alerta "Comprar" (chip, cor da linha e indicadores de mínimo) só
+  // aparece na aba "Todos os locais"; nas demais abas mantém-se apenas a
+  // quantidade bruta e porcionada por local.
+  const showBuy = destFilter === 'all';
+
   // Contagem por local: usa a base com os filtros de KPI aplicados (reflete
   // "onde estão" os itens filtrados), mantendo cada aba com a contagem do
   // próprio local, independente da aba selecionada.
@@ -391,6 +505,8 @@ export default function StockPage() {
     ).length;
 
   const selectedItems = allItems.filter((i) => selected.has(i._id) && i.status === 'in_stock');
+  /** Etiqueta-alvo do diálogo de exclusão (para validar a baixa parcial). */
+  const deleteTargetRow = allItems.find((i) => i._id === deleteTarget);
   const bulkBusy = createMovement.isPending || updateItem.isPending || deleteItem.isPending;
 
   const toggleSelect = (id: string, isChecked: boolean) => {
@@ -426,10 +542,11 @@ export default function StockPage() {
             quantity: 1,
             weightGrams: item.weightGrams,
             itemType: item.type,
+            destination: bulkDest,
             reason: `Baixar — ${bulkDest}`,
             date: todayISODate(),
           });
-          await deleteItem.mutateAsync(item._id);
+          await deleteItem.mutateAsync({ id: item._id, destination: bulkDest });
         }
       }
       const n = selectedItems.length;
@@ -446,6 +563,33 @@ export default function StockPage() {
       );
     } catch {
       enqueueSnackbar('Erro ao movimentar etiquetas.', { variant: 'error' });
+    }
+  };
+
+  /** Todos os itens em estoque agrupados por local (conferência PDF). */
+  const conferenceGroups = [
+    { name: 'Sem destino', items: allItems.filter((i) => i.status === 'in_stock' && !i.destination) },
+    ...locationTabs.map((name) => ({
+      name,
+      items: allItems.filter((i) => i.status === 'in_stock' && i.destination === name),
+    })),
+  ];
+
+  /**
+   * Imprime a conferência: a área fica no DOM (filha de main) e a classe
+   * `printing-conference` faz o CSS imprimir somente ela — o usuário escolhe
+   * "Salvar como PDF" no diálogo do navegador.
+   */
+  const printConference = async () => {
+    const removeClass = () => document.body.classList.remove('printing-conference');
+    window.addEventListener('afterprint', removeClass, { once: true });
+    document.body.classList.add('printing-conference');
+    try {
+      await new Promise((r) => setTimeout(r, 250));
+      window.print();
+    } finally {
+      window.removeEventListener('afterprint', removeClass);
+      removeClass();
     }
   };
 
@@ -632,6 +776,46 @@ export default function StockPage() {
               <MenuItem value="abaixo">Abaixo do mínimo</MenuItem>
               <MenuItem value="ok">OK</MenuItem>
             </TextField>
+
+            <Box sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {estoqueExport && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<DownloadIcon fontSize="small" />}
+                  onClick={exportAllStock}
+                  sx={{
+                    textTransform: 'none',
+                    color: '#495057',
+                    borderColor: '#CED4DA',
+                    bgcolor: '#fff',
+                    borderRadius: 2,
+                    '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5' },
+                  }}
+                >
+                  Exportar todos os itens
+                </Button>
+              )}
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<PictureAsPdfIcon fontSize="small" />}
+                onClick={() => {
+                  setConferenceAt(new Date().toLocaleString('pt-BR'));
+                  setPdfOpen(true);
+                }}
+                sx={{
+                  textTransform: 'none',
+                  color: '#C62828',
+                  borderColor: '#F0C0C0',
+                  bgcolor: '#fff',
+                  borderRadius: 2,
+                  '&:hover': { borderColor: '#C62828', bgcolor: '#FFEBEE' },
+                }}
+              >
+                Conferência PDF
+              </Button>
+            </Box>
           </Box>
 
           {selected.size > 0 && (
@@ -708,8 +892,8 @@ export default function StockPage() {
                       gap: 2,
                       p: 2,
                       cursor: 'pointer',
-                      bgcolor: r.belowMin ? '#FDECEC' : 'transparent',
-                      '&:hover': { bgcolor: r.belowMin ? '#FBE4E4' : '#f9fafb' },
+                      bgcolor: showBuy && r.belowMin ? '#FDECEC' : 'transparent',
+                      '&:hover': { bgcolor: showBuy && r.belowMin ? '#FBE4E4' : '#f9fafb' },
                     }}
                   >
                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -735,7 +919,7 @@ export default function StockPage() {
                         {r.expiringCount > 0 && (
                           <Chip label={`${r.expiringCount} vencendo`} size="small" sx={chipAmber} />
                         )}
-                        {r.belowMin && (
+                        {showBuy && r.belowMin && (
                           <Chip
                             label="Comprar"
                             size="small"
@@ -764,7 +948,7 @@ export default function StockPage() {
                         <Typography variant="body2" sx={{ color: '#666' }}>
                           {r.portionedCount} porcionado
                         </Typography>
-                        {r.minQuantity > 0 && (
+                        {showBuy && r.minQuantity > 0 && (
                           <Typography
                             variant="body2"
                             fontWeight={700}
@@ -773,7 +957,7 @@ export default function StockPage() {
                             {r.totalWeight}/{r.minQuantity} min.
                           </Typography>
                         )}
-                        {r.minPortionedQuantity > 0 && (
+                        {showBuy && r.minPortionedQuantity > 0 && (
                           <Typography
                             variant="body2"
                             fontWeight={700}
@@ -859,7 +1043,12 @@ export default function StockPage() {
                             ? (item) => (
                                 <IconButton
                                   size="small"
-                                  onClick={() => setDeleteTarget(item._id)}
+                                  onClick={() => {
+                                    setDeleteDest('');
+                                    setDeletePartial(false);
+                                    setDeletePartialWeight('');
+                                    setDeleteTarget(item._id);
+                                  }}
                                   sx={{ color: '#d32f2f' }}
                                 >
                                   <DeleteIcon fontSize="small" />
@@ -1009,13 +1198,259 @@ export default function StockPage() {
         </DialogActions>
       </Dialog>
 
-      <ConfirmDialog
+      <Dialog
         open={!!deleteTarget}
-        title="Excluir Item"
-        message="Tem certeza que deseja excluir este item do estoque?"
-        onConfirm={handleDelete}
-        onCancel={() => setDeleteTarget(null)}
-      />
+        onClose={() => setDeleteTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Excluir Etiqueta</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+            A etiqueta será excluída do sistema (ou parcialmente baixada). Informe o
+            destino da baixa — ele é obrigatório e fica registrado no histórico.
+          </Typography>
+          <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
+            Destino *
+          </Typography>
+          <TextField
+            select
+            fullWidth
+            size="small"
+            value={deleteDest}
+            onChange={(e) => setDeleteDest(e.target.value)}
+            SelectProps={{
+              displayEmpty: true,
+              renderValue: (v) =>
+                v === '' ? (
+                  <Box component="span" sx={{ color: 'text.disabled' }}>
+                    Selecione o destino...
+                  </Box>
+                ) : (
+                  String(v)
+                ),
+            }}
+          >
+            <MenuItem value="" disabled>
+              Selecione o destino...
+            </MenuItem>
+            {writeoffDestinations.map((d) => (
+              <MenuItem key={d} value={d}>
+                {d}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
+            <Checkbox
+              size="small"
+              checked={deletePartial}
+              onChange={(e) => {
+                setDeletePartial(e.target.checked);
+                setDeletePartialWeight('');
+              }}
+            />
+            <Typography variant="body2" fontWeight={600}>
+              Baixa parcial (apenas parte do peso)
+            </Typography>
+            {deleteTargetRow && (
+              <Typography variant="caption" color="text.secondary">
+                (etiqueta: {deleteTargetRow.weightGrams}g)
+              </Typography>
+            )}
+          </Box>
+          {deletePartial && deleteTargetRow && (
+            <Box sx={{ mt: 1 }}>
+              <TextField
+                type="number"
+                fullWidth
+                size="small"
+                placeholder={`Peso a baixar em g (máx. ${deleteTargetRow.weightGrams - 1}g)`}
+                value={deletePartialWeight}
+                onChange={(e) => setDeletePartialWeight(e.target.value)}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
+          <Button
+            onClick={() => setDeleteTarget(null)}
+            variant="outlined"
+            sx={{
+              textTransform: 'none',
+              color: '#444',
+              borderColor: '#e0e0e0',
+              bgcolor: '#fff',
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={
+              !deleteDest ||
+              (deletePartial &&
+                (!Number(deletePartialWeight) ||
+                  Number(deletePartialWeight) <= 0 ||
+                  (deleteTargetRow &&
+                    Number(deletePartialWeight) >= deleteTargetRow.weightGrams))) ||
+              deleteItem.isPending ||
+              createMovement.isPending ||
+              updateItem.isPending
+            }
+            onClick={handleDelete}
+            sx={{ textTransform: 'none' }}
+          >
+            {deletePartial ? 'Dar baixa parcial' : 'Excluir'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={pdfOpen} onClose={() => setPdfOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pb: 1,
+          }}
+        >
+          Conferência de Estoque (PDF)
+          <IconButton
+            aria-label="fechar"
+            onClick={() => setPdfOpen(false)}
+            size="small"
+            sx={{ color: '#666', mr: -1 }}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: '#666', mb: 1.5 }}>
+            Documento com todos os itens e etiquetas que compõem o estoque de cada local,
+            com data/hora e campo de assinatura do funcionário que está recebendo. No
+            diálogo de impressão, escolha &quot;Salvar como PDF&quot;.
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 0.5 }}>
+            Responsável: <b>{me?.name || '—'}</b>
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            Data/hora: <b>{conferenceAt}</b>
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+            {conferenceGroups.map((g) => (
+              <Chip
+                key={g.name}
+                label={`${g.name}: ${g.items.length} etiqueta(s)`}
+                size="small"
+                sx={{ bgcolor: '#F1F3F5', color: '#495057', fontWeight: 600 }}
+              />
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
+          <Button
+            onClick={() => setPdfOpen(false)}
+            variant="outlined"
+            sx={{
+              textTransform: 'none',
+              color: '#444',
+              borderColor: '#e0e0e0',
+              bgcolor: '#fff',
+            }}
+          >
+            Fechar
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<PictureAsPdfIcon fontSize="small" />}
+            onClick={() => void printConference()}
+            sx={{ textTransform: 'none' }}
+          >
+            Imprimir / Salvar PDF
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Área da conferência: só aparece na impressão (classe printing-conference). */}
+      {pdfOpen && (
+        <Box
+          className="conferencia-print-area"
+          sx={{ p: 2, bgcolor: '#fff' }}
+        >
+          <Typography variant="h6" fontWeight={700} sx={{ mb: 0.5 }}>
+            Conferência de Estoque — {me?.company?.name || 'Restaurante'}
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Emitido em {conferenceAt} — Responsável: {me?.name || '—'}
+          </Typography>
+          {conferenceGroups.map((group) => (
+            <Box key={group.name} sx={{ mb: 2.5 }}>
+              <Typography variant="subtitle1" fontWeight={700}>
+                {group.name} ({group.items.length})
+              </Typography>
+              {group.items.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhuma etiqueta
+                </Typography>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['Produto', 'Tipo', 'Peso', 'Lote', 'Validade', 'QR'].map((h) => (
+                        <th
+                          key={h}
+                          style={{
+                            borderBottom: '2px solid #000',
+                            textAlign: 'left',
+                            padding: '4px 6px',
+                            fontSize: 12,
+                          }}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.items.map((item) => (
+                      <tr key={item._id}>
+                        <td style={confTdStyle}>{item.product.productName}</td>
+                        <td style={confTdStyle}>
+                          {item.type === 'raw' ? 'Bruto' : 'Porcionado'}
+                        </td>
+                        <td style={confTdStyle}>{formatWeight(item.weightGrams)}</td>
+                        <td style={confTdStyle}>{item.lote || '—'}</td>
+                        <td style={confTdStyle}>{formatDate(item.expiryDate)}</td>
+                        <td style={{ ...confTdStyle, fontFamily: 'monospace' }}>
+                          {item.qrCode}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Box>
+          ))}
+          <Box sx={{ mt: 4 }}>
+            <Typography variant="body2" fontWeight={700}>
+              Assinatura do funcionário que está recebendo o estoque:
+            </Typography>
+            <Box
+              sx={{
+                borderBottom: '1.5px solid #000',
+                width: { xs: '100%', sm: '60%' },
+                height: 48,
+                mt: 4,
+              }}
+            />
+            <Typography variant="caption" sx={{ color: '#555' }}>
+              Nome e assinatura
+            </Typography>
+          </Box>
+        </Box>
+      )}
     </LoggedLayout>
   );
 }

@@ -281,7 +281,7 @@ export default function DashboardPage() {
               </Button>
               <Button
                 variant="outlined"
-                onClick={() => router.push('/reports?tab=estoque')}
+                onClick={() => router.push('/reports?tab=compras')}
                 sx={{
                   textTransform: 'none',
                   borderRadius: 1.5,
@@ -567,7 +567,7 @@ export default function DashboardPage() {
                   </Typography>
                   <Button
                     size="small"
-                    onClick={() => router.push('/reports?tab=estoque')}
+                    onClick={() => router.push('/reports?tab=compras')}
                     sx={{
                       ml: 'auto',
                       textTransform: 'none',

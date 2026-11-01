@@ -45,6 +45,10 @@ vi.mock('@/lib/queries', () => {
     useCreateSupplier: mutation,
     useUpdateSupplier: mutation,
     useDeleteSupplier: mutation,
+    useGroups: () => queryResult,
+    useCreateGroup: mutation,
+    useUpdateGroup: mutation,
+    useDeleteGroup: mutation,
     useChangePassword: mutation,
   };
 });

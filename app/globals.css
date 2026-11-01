@@ -41,6 +41,12 @@
   display: none;
 }
 
+/* Conferência de estoque (PDF): a área fica no DOM enquanto o diálogo está
+   aberto, mas só aparece na impressão. */
+.conferencia-print-area {
+  display: none;
+}
+
 @media print {
   @page {
     size: A4 portrait;
@@ -114,6 +120,68 @@
      o Recebimento e para a reimpressão do Histórico. */
   body:has(.etiquetas-print-area) main > *:not(.etiquetas-print-area),
   body:has(.etiquetas-print-area) .reprint-dialog {
+    display: none !important;
+  }
+
+  /* Fallback mais compatível: quando o corpo recebe a classe
+     `printing-labels` (adicionada pelo JS antes de window.print()),
+     oculta tudo exceto a área de etiquetas, evitando etiquetas em branco
+     em navegadores que não suportam o seletor `:has()`. */
+  body.printing-labels * {
+    visibility: hidden !important;
+  }
+  body.printing-labels .etiquetas-print-area,
+  body.printing-labels .etiquetas-print-area * {
+    visibility: visible !important;
+  }
+  body.printing-labels .etiquetas-print-area {
+    display: block !important;
+    position: static;
+    left: 0;
+    top: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 58mm;
+  }
+  body.printing-labels .etiqueta-print {
+    position: static !important;
+    width: 58mm !important;
+    max-width: 58mm !important;
+    box-sizing: border-box;
+    margin: 0 !important;
+    padding: 2mm !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  body.printing-labels .etiqueta-print + .etiqueta-print {
+    break-before: page;
+    page-break-before: always;
+  }
+  body.printing-labels main,
+  body.printing-labels main > *:not(.etiquetas-print-area),
+  body.printing-labels .reprint-dialog {
+    display: none !important;
+  }
+
+  /* Conferência de estoque (PDF): a área da conferência é o único conteúdo
+     impresso; navegação, diálogos e demais seções saem da página. */
+  body.printing-conference * {
+    visibility: hidden !important;
+  }
+  body.printing-conference .conferencia-print-area,
+  body.printing-conference .conferencia-print-area * {
+    visibility: visible !important;
+  }
+  body.printing-conference .conferencia-print-area {
+    display: block !important;
+    position: static;
+    left: 0;
+    top: 0;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body.printing-conference main > *:not(.conferencia-print-area),
+  body.printing-conference .MuiDialog-container {
     display: none !important;
   }
 }

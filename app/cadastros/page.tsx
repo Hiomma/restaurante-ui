@@ -7,12 +7,14 @@ import InventoryIcon from '@mui/icons-material/Inventory';
 import PeopleIcon from '@mui/icons-material/People';
 import PlaceIcon from '@mui/icons-material/Place';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import LabelIcon from '@mui/icons-material/Label';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
 import ProductsRegistry from './registries/ProductsRegistry';
 import EmployeesRegistry from './registries/EmployeesRegistry';
 import DestinosRegistry from './registries/DestinosRegistry';
 import SuppliersRegistry from './registries/SuppliersRegistry';
+import GroupsRegistry from './registries/GroupsRegistry';
 
 export default function CadastrosPage() {
   const [tab, setTab] = useState(0);
@@ -75,12 +77,14 @@ export default function CadastrosPage() {
         <Tab icon={<PeopleIcon fontSize="small" />} iconPosition="start" label="Funcionários" />
         <Tab icon={<PlaceIcon fontSize="small" />} iconPosition="start" label="Destinos" />
         <Tab icon={<LocalShippingIcon fontSize="small" />} iconPosition="start" label="Fornecedores" />
+        <Tab icon={<LabelIcon fontSize="small" />} iconPosition="start" label="Grupos" />
       </ResponsiveTabs>
 
       {tab === 0 && <ProductsRegistry />}
       {tab === 1 && <EmployeesRegistry />}
       {tab === 2 && <DestinosRegistry />}
       {tab === 3 && <SuppliersRegistry />}
+      {tab === 4 && <GroupsRegistry />}
     </LoggedLayout>
   );
 }
