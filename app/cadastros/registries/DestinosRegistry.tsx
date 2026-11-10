@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import PlaceIcon from '@mui/icons-material/Place';
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import { useSnackbar } from 'notistack';
@@ -24,6 +25,7 @@ import {
   useMovementDestinations,
   useCreateMovementDestination,
   useDeleteMovementDestination,
+  useUpdateMovementDestination,
 } from '@/lib/queries';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '@/app/components/ResponsiveTabs/ResponsiveTabs';
@@ -95,9 +97,12 @@ export default function DestinosRegistry() {
   const { enqueueSnackbar } = useSnackbar();
   const { data: destinations } = useMovementDestinations();
   const createDestination = useCreateMovementDestination();
+  const updateDestination = useUpdateMovementDestination();
   const deleteDestination = useDeleteMovementDestination();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  /** Destino personalizado em edição (null = criação). */
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [destName, setDestName] = useState('');
   const [destType, setDestType] = useState<'move' | 'writeoff'>('move');
   const [destSubTab, setDestSubTab] = useState<'move' | 'writeoff'>('move');
@@ -126,24 +131,49 @@ export default function DestinosRegistry() {
   const hasCustomDestinations = destRows.some((r) => !r.fixed);
 
   const openCreate = () => {
+    setEditingId(null);
+    setDestName('');
     setDestType(destSubTab);
     setDialogOpen(true);
   };
 
-  const handleAddDestination = async () => {
+  /** Edição de destino personalizado (os fixos são embutidos no sistema). */
+  const openEdit = (row: DestinationRow) => {
+    setEditingId(row.key);
+    setDestName(row.name);
+    setDestType(row.type);
+    setDialogOpen(true);
+  };
+
+  const closeDialog = () => {
+    setEditingId(null);
+    setDestName('');
+    setDialogOpen(false);
+  };
+
+  const handleSaveDestination = async () => {
     const name = destName.trim();
     if (!name) return;
     try {
-      await createDestination.mutateAsync({ name, type: destType });
-      // Show the sub-tab the new destination belongs to, so it is visible
-      // immediately after creation without a page refresh.
+      if (editingId) {
+        await updateDestination.mutateAsync({ id: editingId, data: { name, type: destType } });
+        enqueueSnackbar('Destino atualizado com sucesso!', { variant: 'success' });
+      } else {
+        await createDestination.mutateAsync({ name, type: destType });
+        enqueueSnackbar('Destino adicionado com sucesso!', { variant: 'success' });
+      }
+      // Show the sub-tab the destination belongs to, so it is visible
+      // immediately after creation/update without a page refresh.
       setDestSubTab(destType);
-      enqueueSnackbar('Destino adicionado com sucesso!', { variant: 'success' });
       setDestName('');
       setDestType('move');
+      setEditingId(null);
       setDialogOpen(false);
     } catch {
-      enqueueSnackbar('Erro ao adicionar destino.', { variant: 'error' });
+      enqueueSnackbar(
+        editingId ? 'Erro ao atualizar destino.' : 'Erro ao adicionar destino.',
+        { variant: 'error' },
+      );
     }
   };
 
@@ -251,14 +281,24 @@ export default function DestinosRegistry() {
               Fixo
             </Typography>
           ) : (
-            <IconButton
-              size="small"
-              aria-label="excluir destino"
-              onClick={() => handleDeleteDestination(row.key)}
-              sx={{ color: '#C62828' }}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
+            <>
+              <IconButton
+                size="small"
+                aria-label="editar destino"
+                onClick={() => openEdit(row)}
+                sx={{ color: '#666' }}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                aria-label="excluir destino"
+                onClick={() => handleDeleteDestination(row.key)}
+                sx={{ color: '#C62828' }}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </>
           )
         }
         columns={[
@@ -294,7 +334,7 @@ export default function DestinosRegistry() {
         ]}
       />
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={closeDialog} maxWidth="sm" fullWidth>
         <DialogTitle
           sx={{
             display: 'flex',
@@ -303,10 +343,10 @@ export default function DestinosRegistry() {
             pb: 1,
           }}
         >
-          Novo Destino
+          {editingId ? 'Editar Destino' : 'Novo Destino'}
           <IconButton
             aria-label="fechar"
-            onClick={() => setDialogOpen(false)}
+            onClick={closeDialog}
             size="small"
             sx={{ color: '#666', mr: -1 }}
           >
@@ -325,7 +365,7 @@ export default function DestinosRegistry() {
                 value={destName}
                 onChange={(e) => setDestName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleAddDestination();
+                  if (e.key === 'Enter') handleSaveDestination();
                 }}
               />
             </Box>
@@ -346,16 +386,18 @@ export default function DestinosRegistry() {
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
-          <Button onClick={() => setDialogOpen(false)} variant="outlined" sx={outlinedCancelSx}>
+          <Button onClick={closeDialog} variant="outlined" sx={outlinedCancelSx}>
             Cancelar
           </Button>
           <Button
             variant="contained"
-            disabled={!destName.trim() || createDestination.isPending}
-            onClick={handleAddDestination}
+            disabled={
+              !destName.trim() || createDestination.isPending || updateDestination.isPending
+            }
+            onClick={handleSaveDestination}
             sx={primaryBtnSx}
           >
-            Adicionar
+            {editingId ? 'Salvar' : 'Adicionar'}
           </Button>
         </DialogActions>
       </Dialog>

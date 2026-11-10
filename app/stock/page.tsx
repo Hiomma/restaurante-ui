@@ -217,7 +217,25 @@ export default function StockPage() {
   );
 
   // Itens efetivamente listados: em estoque + aba de local + filtros de KPI.
-  const visibleItems = inStock.filter(passesKpiFilter);
+  const searchQuery = search.trim().toLowerCase();
+
+  /**
+   * Busca NO ITEM (produto OU lote): o nome casa para todas as etiquetas do
+   * produto; o lote casa SOMENTE para as etiquetas daquele lote — antes, a
+   * busca era feita por grupo e "puxava" todos os lotes do produto.
+   */
+  const matchesSearch = (item: StockItem): boolean => {
+    if (!searchQuery) return true;
+    const name =
+      (products ?? []).find((p) => p._id === item.product.productId)?.name ??
+      item.product.productName;
+    if (name.toLowerCase().includes(searchQuery)) return true;
+    const lote = (item.lote ?? '').toLowerCase();
+    if (!lote) return false;
+    return lote.includes(searchQuery) || `lote ${lote}`.includes(searchQuery);
+  };
+
+  const visibleItems = inStock.filter(passesKpiFilter).filter(matchesSearch);
 
   const groupedMap = new Map<string, StockItem[]>();
   visibleItems.forEach((item) => {
@@ -254,23 +272,7 @@ export default function StockPage() {
 
   const groupOptions = Array.from(new Set((products ?? []).map((p) => p.group))).sort();
 
-  const searchQuery = search.trim().toLowerCase();
-
-  // Busca casando contra o nome do produto OU o lote de qualquer etiqueta do
-  // grupo ("Lote 255997" com o prefixo ou só o valor "255997") — facilita
-  // rastrear quanto ainda resta de um lote problemático.
-  const matchesSearch = (r: ProductGroupRow) => {
-    if (!searchQuery) return true;
-    if (r.name.toLowerCase().includes(searchQuery)) return true;
-    return r.items.some((i) => {
-      const lote = (i.lote ?? '').toLowerCase();
-      if (!lote) return false;
-      return lote.includes(searchQuery) || `lote ${lote}`.includes(searchQuery);
-    });
-  };
-
   const filteredRows = rows
-    .filter(matchesSearch)
     .filter((r) => groupFilter === 'all' || r.group === groupFilter)
     .filter((r) => {
       if (statusFilter === 'all') return true;
@@ -362,43 +364,74 @@ export default function StockPage() {
     );
   };
 
-  // Exporta todos os produtos do estoque (incluindo os zerados), ignorando
-  // os filtros ativos: uma linha por produto com os agregados gerais.
+  /**
+   * Exporta os itens em estoque SEPARADOS POR LOCAL (cada local com apenas
+   * os seus itens). Com uma aba de local ativa, exporta só aquele local;
+   * em "Todos os locais", une todos os locais em blocos separados.
+   */
   const exportAllStock = () => {
     const headers = [
+      'Local',
       'Produto',
-      'Grupo',
-      'Etiquetas',
-      'Peso Total (g)',
-      'Bruto',
-      'Porcionado',
-      'Mínimo (g)',
-      'Status',
+      'Tipo',
+      'Código (QR)',
+      'Lote',
+      'Validade',
+      'Peso (g)',
+      'NF',
+      'Fornecedor',
     ];
-    const rows = (products ?? []).map((product) => {
-      const items = allItems.filter(
-        (i) => i.product.productId === product._id && i.status === 'in_stock',
-      );
-      const weight = items.reduce((s, i) => s + i.weightGrams, 0);
-      const raw = items.filter((i) => i.type === 'raw').length;
-      const portioned = items.length - raw;
-      const status = !product.minQuantity
-        ? 'Sem mínimo'
-        : weight < product.minQuantity
-          ? `Comprar (falta ${product.minQuantity - weight}g)`
-          : 'OK';
-      return [
-        product.name,
-        product.group,
-        items.length,
-        weight,
-        raw,
-        portioned,
-        product.minQuantity || 0,
-        status,
-      ];
+
+    const inScope = allItems.filter((i) => {
+      if (i.status !== 'in_stock') return false;
+      if (destFilter === 'all') return true;
+      if (destFilter === 'none') return !i.destination;
+      return i.destination === destFilter;
     });
-    downloadCsv('estoque-completo', headers, rows);
+
+    // Ordem dos blocos: "Sem destino" primeiro, depois os locais das abas.
+    const locationOrder = ['Sem destino', ...locationTabs];
+    const byLocation = new Map<string, StockItem[]>();
+    for (const item of inScope) {
+      const local = item.destination || 'Sem destino';
+      const arr = byLocation.get(local);
+      if (arr) arr.push(item);
+      else byLocation.set(local, [item]);
+    }
+    const orderedLocations = [
+      ...locationOrder.filter((l) => byLocation.has(l)),
+      ...Array.from(byLocation.keys()).filter((l) => !locationOrder.includes(l)),
+    ];
+
+    const safeName = (destFilter === 'all' ? 'por-local' : destFilter)
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .replace(/[^\w-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase();
+
+    const rowsOut: (string | number)[][] = [];
+    for (const local of orderedLocations) {
+      const localItems = byLocation.get(local) ?? [];
+      // Cabeçalho do bloco deixa o local explícito na planilha.
+      rowsOut.push([`LOCAL: ${local} (${localItems.length} etiqueta(s))`]);
+      for (const item of localItems) {
+        rowsOut.push([
+          local,
+          item.product.productName,
+          item.type === 'raw' ? 'Bruto' : 'Porcionado',
+          item.qrCode || '',
+          item.lote || '',
+          formatDate(item.expiryDate),
+          item.weightGrams,
+          item.nf || '',
+          item.supplier || '—',
+        ]);
+      }
+      rowsOut.push([]);
+    }
+
+    downloadCsv(`estoque-${safeName}`, headers, rowsOut);
   };
 
   const handleDelete = async () => {
@@ -430,6 +463,7 @@ export default function StockPage() {
           weightGrams: partialGrams,
           itemType: item.type,
           destination: deleteDest,
+          lote: item.lote,
           reason: `Baixar parcial — ${partialGrams}g de ${item.weightGrams}g — ${deleteDest}`,
           date: todayISODate(),
         });
@@ -448,6 +482,7 @@ export default function StockPage() {
           weightGrams: item.weightGrams,
           itemType: item.type,
           destination: deleteDest,
+          lote: item.lote,
           reason: `Baixar — ${deleteDest}`,
           date: todayISODate(),
         });
@@ -530,6 +565,7 @@ export default function StockPage() {
             quantity: 1,
             weightGrams: item.weightGrams,
             itemType: item.type,
+            lote: item.lote,
             reason: `Mover — ${bulkDest}`,
             date: todayISODate(),
           });
@@ -543,6 +579,7 @@ export default function StockPage() {
             weightGrams: item.weightGrams,
             itemType: item.type,
             destination: bulkDest,
+            lote: item.lote,
             reason: `Baixar — ${bulkDest}`,
             date: todayISODate(),
           });
@@ -566,14 +603,40 @@ export default function StockPage() {
     }
   };
 
-  /** Todos os itens em estoque agrupados por local (conferência PDF). */
-  const conferenceGroups = [
-    { name: 'Sem destino', items: allItems.filter((i) => i.status === 'in_stock' && !i.destination) },
-    ...locationTabs.map((name) => ({
-      name,
-      items: allItems.filter((i) => i.status === 'in_stock' && i.destination === name),
-    })),
-  ];
+  /**
+   * Itens da conferência POR LOCAL: cada bloco traz apenas os itens daquele
+   * estoque. Com uma aba de local ativa, a conferência sai só para aquele
+   * local; em "Todos os locais", um bloco por localidade.
+   */
+  const conferenceGroups =
+    destFilter === 'all'
+      ? [
+          {
+            name: 'Sem destino',
+            items: allItems.filter((i) => i.status === 'in_stock' && !i.destination),
+          },
+          ...locationTabs.map((name) => ({
+            name,
+            items: allItems.filter(
+              (i) => i.status === 'in_stock' && i.destination === name,
+            ),
+          })),
+        ]
+      : destFilter === 'none'
+        ? [
+            {
+              name: 'Sem destino',
+              items: allItems.filter((i) => i.status === 'in_stock' && !i.destination),
+            },
+          ]
+        : [
+            {
+              name: destFilter,
+              items: allItems.filter(
+                (i) => i.status === 'in_stock' && i.destination === destFilter,
+              ),
+            },
+          ];
 
   /**
    * Imprime a conferência: a área fica no DOM (filha de main) e a classe
@@ -1328,9 +1391,10 @@ export default function StockPage() {
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: '#666', mb: 1.5 }}>
-            Documento com todos os itens e etiquetas que compõem o estoque de cada local,
-            com data/hora e campo de assinatura do funcionário que está recebendo. No
-            diálogo de impressão, escolha &quot;Salvar como PDF&quot;.
+            Documento com os itens de cada local, separados por estoque (com uma aba de
+            local ativa, apenas os itens daquele local), com data/hora e campo de
+            assinatura do funcionário que está recebendo. No diálogo de impressão,
+            escolha &quot;Salvar como PDF&quot;.
           </Typography>
           <Typography variant="body2" sx={{ mb: 0.5 }}>
             Responsável: <b>{me?.name || '—'}</b>

@@ -109,6 +109,12 @@ export interface Portioning {
   lote?: string;
   /** Lote de origem da matéria-prima (informado na entrada/recebimento). */
   rawLote?: string;
+  /**
+   * Código do lote interno do porcionamento (`BATCH-PORT-...`) — o mesmo
+   * gravado nas etiquetas criadas, usado para ligar o registro ao estoque
+   * gerado nos relatórios.
+   */
+  batchId?: string;
   employeeName?: string;
   createdAt: string;
 }
@@ -153,6 +159,12 @@ export interface StockMovement {
   /** Usuário que realizou a movimentação. */
   userName?: string;
   date: string;
+  /**
+   * Lote da etiqueta envolvida (porcionamento, entrada ou etiqueta avulsa).
+   * Permite a busca por lote no Histórico/Relatórios; registros antigos
+   * podem não ter o campo.
+   */
+  lote?: string;
   createdAt: string;
 }
 

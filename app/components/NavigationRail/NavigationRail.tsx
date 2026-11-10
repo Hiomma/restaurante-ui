@@ -45,8 +45,21 @@ const navItems = [
   { icon: <EventNoteIcon />, label: 'Agenda', path: '/agenda' },
 ];
 
-/** Itens que o funcionário com acesso restrito não pode ver/navegar. */
-const RESTRICTED_HIDDEN_PATHS = ['/cadastros', '/reports'];
+/**
+ * Permissão de acesso por rota: a navegação mostra/oculta cada item
+ * conforme a matriz de permissões por perfil (aba "Permissões").
+ */
+const NAV_PERMISSION_BY_PATH: Record<string, keyof ReturnType<typeof useAccess>> = {
+  '/': 'dashboard',
+  '/cadastros': 'cadastros',
+  '/receiving': 'recebimento',
+  '/portionings': 'porcionamentoCreate',
+  '/movements': 'movimentacoes',
+  '/history': 'historico',
+  '/stock': 'estoqueView',
+  '/reports': 'relatorios',
+  '/agenda': 'agendaView',
+};
 
 export default function NavigationRail({
   inDrawer = false,
@@ -59,11 +72,12 @@ export default function NavigationRail({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [passwordOpen, setPasswordOpen] = useState(false);
-  // Funcionário com acesso restrito: sem Cadastros, Relatórios e Alterar Senha.
-  const { restricted } = useAccess();
-  const visibleNavItems = restricted
-    ? navItems.filter((item) => !RESTRICTED_HIDDEN_PATHS.includes(item.path))
-    : navItems;
+  // Matriz de permissões por perfil: cada rota é filtrada pela sua chave.
+  const access = useAccess();
+  const visibleNavItems = navItems.filter((item) => {
+    const key = NAV_PERMISSION_BY_PATH[item.path];
+    return key ? access[key] !== false : true;
+  });
 
   const handleLogout = () => {
     clearToken();
@@ -145,7 +159,7 @@ export default function NavigationRail({
       <Divider sx={{ borderColor: '#243447' }} />
 
       <List sx={{ px: 1 }}>
-        {!restricted && (
+        {access.changePassword && (
           <ListItem disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton
               onClick={() => {
@@ -191,7 +205,7 @@ export default function NavigationRail({
       </Typography>
 
       <ChangePasswordDialog
-        open={!restricted && passwordOpen}
+        open={!!access.changePassword && passwordOpen}
         onClose={() => setPasswordOpen(false)}
       />
     </Box>

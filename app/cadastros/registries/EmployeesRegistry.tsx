@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Box,
   Typography,
@@ -14,6 +14,8 @@ import {
   MenuItem,
   Chip,
   Switch,
+  Tab,
+  Checkbox,
   InputAdornment,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -26,18 +28,59 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useSnackbar } from 'notistack';
 import { employeeSchema } from '@/lib/validation';
 import {
   useEmployees,
   useCreateEmployee,
   useUpdateEmployee,
   useDeleteEmployee,
+  usePermissionProfile,
+  useUpdatePermissionProfile,
 } from '@/lib/queries';
+import { EMPLOYEE_PERMISSION_DEFAULTS } from '@/lib/permissions';
 import type { Employee } from '@/types';
 import ConfirmDialog from '@/app/components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
+import ResponsiveTabs from '@/app/components/ResponsiveTabs/ResponsiveTabs';
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
+
+const thSx = { fontWeight: 700, color: '#333' };
+
+/**
+ * Permissões da matriz por perfil — mesma chave da API (`/permission-profiles`)
+ * e de `useAccess`. Admin é sempre acesso total (coluna fixa).
+ */
+const PERMISSION_DEFS: { key: string; label: string; hint: string }[] = [
+  { key: 'dashboard', label: 'Dashboard', hint: 'Visão geral do sistema' },
+  { key: 'recebimento', label: 'Recebimento', hint: 'Registrar entradas de mercadoria' },
+  { key: 'movimentacoes', label: 'Movimentações', hint: 'Mover etiquetas e fazer a contagem' },
+  { key: 'historico', label: 'Histórico', hint: 'Ver movimentações e reimprimir etiquetas' },
+  {
+    key: 'porcionamentoCreate',
+    label: 'Porcionamento — criar',
+    hint: 'Gerar porcionamentos e etiquetas avulsas',
+  },
+  {
+    key: 'porcionamentoDelete',
+    label: 'Porcionamento — excluir',
+    hint: 'Excluir registros do histórico de porcionamento',
+  },
+  { key: 'estoqueView', label: 'Estoque', hint: 'Visualizar o estoque por local' },
+  { key: 'estoqueExport', label: 'Estoque — exportar', hint: 'Exportar planilhas e conferência' },
+  { key: 'estoqueDelete', label: 'Estoque — baixar', hint: 'Dar baixa/excluir etiquetas' },
+  { key: 'agendaView', label: 'Agenda', hint: 'Visualizar a agenda' },
+  { key: 'agendaEdit', label: 'Agenda — alterar', hint: 'Criar, editar e excluir itens' },
+  { key: 'cadastros', label: 'Cadastros', hint: 'Produtos, fornecedores, destinos e grupos' },
+  {
+    key: 'funcionarios',
+    label: 'Funcionários',
+    hint: 'Gerenciar a equipe (sem promover a Admin)',
+  },
+  { key: 'relatorios', label: 'Relatórios', hint: 'Acessar todas as abas de relatórios' },
+  { key: 'changePassword', label: 'Alterar senha', hint: 'Trocar a própria senha' },
+];
 
 const containedSx = {
   textTransform: 'none',
@@ -72,10 +115,45 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
  * Renderizado sem o layout: quem monta é a página que o utiliza.
  */
 export default function EmployeesRegistry() {
-  const { data: employees, isLoading } = useEmployees();
+  const { enqueueSnackbar } = useSnackbar();
+  const { data: employees, isLoading, isError } = useEmployees();
   const createEmp = useCreateEmployee();
   const updateEmp = useUpdateEmployee();
   const deleteEmp = useDeleteEmployee();
+
+  // ===== Aba "Permissões" (matriz por perfil) =====
+  const [subTab, setSubTab] = useState<'list' | 'permissions'>('list');
+  const { data: permissionProfile, isLoading: loadingProfile } = usePermissionProfile();
+  const updateProfile = useUpdatePermissionProfile();
+  const [matrix, setMatrix] = useState<Record<string, boolean> | null>(null);
+
+  // Espelho da matriz salva (ou dos padrões enquanto não há matriz).
+  const savedMatrix: Record<string, boolean> = {
+    ...EMPLOYEE_PERMISSION_DEFAULTS,
+    ...(permissionProfile?.employee ?? {}),
+  };
+  const effectiveMatrix = matrix ?? savedMatrix;
+  const matrixDirty = !!matrix && JSON.stringify(matrix) !== JSON.stringify(savedMatrix);
+
+  // Troca de aba recarrega a matriz salva (ponto de partida da edição).
+  const changeSubTab = (next: 'list' | 'permissions') => {
+    if (next === 'permissions') setMatrix(null);
+    setSubTab(next);
+  };
+
+  const togglePermission = (key: string) => {
+    setMatrix({ ...effectiveMatrix, [key]: !effectiveMatrix[key] });
+  };
+
+  const handleSavePermissions = async () => {
+    try {
+      await updateProfile.mutateAsync(effectiveMatrix);
+      setMatrix(null);
+      enqueueSnackbar('Permissões por perfil salvas!', { variant: 'success' });
+    } catch {
+      enqueueSnackbar('Erro ao salvar as permissões.', { variant: 'error' });
+    }
+  };
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
@@ -102,31 +180,46 @@ export default function EmployeesRegistry() {
   };
 
   const onSubmit = async (data: EmployeeFormValues) => {
-    if (!editing) {
-      if (!data.password) {
-        form.setError('password', { message: 'Senha é obrigatória' });
-        return;
+    try {
+      if (!editing) {
+        if (!data.password) {
+          form.setError('password', { message: 'Senha é obrigatória' });
+          return;
+        }
+        if ((data.password ?? '').length < 6) {
+          form.setError('password', { message: 'Senha deve ter pelo menos 6 caracteres' });
+          return;
+        }
+        await createEmp.mutateAsync({
+          name: data.name,
+          username: data.username,
+          password: data.password,
+          role: data.role ?? 'employee',
+        });
+        enqueueSnackbar('Funcionário cadastrado com sucesso!', { variant: 'success' });
+      } else {
+        const payload: Partial<EmployeeFormValues> = {
+          name: data.name,
+          username: data.username,
+          role: data.role ?? 'employee',
+        };
+        if (data.password) payload.password = data.password;
+        await updateEmp.mutateAsync({ id: editing._id, data: payload });
+        enqueueSnackbar('Funcionário atualizado com sucesso!', { variant: 'success' });
       }
-      if ((data.password ?? '').length < 6) {
-        form.setError('password', { message: 'Senha deve ter pelo menos 6 caracteres' });
-        return;
-      }
-      await createEmp.mutateAsync({
-        name: data.name,
-        username: data.username,
-        password: data.password,
-        role: data.role ?? 'employee',
-      });
-    } else {
-      const payload: Partial<EmployeeFormValues> = {
-        name: data.name,
-        username: data.username,
-        role: data.role ?? 'employee',
-      };
-      if (data.password) payload.password = data.password;
-      await updateEmp.mutateAsync({ id: editing._id, data: payload });
+      setDialogOpen(false);
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response
+        ?.data?.message;
+      enqueueSnackbar(
+        Array.isArray(msg)
+          ? msg.filter(Boolean).join(' — ') || 'Erro ao salvar funcionário.'
+          : typeof msg === 'string' && msg.trim()
+            ? msg
+            : 'Erro ao salvar funcionário.',
+        { variant: 'error' },
+      );
     }
-    setDialogOpen(false);
   };
 
   const toggleActive = (emp: Employee) => {
@@ -135,10 +228,39 @@ export default function EmployeesRegistry() {
 
   const handleDelete = async () => {
     if (deleteTarget) {
-      await deleteEmp.mutateAsync(deleteTarget);
+      try {
+        await deleteEmp.mutateAsync(deleteTarget);
+        enqueueSnackbar('Funcionário removido.', { variant: 'success' });
+      } catch {
+        enqueueSnackbar('Erro ao excluir funcionário.', { variant: 'error' });
+      }
       setDeleteTarget(null);
     }
   };
+
+  // Sem permissão (`funcionarios` negada) a lista nem carrega: em vez de
+  // uma tabela vazia, mostre o motivo.
+  if (isError) {
+    return (
+      <Box
+        sx={{
+          bgcolor: '#FFF3E0',
+          border: '1px solid #FFCC80',
+          borderRadius: 2,
+          p: 2.5,
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+          Acesso restrito
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#555' }}>
+          Seu perfil não tem permissão para gerenciar funcionários. Peça ao administrador para
+          liberar a permissão &quot;Funcionários&quot; na aba Cadastros → Funcionários →
+          Permissões.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box>
@@ -172,15 +294,149 @@ export default function EmployeesRegistry() {
               Funcionários
             </Typography>
             <Typography variant="body2" sx={{ color: '#666' }}>
-              Gerencie os usuários do sistema
+              Gerencie os usuários do sistema e as permissões por perfil
             </Typography>
           </Box>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
-          Novo Funcionário
-        </Button>
+        {subTab === 'list' && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
+            Novo Funcionário
+          </Button>
+        )}
       </Box>
 
+      {/* Abas do registro: equipe + matriz de permissões por perfil. */}
+      <ResponsiveTabs
+        value={subTab}
+        onChange={(_, v: 'list' | 'permissions') => changeSubTab(v)}
+        scrollButtons="auto"
+        allowScrollButtonsMobile
+        sx={{
+          bgcolor: '#f1f3f5',
+          borderRadius: 2,
+          p: 0.5,
+          mb: 2,
+          minHeight: 44,
+          width: 'fit-content',
+          maxWidth: '100%',
+          '& .MuiTabs-indicator': { display: 'none' },
+          '& .MuiTab-root': {
+            textTransform: 'none',
+            borderRadius: 1.5,
+            minHeight: 40,
+            minWidth: 120,
+            fontWeight: 600,
+            color: '#555',
+            whiteSpace: 'nowrap',
+            justifyContent: 'center',
+            '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
+          },
+        }}
+      >
+        <Tab label="Funcionários" value="list" />
+        <Tab label="Permissões" value="permissions" />
+      </ResponsiveTabs>
+
+      {subTab === 'permissions' && (
+        <Box>
+          <Box
+            sx={{
+              bgcolor: '#E8F4FD',
+              border: '1px solid #B3DDF2',
+              borderRadius: 2,
+              p: 2,
+              mb: 2,
+            }}
+          >
+            <Typography variant="body2" sx={{ color: '#333', lineHeight: 1.6 }}>
+              <Box component="span" sx={{ fontWeight: 700 }}>
+                Permissões por perfil:{' '}
+              </Box>
+              marque o que o perfil <b>Funcionário</b> pode fazer no sistema. O perfil{' '}
+              <b>Admin</b> sempre tem acesso total. As alterações valem para todos os
+              funcionários com perfil Funcionário e são aplicadas também na API.
+            </Typography>
+          </Box>
+
+          <ResponsiveTable
+            containerSx={{ border: '1px solid #e8ecf1' }}
+            headerCellSx={thSx}
+            rows={PERMISSION_DEFS}
+            rowKey={(p) => p.key}
+            emptyMessage="Nenhuma permissão"
+            actionsLabel="Ações"
+            columns={[
+              {
+                id: 'permissao',
+                header: 'Permissão',
+                primary: true,
+                cell: (p) => (
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>
+                      {p.label}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#888' }}>
+                      {p.hint}
+                    </Typography>
+                  </Box>
+                ),
+              },
+              {
+                id: 'admin',
+                header: 'Admin',
+                cell: () => (
+                  <Checkbox size="small" checked disabled sx={{ p: 0 }} />
+                ),
+              },
+              {
+                id: 'funcionario',
+                header: 'Funcionário',
+                fullWidthOnMobile: true,
+                cell: (p) => (
+                  <Checkbox
+                    size="small"
+                    checked={!!effectiveMatrix[p.key]}
+                    onChange={() => togglePermission(p.key)}
+                    inputProps={{ 'aria-label': `permissão ${p.label}` }}
+                  />
+                ),
+              },
+            ]}
+          />
+
+          <Box
+            className="no-print"
+            sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}
+          >
+            <Button
+              variant="outlined"
+              disabled={!matrixDirty || updateProfile.isPending}
+              onClick={() => setMatrix(null)}
+              sx={{
+                textTransform: 'none',
+                color: '#444',
+                borderColor: '#e0e0e0',
+                bgcolor: '#fff',
+                borderRadius: 1.5,
+                px: 2.5,
+              }}
+            >
+              Descartar alterações
+            </Button>
+            <Button
+              variant="contained"
+              disabled={!matrixDirty || updateProfile.isPending || loadingProfile}
+              onClick={handleSavePermissions}
+              sx={containedSx}
+            >
+              Salvar permissões
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      {subTab === 'list' && (
+        <>
       <Box
         sx={{
           bgcolor: '#E8F4FD',
@@ -277,6 +533,8 @@ export default function EmployeesRegistry() {
           </>
         )}
       />
+        </>
+      )}
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle

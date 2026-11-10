@@ -531,9 +531,9 @@ function ReportsContent() {
   }
 
   const [perdasGroup, setPerdasGroup] = useState('');
-  const [perdasProduct, setPerdasProduct] = useState('');
+  /** Busca única da aba Perdas: por NOME do produto OU número de lote. */
+  const [perdasSearch, setPerdasSearch] = useState('');
   const [perdasSupplier, setPerdasSupplier] = useState('');
-  const [perdasLote, setPerdasLote] = useState('');
   const [perdasFrom, setPerdasFrom] = useState('');
   const [perdasTo, setPerdasTo] = useState('');
 
@@ -546,6 +546,7 @@ function ReportsContent() {
   const [recvTo, setRecvTo] = useState('');
 
   const [movSearch, setMovSearch] = useState('');
+  const [movLote, setMovLote] = useState('');
   const [movType, setMovType] = useState('');
   const [movDest, setMovDest] = useState('');
   const [movMotivo, setMovMotivo] = useState('');
@@ -565,20 +566,7 @@ function ReportsContent() {
     ...groups.map((g) => ({ value: g, label: g })),
   ];
 
-  // Opções dos filtros de Perdas: produtos e fornecedores presentes nos dados.
-  const perdasProductMap = new Map<string, string>();
-  for (const pt of portionings) {
-    if (!perdasProductMap.has(pt.product.productId)) {
-      perdasProductMap.set(pt.product.productId, pt.product.productName);
-    }
-  }
-  const perdasProductOptions = [
-    { value: '', label: 'Todos os produtos' },
-    ...Array.from(perdasProductMap.entries())
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
-  ];
-
+  // Opções dos filtros de Perdas: fornecedores presentes nos dados.
   const perdasSupplierOptions = [
     { value: '', label: 'Todos os fornecedores' },
     ...Array.from(
@@ -586,14 +574,6 @@ function ReportsContent() {
     )
       .sort((a, b) => a.localeCompare(b, 'pt-BR'))
       .map((s) => ({ value: s, label: s })),
-  ];
-
-  // Lotes GERADOS no porcionamento (pt.lote) presentes nos dados.
-  const perdasLoteOptions = [
-    { value: '', label: 'Todos os lotes' },
-    ...Array.from(new Set(portionings.map((pt) => (pt.lote ?? '').trim()).filter(Boolean)))
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-      .map((l) => ({ value: l, label: l })),
   ];
 
   const movDestOptions = [
@@ -634,14 +614,29 @@ function ReportsContent() {
   const isPurchaseProduct = (p: Product) => p.category !== 'Porcionado';
   const isProductionProduct = (p: Product) => p.category === 'Porcionado' || !p.category;
 
+  // Busca da aba Perdas por produto OU lote (gerado no porcionamento ou de
+  // origem da matéria-prima) — um único campo de pesquisa para as duas.
+  const perdasQuery = normalizeText(perdasSearch.trim());
+  const matchesPerdasSearch = (pt: Portioning): boolean => {
+    if (!perdasQuery) return true;
+    const names = [
+      perdasProductName(pt),
+      pt.product.productName,
+      ...(pt.outputs ?? []).map((o) => o.productName),
+    ];
+    if (names.some((n) => normalizeText(n).includes(perdasQuery))) return true;
+    if (normalizeText(pt.lote ?? '').includes(perdasQuery)) return true;
+    if (normalizeText(pt.rawLote ?? '').includes(perdasQuery)) return true;
+    return false;
+  };
+
   const filteredPerdas = portionings.filter((pt) => {
     if (perdasGroup) {
       const group = productMap.get(pt.product.productId)?.group ?? '';
       if (group !== perdasGroup) return false;
     }
-    if (perdasProduct && pt.product.productId !== perdasProduct) return false;
+    if (!matchesPerdasSearch(pt)) return false;
     if (perdasSupplier && (pt.supplier ?? '').trim() !== perdasSupplier) return false;
-    if (perdasLote && (pt.lote ?? '').trim() !== perdasLote) return false;
     if (perdasFrom && perdasTo) {
       const d = pt.date.slice(0, 10);
       if (d < perdasFrom || d > perdasTo) return false;
@@ -660,9 +655,21 @@ function ReportsContent() {
   const generalLossPct = rawSum > 0 ? (lossSum / rawSum) * 100 : 0;
 
   // Agrupa pela MATÉRIA-PRIMA (rawProduct): é dela que vêm as perdas na limpeza.
+  // Só entra produto classificado como "MATÉRIA PRIMA" (bruto): quando o
+  // registro antigo aponta para o produto PORCIONADO (sem snapshot de
+  // origem), o agrupamento ficava conflitante — iscas/tiras/medalhões de
+  // matérias-primas diferentes se misturavam com rendimentos distintos.
+  const isRawCategoryProduct = (productId: string): boolean => {
+    const p = productMap.get(productId);
+    // Sem cadastro (registro antigo): o porcionamento só existe para bruto.
+    if (!p) return true;
+    return isPurchaseProduct(p); // 'Materia Prima' (ou sem categoria) → true
+  };
+
   const productLossMap = new Map<string, LossAgg & { name: string }>();
   for (const pt of filteredPerdas) {
     const key = perdasProductKey(pt);
+    if (!isRawCategoryProduct(key)) continue;
     const curP = productLossMap.get(key) ?? {
       name: perdasProductName(pt),
       loss: 0,
@@ -704,6 +711,7 @@ function ReportsContent() {
         'Perda (g)',
         '% Perda',
         'Ganho (g)',
+        'Lote',
         'Lote Origem',
       ],
       perdasHistory.map((p) => [
@@ -715,6 +723,7 @@ function ReportsContent() {
         p.lossGrams,
         (p.lossPercentage ?? 0).toFixed(1),
         p.gainGrams ?? 0,
+        p.lote || '',
         perdasRawLote(p),
       ]),
     );
@@ -766,7 +775,10 @@ function ReportsContent() {
     .filter((i) => i.type === 'raw')
     .filter((i) => {
       const q = recvSearch.trim().toLowerCase();
-      if (q && !i.product.productName.toLowerCase().includes(q)) return false;
+      // Busca por produto OU número de lote da etiqueta.
+      if (q && !i.product.productName.toLowerCase().includes(q) && !(i.lote ?? '').toLowerCase().includes(q)) {
+        return false;
+      }
       const d = (i.manipulationDate || i.createdAt).slice(0, 10);
       if (recvFrom && d < recvFrom) return false;
       if (recvTo && d > recvTo) return false;
@@ -795,12 +807,23 @@ function ReportsContent() {
     );
   };
 
+  // Filtro de lote da aba Movimentações: casa o campo `lote` do movimento
+  // (novos registros) ou o "Lote X" no motivo (registros antigos).
+  const movLoteQuery = normalizeText(movLote.trim());
+  const matchesMovLote = (m: StockMovement): boolean => {
+    if (!movLoteQuery) return true;
+    if (normalizeText(m.lote ?? '').includes(movLoteQuery)) return true;
+    const escaped = movLoteQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`lote\\s*${escaped}`, 'i').test(stripBatchCodes(m.reason ?? ''));
+  };
+
   const movRows = movements
     .filter((m) => {
       const q = movSearch.trim().toLowerCase();
       if (q && !m.product.productName.toLowerCase().includes(q)) {
         return false;
       }
+      if (!matchesMovLote(m)) return false;
       if (movType && m.movementType !== movType) return false;
       if (movDest && movementDestination(m, registeredDestinations) !== movDest) return false;
       if (
@@ -1040,23 +1063,16 @@ function ReportsContent() {
                   options={groupOptions}
                   minWidth={190}
                 />
-                <SelectFilter
-                  value={perdasProduct}
-                  onChange={setPerdasProduct}
-                  options={perdasProductOptions}
-                  minWidth={210}
+                <SearchField
+                  value={perdasSearch}
+                  onChange={setPerdasSearch}
+                  placeholder="Buscar por produto ou lote..."
                 />
                 <SelectFilter
                   value={perdasSupplier}
                   onChange={setPerdasSupplier}
                   options={perdasSupplierOptions}
                   minWidth={210}
-                />
-                <SelectFilter
-                  value={perdasLote}
-                  onChange={setPerdasLote}
-                  options={perdasLoteOptions}
-                  minWidth={180}
                 />
                 <DateRangeField
                   from={perdasFrom}
@@ -1315,7 +1331,7 @@ function ReportsContent() {
                 <SearchField
                   value={recvSearch}
                   onChange={setRecvSearch}
-                  placeholder="Buscar por produto..."
+                  placeholder="Buscar por produto ou lote..."
                 />
                 <DateRangeField from={recvFrom} to={recvTo} onFrom={setRecvFrom} onTo={setRecvTo} />
                 <Box sx={{ ml: 'auto' }}>
@@ -1375,6 +1391,11 @@ function ReportsContent() {
                   value={movSearch}
                   onChange={setMovSearch}
                   placeholder="Buscar por produto..."
+                />
+                <SearchField
+                  value={movLote}
+                  onChange={setMovLote}
+                  placeholder="Buscar por lote..."
                 />
                 <SearchField
                   value={movMotivo}

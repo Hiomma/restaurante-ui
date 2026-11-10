@@ -18,7 +18,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // Só 401 encerra a sessão (token expirado/ausente). Um 403 é falta de
+    // PERMISSÃO (matriz por perfil) — derrubar a sessão ali apagaria o
+    // trabalho do usuário toda vez que uma ação fosse negada.
+    if (error.response?.status === 401) {
       if (typeof window !== 'undefined') {
         clearToken();
         window.location.href = '/login';

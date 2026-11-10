@@ -188,7 +188,7 @@ export default function AgendaPage() {
   const updateItem = useUpdateAgendaItem();
   const deleteItem = useDeleteAgendaItem();
   // Funcionário com acesso restrito: a Agenda é somente leitura.
-  const { restricted } = useAccess();
+  const { agendaEdit } = useAccess();
 
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -255,7 +255,7 @@ export default function AgendaPage() {
       cell: (item) => (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <StatusChip item={item} />
-          {!restricted && (
+          {agendaEdit && (
             <StatusSelect
               item={item}
               onChange={(status) => handleStatusChange(item, status)}
@@ -359,7 +359,7 @@ export default function AgendaPage() {
             </Typography>
           </Box>
         </Box>
-        {!restricted && (
+        {agendaEdit && (
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate} sx={containedSx}>
             Novo Item
           </Button>
@@ -438,7 +438,7 @@ export default function AgendaPage() {
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
                   <StatusChip item={item} />
-                  {!restricted && (
+                  {agendaEdit && (
                     <StatusSelect
                       item={item}
                       onChange={(status) => handleStatusChange(item, status)}
@@ -475,7 +475,7 @@ export default function AgendaPage() {
           );
         }}
         actions={
-          restricted
+          !agendaEdit
             ? undefined
             : (item) => (
                 <>

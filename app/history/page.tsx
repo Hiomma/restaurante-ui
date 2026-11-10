@@ -15,6 +15,7 @@ import {
   Button,
   InputAdornment,
   Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import SearchIcon from '@mui/icons-material/Search';
@@ -23,9 +24,10 @@ import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import DeleteIcon from '@mui/icons-material/Delete';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import DownloadIcon from '@mui/icons-material/Download';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import type { StockMovement, StockItem } from '@/types';
+import type { StockMovement, StockItem, Portioning } from '@/types';
 import {
   useStockMovements,
   useStockItems,
@@ -33,6 +35,7 @@ import {
   useDeleteStockItem,
   useMe,
   useProducts,
+  useMovementDestinations,
 } from '@/lib/queries';
 import {
   formatDate,
@@ -45,10 +48,61 @@ import {
 import { printEtiquetasNativas } from '@/lib/printService';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
 import BrDateField from '../components/BrDateField/BrDateField';
 import LabelPreview, { type LabelData } from '../components/LabelPreview/LabelPreview';
 
 const thSx = { fontWeight: 700, color: '#333' };
+
+/** Destinos fixos (mesmos valores do cadastro). */
+const FIXED_MOVE_DESTINATIONS = ['Salão', 'Bar', 'Cozinha'];
+const FIXED_WRITEOFF_DESTINATIONS = ['Perda', 'Não encontrado'];
+
+/** Texto normalizado para comparar destinos/motivos sem acento/caixa. */
+const norm = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
+ * Colunas OPCIONAIS do Relatório de Produção e Baixa (marcadas na tela):
+ * as colunas FIXAS são Data, Produto, Fornecedor, Lote, Lote Origem,
+ * Peso Bruto, Peso Líquido, Peso em Estoque e Porções em Estoque.
+ * Venda = saídas para Salão/Bar/Cozinha; Perda = saídas com destino de baixa.
+ */
+const OPTIONAL_REL_COLUMNS: { key: string; label: string }[] = [
+  { key: 'produzidas', label: 'Porções Produzidas' },
+  { key: 'vendaPeso', label: 'Peso Venda (g)' },
+  { key: 'vendaPct', label: '% Venda' },
+  { key: 'vendaQtd', label: 'Porções Vendidas' },
+  { key: 'perdaPeso', label: 'Peso Perdido (g)' },
+  { key: 'perdaPct', label: '% Perda' },
+  { key: 'perdaQtd', label: 'Porções Perdidas' },
+];
+
+/** Linha do Relatório de Produção e Baixa: um porcionamento (lote) por linha. */
+interface ProductionReportRow {
+  key: string;
+  data: string;
+  produto: string;
+  fornecedor: string;
+  lote: string;
+  loteOrigem: string;
+  bruto: number;
+  limpo: number;
+  produzidas: number;
+  pesoEstoque: number;
+  qtdEstoque: number;
+  vendaPeso: number;
+  vendaQtd: number;
+  pctVenda: number;
+  perdaPeso: number;
+  perdaQtd: number;
+  pctPerda: number;
+}
 
 /** Botões de exportação (Excel/PDF) do relatório — mesmo tom neutro dos Relatórios. */
 const exportBtnSx = {
@@ -171,8 +225,12 @@ export default function HistoryPage() {
   const { data: movements, isLoading } = useStockMovements();
   const { data: me } = useMe();
   const { data: products } = useProducts();
+  const { data: customDestinations = [] } = useMovementDestinations();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  /** Filtro de PERÍODO da lista de movimentações (aba Histórico). */
+  const [histFrom, setHistFrom] = useState('');
+  const [histTo, setHistTo] = useState('');
   const [detail, setDetail] = useState<StockMovement | null>(null);
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const deleteStockItem = useDeleteStockItem();
@@ -188,6 +246,13 @@ export default function HistoryPage() {
   const [relSupplier, setRelSupplier] = useState('');
   const [relFrom, setRelFrom] = useState('');
   const [relTo, setRelTo] = useState('');
+  /** Colunas opcionais marcadas do relatório (as fixas sempre aparecem). */
+  const [relCols, setRelCols] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(OPTIONAL_REL_COLUMNS.map((c) => [c.key, true])),
+  );
+
+  const toggleRelCol = (key: string) =>
+    setRelCols((prev) => ({ ...prev, [key]: !prev[key] }));
 
   /** Chip de tipo do diálogo: mesmo rótulo/paleta da coluna "Tipo". */
   const detailType = detail ? movementTypeView(detail) : null;
@@ -288,11 +353,16 @@ export default function HistoryPage() {
 
   const filtered = movements?.filter((m) => {
     if (typeFilter && m.movementType !== typeFilter) return false;
+    // Período (aba Histórico): casa a data da movimentação (YYYY-MM-DD).
+    const mDate = m.date.slice(0, 10);
+    if (histFrom && mDate < histFrom) return false;
+    if (histTo && mDate > histTo) return false;
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
       m.product.productName.toLowerCase().includes(q) ||
       (m.reason ?? '').toLowerCase().includes(q) ||
+      (m.lote ?? '').toLowerCase().includes(q) ||
       formatDate(m.date).includes(q) ||
       m.date.includes(q)
     );
@@ -350,72 +420,324 @@ export default function HistoryPage() {
     return true;
   });
 
-  /**
-   * "Produzido": soma das PORÇÕES por produto final, agrupado por produto.
-   * Quando o porcionamento tem `outputs` (vários produtos gerados), soma o
-   * `portionsCount` de cada saída; sem outputs, soma o `portionsCount` do
-   * próprio porcionamento.
-   */
-  const producedMap = new Map<string, { name: string; produced: number }>();
-  const addProduced = (productId: string, name: string, qty: number) => {
-    const cur = producedMap.get(productId) ?? { name, produced: 0 };
-    cur.produced += qty;
-    producedMap.set(productId, cur);
+  // ===== Linhas do Relatório de Produção e Baixas =====
+  // Uma linha por PORCIONAMENTO (lote): colunas fixas de identificação e
+  // produção + colunas opcionais de venda/perda derivadas das movimentações
+  // (venda = saídas para Salão/Bar/Cozinha; perda = saídas com destino de
+  // baixa), sempre no período filtrado.
+
+  /** Destinos de venda (Salão/Bar/Cozinha + cadastrados tipo "mover"). */
+  const moveDestSet = new Set(
+    [
+      ...FIXED_MOVE_DESTINATIONS,
+      ...customDestinations
+        .filter((d) => d.active && (d.type ?? 'move') === 'move')
+        .map((d) => d.name),
+    ].map(norm),
+  );
+
+  /** Destinos de baixa (Perda/Não encontrado + cadastrados tipo "baixar"). */
+  const writeoffDestSet = new Set(
+    [
+      ...FIXED_WRITEOFF_DESTINATIONS,
+      ...customDestinations
+        .filter((d) => d.active && d.type === 'writeoff')
+        .map((d) => d.name),
+    ].map(norm),
+  );
+
+  /** Destino do movimento (campo próprio ou derivado do motivo legado). */
+  const movementDest = (m: StockMovement): string => {
+    const dest = (m.destination ?? '').trim();
+    if (dest) return dest;
+    const match = stripBatchCodes(m.reason ?? '').match(/^\s*\S+\s*[—–-]\s*(.+)$/);
+    return match ? match[1].trim() : '';
   };
-  for (const pt of filteredPortionings) {
-    if (pt.outputs && pt.outputs.length > 0) {
-      for (const o of pt.outputs) addProduced(o.productId, o.productName, o.portionsCount ?? 0);
-    } else {
-      addProduced(pt.product.productId, pt.product.productName, pt.portionsCount ?? 0);
+
+  const productIdsOf = (pt: Portioning): Set<string> =>
+    new Set(
+      pt.outputs && pt.outputs.length > 0
+        ? pt.outputs.map((o) => o.productId)
+        : [pt.product.productId],
+    );
+
+  /**
+   * Itens PORCIONADOS gerados por um porcionamento: `batchId` (registros
+   * novos), senão o lote + produtos gerados, senão a data do porcionamento
+   * (registros antigos, sem vínculo).
+   */
+  const itemsOfBatch = (pt: Portioning): StockItem[] => {
+    const portioned = allStockItems.filter((i) => i.type === 'portioned');
+    if (pt.batchId) return portioned.filter((i) => i.batchId === pt.batchId);
+    const productIds = productIdsOf(pt);
+    if (pt.lote) {
+      return portioned.filter(
+        (i) => i.lote === pt.lote && productIds.has(i.product.productId),
+      );
     }
+    const d = pt.date.slice(0, 10);
+    return portioned.filter(
+      (i) =>
+        productIds.has(i.product.productId) &&
+        (i.manipulationDate || '').slice(0, 10) === d,
+    );
+  };
+
+  const movementInRange = (m: StockMovement): boolean => {
+    const d = m.date.slice(0, 10);
+    if (relFrom && d < relFrom) return false;
+    if (relTo && d > relTo) return false;
+    return true;
+  };
+
+  /** Porcionamento dono de uma movimentação (por lote; senão o mais recente). */
+  const batchOfMovement = (m: StockMovement): Portioning | null => {
+    const candidates = filteredPortionings.filter((pt) =>
+      productIdsOf(pt).has(m.product.productId),
+    );
+    if (candidates.length === 0) return null;
+    if (m.lote) {
+      const byLote = candidates.find((pt) => (pt.lote ?? '') === m.lote);
+      if (byLote) return byLote;
+    }
+    // Fallback p/ movimentações antigas sem lote: lote mais recente do
+    // produto anterior à movimentação.
+    return (
+      candidates
+        .filter((pt) => pt.date.slice(0, 10) <= m.date.slice(0, 10))
+        .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null
+    );
+  };
+
+  const extrasByBatch = new Map<
+    string,
+    { vendaPeso: number; vendaQtd: number; perdaPeso: number; perdaQtd: number }
+  >();
+  for (const m of movements ?? []) {
+    if (m.itemType !== 'portioned') continue;
+    if (m.movementType !== 'move' && m.movementType !== 'exit') continue;
+    if (!movementInRange(m)) continue;
+    const dest = norm(movementDest(m));
+    const isVenda = m.movementType === 'move' && moveDestSet.has(dest);
+    const isPerda = m.movementType === 'exit' && writeoffDestSet.has(dest);
+    if (!isVenda && !isPerda) continue;
+    const pt = batchOfMovement(m);
+    if (!pt) continue;
+    const cur = extrasByBatch.get(pt._id) ?? {
+      vendaPeso: 0,
+      vendaQtd: 0,
+      perdaPeso: 0,
+      perdaQtd: 0,
+    };
+    if (isVenda) {
+      cur.vendaPeso += m.weightGrams ?? 0;
+      cur.vendaQtd += m.quantity;
+    } else {
+      cur.perdaPeso += m.weightGrams ?? 0;
+      cur.perdaQtd += m.quantity;
+    }
+    extrasByBatch.set(pt._id, cur);
   }
 
-  // Estoque e baixas: apenas itens PORCIONADOS do produto resultante dos
-  // filtros acima (1 linha por produto).
-  const productionRows = Array.from(producedMap.entries())
-    .map(([productId, v]) => {
-      const items = allStockItems.filter(
-        (i) => i.type === 'portioned' && i.product.productId === productId,
-      );
-      const inStock = items.filter((i) => i.status === 'in_stock').length;
-      const discarded = items.filter((i) => i.status === 'discarded').length;
-      const group = productMap.get(productId)?.group ?? items[0]?.product.productGroup ?? '—';
+  const productionReportRows: ProductionReportRow[] = filteredPortionings
+    .map((pt) => {
+      const batchItems = itemsOfBatch(pt);
+      const inStock = batchItems.filter((i) => i.status === 'in_stock');
+      const pesoEstoque = inStock.reduce((s, i) => s + i.weightGrams, 0);
+      const extras = extrasByBatch.get(pt._id) ?? {
+        vendaPeso: 0,
+        vendaQtd: 0,
+        perdaPeso: 0,
+        perdaQtd: 0,
+      };
+      const base = pt.cleanWeightGrams > 0 ? pt.cleanWeightGrams : 0;
       return {
-        productId,
-        name: v.name,
-        group,
-        produced: v.produced,
-        inStock,
-        discarded,
-        // % de baixa em relação ao total de itens produzidos do produto.
-        pct: v.produced > 0 ? (discarded / v.produced) * 100 : 0,
+        key: pt._id,
+        data: pt.date,
+        produto:
+          pt.outputs && pt.outputs.length > 0
+            ? pt.outputs.map((o) => o.productName).join(', ')
+            : pt.product.productName,
+        fornecedor: pt.supplier || '—',
+        lote: pt.lote || '—',
+        loteOrigem: pt.rawLote || '—',
+        bruto: pt.rawWeightGrams,
+        limpo: pt.cleanWeightGrams,
+        produzidas: pt.portionsCount ?? 0,
+        pesoEstoque,
+        qtdEstoque: inStock.length,
+        vendaPeso: extras.vendaPeso,
+        vendaQtd: extras.vendaQtd,
+        pctVenda: base > 0 ? (extras.vendaPeso / base) * 100 : 0,
+        perdaPeso: extras.perdaPeso,
+        perdaQtd: extras.perdaQtd,
+        pctPerda: base > 0 ? (extras.perdaPeso / base) * 100 : 0,
       };
     })
-    // O filtro de grupo também vale para as linhas montadas pelos outputs.
-    .filter((r) => !relGroup || r.group === relGroup)
-    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    .sort((a, b) => b.data.localeCompare(a.data));
 
-  // Totais gerais (rodapé): % de baixas sobre o TOTAL de itens produzidos.
-  const totalProduced = productionRows.reduce((s, r) => s + r.produced, 0);
-  const totalInStock = productionRows.reduce((s, r) => s + r.inStock, 0);
-  const totalDiscarded = productionRows.reduce((s, r) => s + r.discarded, 0);
-  const totalPct = totalProduced > 0 ? (totalDiscarded / totalProduced) * 100 : 0;
+  // Totais gerais (rodapé).
+  const totalPesoEstoque = productionReportRows.reduce((s, r) => s + r.pesoEstoque, 0);
+  const totalQtdEstoque = productionReportRows.reduce((s, r) => s + r.qtdEstoque, 0);
+  const totalVendaPeso = productionReportRows.reduce((s, r) => s + r.vendaPeso, 0);
+  const totalVendaQtd = productionReportRows.reduce((s, r) => s + r.vendaQtd, 0);
+  const totalPerdaPeso = productionReportRows.reduce((s, r) => s + r.perdaPeso, 0);
+  const totalPerdaQtd = productionReportRows.reduce((s, r) => s + r.perdaQtd, 0);
 
   /** Exporta o relatório filtrado para Excel (CSV separado por ";"). */
   const exportProducaoBaixas = () => {
-    downloadCsv(
-      'relatorio-producao-e-baixas',
-      ['Produto', 'Grupo', 'Produzido', 'Em estoque', 'Baixas', '% Baixa'],
-      productionRows.map((r) => [
-        r.name,
-        r.group,
-        r.produced,
-        r.inStock,
-        r.discarded,
-        r.pct.toFixed(1),
-      ]),
-    );
+    const headers = [
+      'Data',
+      'Produto',
+      'Fornecedor',
+      'Lote',
+      'Lote Origem',
+      'Peso Bruto (g)',
+      'Peso Líquido (g)',
+      'Peso em Estoque (g)',
+      'Porções em Estoque',
+    ];
+    for (const col of OPTIONAL_REL_COLUMNS) {
+      if (relCols[col.key]) headers.push(col.label);
+    }
+    const rowsOut = productionReportRows.map((r) => {
+      const cells: (string | number)[] = [
+        formatDate(r.data),
+        r.produto,
+        r.fornecedor,
+        r.lote === '—' ? '' : r.lote,
+        r.loteOrigem === '—' ? '' : r.loteOrigem,
+        r.bruto,
+        r.limpo,
+        r.pesoEstoque,
+        r.qtdEstoque,
+      ];
+      if (relCols.produzidas) cells.push(r.produzidas);
+      if (relCols.vendaPeso) cells.push(r.vendaPeso);
+      if (relCols.vendaPct) cells.push(r.pctVenda.toFixed(1));
+      if (relCols.vendaQtd) cells.push(r.vendaQtd);
+      if (relCols.perdaPeso) cells.push(r.perdaPeso);
+      if (relCols.perdaPct) cells.push(r.pctPerda.toFixed(1));
+      if (relCols.perdaQtd) cells.push(r.perdaQtd);
+      return cells;
+    });
+    downloadCsv('relatorio-producao-e-baixas', headers, rowsOut);
   };
+
+  /** Colunas da tabela: fixas + opcionais marcadas. */
+  const relTableColumns: ResponsiveTableColumn<ProductionReportRow>[] = [
+    { id: 'data', header: 'Data', cell: (r) => formatDate(r.data) },
+    {
+      id: 'produto',
+      header: 'Produto',
+      primary: true,
+      cell: (r) => (
+        <Typography variant="body2" fontWeight={500}>
+          {r.produto}
+        </Typography>
+      ),
+    },
+    { id: 'fornecedor', header: 'Fornecedor', cell: (r) => r.fornecedor },
+    {
+      id: 'lote',
+      header: 'Lote',
+      cell: (r) => (
+        <Typography
+          variant="body2"
+          sx={{ fontFamily: 'monospace', fontSize: 13, color: '#1565C0' }}
+        >
+          {r.lote}
+        </Typography>
+      ),
+    },
+    {
+      id: 'loteOrigem',
+      header: 'Lote Origem',
+      cell: (r) => (
+        <Typography
+          variant="body2"
+          sx={{ fontFamily: 'monospace', fontSize: 13, color: '#888' }}
+        >
+          {r.loteOrigem}
+        </Typography>
+      ),
+    },
+    { id: 'bruto', header: 'Peso Bruto', cell: (r) => `${r.bruto}g` },
+    { id: 'limpo', header: 'Peso Líquido', cell: (r) => `${r.limpo}g` },
+    { id: 'pesoEstoque', header: 'Peso em Estoque', cell: (r) => `${r.pesoEstoque}g` },
+    {
+      id: 'qtdEstoque',
+      header: 'Porções em Estoque',
+      align: 'right',
+      cell: (r) => r.qtdEstoque,
+    },
+    ...(relCols.produzidas
+      ? [
+          {
+            id: 'produzidas',
+            header: 'Porções Produzidas',
+            align: 'right' as const,
+            cell: (r: ProductionReportRow) => r.produzidas,
+          },
+        ]
+      : []),
+    ...(relCols.vendaPeso
+      ? [
+          {
+            id: 'vendaPeso',
+            header: 'Peso Venda',
+            cell: (r: ProductionReportRow) => `${r.vendaPeso}g`,
+          },
+        ]
+      : []),
+    ...(relCols.vendaPct
+      ? [
+          {
+            id: 'vendaPct',
+            header: '% Venda',
+            cell: (r: ProductionReportRow) => formatPercent(r.pctVenda),
+          },
+        ]
+      : []),
+    ...(relCols.vendaQtd
+      ? [
+          {
+            id: 'vendaQtd',
+            header: 'Porções Vendidas',
+            align: 'right' as const,
+            cell: (r: ProductionReportRow) => r.vendaQtd,
+          },
+        ]
+      : []),
+    ...(relCols.perdaPeso
+      ? [
+          {
+            id: 'perdaPeso',
+            header: 'Peso Perdido',
+            cell: (r: ProductionReportRow) => `${r.perdaPeso}g`,
+          },
+        ]
+      : []),
+    ...(relCols.perdaPct
+      ? [
+          {
+            id: 'perdaPct',
+            header: '% Perda',
+            cell: (r: ProductionReportRow) => formatPercent(r.pctPerda),
+          },
+        ]
+      : []),
+    ...(relCols.perdaQtd
+      ? [
+          {
+            id: 'perdaQtd',
+            header: 'Porções Perdidas',
+            align: 'right' as const,
+            cell: (r: ProductionReportRow) => r.perdaQtd,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <LoggedLayout>
@@ -472,6 +794,15 @@ export default function HistoryPage() {
           <MenuItem value="exit">Saída</MenuItem>
           <MenuItem value="move">Movimentação</MenuItem>
         </TextField>
+        {/* Filtro de PERÍODO da lista (aba Histórico). */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <CalendarTodayIcon sx={{ color: '#1976D2', fontSize: 18, flexShrink: 0 }} />
+          <BrDateField label="De" value={histFrom} onChange={setHistFrom} fullWidth={false} />
+          <Typography variant="body2" sx={{ color: '#666' }}>
+            até
+          </Typography>
+          <BrDateField label="Até" value={histTo} onChange={setHistTo} fullWidth={false} />
+        </Box>
       </Box>
 
       <ResponsiveTable
@@ -587,8 +918,8 @@ export default function HistoryPage() {
               Relatório de Produção e Baixas
             </Typography>
             <Typography variant="body2" sx={{ color: '#666' }}>
-              Itens porcionados, quantidade ainda em estoque e baixas com o percentual
-              correspondente sobre o total produzido
+              Um registro por porcionamento (lote): identificação, pesos, estoque atual e —
+              nas colunas opcionais — vendas e perdas registradas no período
             </Typography>
           </Box>
           <Box className="no-print" sx={{ display: 'flex', gap: 1 }}>
@@ -691,57 +1022,56 @@ export default function HistoryPage() {
           </Box>
         </Box>
 
+        {/* Colunas opcionais: as fixas (Data, Produto, Fornecedor, Lote,
+            Lote Origem, Peso Bruto, Peso Líquido, Peso em Estoque e
+            Porções em Estoque) sempre aparecem. */}
+        <Box
+          className="no-print"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 0.5,
+            mb: 1.5,
+          }}
+        >
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mr: 1 }}>
+            Colunas opcionais:
+          </Typography>
+          {OPTIONAL_REL_COLUMNS.map((c) => (
+            <FormControlLabel
+              key={c.key}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={!!relCols[c.key]}
+                  onChange={() => toggleRelCol(c.key)}
+                />
+              }
+              label={<Typography variant="body2">{c.label}</Typography>}
+              sx={{ mr: 0.5 }}
+            />
+          ))}
+        </Box>
+
         <ResponsiveTable
           loading={loadingPortionings || loadingStockItems}
-          rows={productionRows}
-          rowKey={(r) => r.productId}
-          emptyMessage="Nenhum produto porcionado para os filtros selecionados"
+          rows={productionReportRows}
+          rowKey={(r) => r.key}
+          emptyMessage="Nenhum porcionamento para os filtros selecionados"
           headerCellSx={thSx}
           footerNote={
-            productionRows.length > 0 ? (
+            productionReportRows.length > 0 ? (
               <Typography variant="body2" fontWeight={700}>
-                Total geral: {totalProduced} produzidos · {totalInStock} em estoque ·{' '}
-                {totalDiscarded} baixas ({formatPercent(totalPct)} do total produzido)
+                Total: {totalQtdEstoque} porção(ões) em estoque ({totalPesoEstoque}g)
+                {relCols.vendaQtd &&
+                  ` · Venda: ${totalVendaQtd} porção(ões) (${totalVendaPeso}g)`}
+                {relCols.perdaQtd &&
+                  ` · Perdido: ${totalPerdaQtd} porção(ões) (${totalPerdaPeso}g)`}
               </Typography>
             ) : undefined
           }
-          columns={[
-            {
-              id: 'produto',
-              header: 'Produto',
-              primary: true,
-              cell: (r) => (
-                <Typography variant="body2" fontWeight={500}>
-                  {r.name}
-                </Typography>
-              ),
-            },
-            { id: 'grupo', header: 'Grupo', cell: (r) => r.group },
-            {
-              id: 'produzido',
-              header: 'Produzido',
-              align: 'right',
-              cell: (r) => r.produced,
-            },
-            {
-              id: 'estoque',
-              header: 'Em estoque',
-              align: 'right',
-              cell: (r) => r.inStock,
-            },
-            {
-              id: 'baixas',
-              header: 'Baixas',
-              align: 'right',
-              cell: (r) => r.discarded,
-            },
-            {
-              id: 'pct-baixa',
-              header: '% Baixa',
-              align: 'right',
-              cell: (r) => formatPercent(r.pct),
-            },
-          ]}
+          columns={relTableColumns}
         />
       </Box>
 

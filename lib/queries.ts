@@ -135,6 +135,32 @@ export function useDeleteEmployee() {
   });
 }
 
+// Permission profiles (matriz de permissões por perfil — aba "Permissões")
+export function usePermissionProfile() {
+  return useQuery({
+    queryKey: ['permission-profile'],
+    queryFn: () =>
+      api
+        .get('/permission-profiles')
+        .then((res) => res.data as { employee: Record<string, boolean> }),
+  });
+}
+
+export function useUpdatePermissionProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (employee: Record<string, boolean>) =>
+      api
+        .put('/permission-profiles', { employee })
+        .then((res) => res.data as { employee: Record<string, boolean> }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['permission-profile'], data);
+      // A matriz também muda o que a interface exibe (navegação/botões).
+      queryClient.invalidateQueries({ queryKey: ['permission-profile'] });
+    },
+  });
+}
+
 // Movement Destinations
 export function useMovementDestinations() {
   return useQuery({

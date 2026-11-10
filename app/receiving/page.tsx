@@ -250,7 +250,12 @@ export default function ReceivingPage() {
 
       const byProduct = new Map<
         string,
-        { productName: string; quantity: number; weightGrams: number }
+        {
+          productName: string;
+          quantity: number;
+          weightGrams: number;
+          lotes: Set<string>;
+        }
       >();
       for (const item of pending) {
         const key = item.payload.productId;
@@ -258,9 +263,11 @@ export default function ReceivingPage() {
           productName: item.payload.productName,
           quantity: 0,
           weightGrams: 0,
+          lotes: new Set<string>(),
         };
         agg.quantity += 1;
         agg.weightGrams += item.payload.weightGrams;
+        if (item.payload.lote) agg.lotes.add(String(item.payload.lote));
         byProduct.set(key, agg);
       }
       for (const [productId, agg] of byProduct) {
@@ -271,6 +278,9 @@ export default function ReceivingPage() {
           quantity: agg.quantity,
           weightGrams: agg.weightGrams,
           itemType: 'raw',
+          // Com um único lote no produto, indexa a movimentação por ele
+          // (filtro de busca por lote); com lotes mistos, fica sem lote.
+          lote: agg.lotes.size === 1 ? Array.from(agg.lotes)[0] : undefined,
           reason: `Recebimento — NF ${numeroNF || 'S/N'} — ${batchId}`,
           date: recebimentoDate,
         });

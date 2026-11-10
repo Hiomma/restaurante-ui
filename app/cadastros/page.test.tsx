@@ -30,6 +30,10 @@ vi.mock('@/lib/queries', () => {
       data: { _id: 'u1', name: 'Dono Teste', username: 'dono', isEmployee: false },
       isLoading: false,
     }),
+    // Matriz de permissões por perfil (useAccess): sem dados — valem os
+    // padrões históricos, iguais aos do dono.
+    usePermissionProfile: () => ({ data: undefined, isLoading: false }),
+    useUpdatePermissionProfile: mutation,
     useProducts: () => queryResult,
     useCreateProduct: mutation,
     useUpdateProduct: mutation,
@@ -40,6 +44,7 @@ vi.mock('@/lib/queries', () => {
     useDeleteEmployee: mutation,
     useMovementDestinations: () => queryResult,
     useCreateMovementDestination: mutation,
+    useUpdateMovementDestination: mutation,
     useDeleteMovementDestination: mutation,
     useSuppliers: () => queryResult,
     useCreateSupplier: mutation,

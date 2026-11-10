@@ -20,12 +20,26 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import CloseIcon from '@mui/icons-material/Close';
+import { useSnackbar } from 'notistack';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { productSchema } from '@/lib/validation';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useGroups } from '@/lib/queries';
 import ConfirmDialog from '@/app/components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
+
+/**
+ * Mensagem de erro vinda da API (Nest devolve string ou array `message`).
+ * Sem ela, o usuário só vê o fallback — o motivo real do save falhar
+ * (validação, 403 etc.) ficava invisível.
+ */
+const apiErrorMessage = (err: unknown, fallback: string): string => {
+  const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data
+    ?.message;
+  if (Array.isArray(msg)) return msg.filter(Boolean).join(' — ') || fallback;
+  if (typeof msg === 'string' && msg.trim()) return msg;
+  return fallback;
+};
 
 const groups = ['Carnes', 'Aves', 'Peixes', 'Frios', 'Laticinios', 'Hortifruti', 'Graos', 'Bebidas', 'Temperos', 'Massas', 'Outros'];
 const storageMethods = ['Refrigerado', 'Congelado', 'Temperatura Ambiente', 'Camara Fria'];
@@ -79,6 +93,7 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
  * Renderizado sem o layout: quem monta é a página que o utiliza.
  */
 export default function ProductsRegistry() {
+  const { enqueueSnackbar } = useSnackbar();
   const [search, setSearch] = useState('');
   const { data: products, isLoading } = useProducts();
   const { data: groups } = useGroups();
@@ -174,20 +189,37 @@ export default function ProductsRegistry() {
     const payload: any = {
       ...data,
       group: selectedGroup ? selectedGroup.name : data.group || '',
+      // Sempre enviado — inclusive `false` — para o cadastro nunca depender
+      // do estado do checkbox para salvar.
       allowLooseLabel: !!data.allowLooseLabel,
     };
     if (!payload.groupId) delete payload.groupId;
-    if (editing) {
-      await updateProduct.mutateAsync({ id: editing._id, data: payload });
-    } else {
-      await createProduct.mutateAsync(payload);
+    try {
+      if (editing) {
+        await updateProduct.mutateAsync({ id: editing._id, data: payload });
+        enqueueSnackbar('Produto atualizado com sucesso!', { variant: 'success' });
+      } else {
+        await createProduct.mutateAsync(payload);
+        enqueueSnackbar('Produto cadastrado com sucesso!', { variant: 'success' });
+      }
+      setDialogOpen(false);
+    } catch (err) {
+      // O erro ficava silencioso (rejeição não tratada): o diálogo simplesmente
+      // não fechava, parecendo que "não salvou" sem nenhum motivo na tela.
+      enqueueSnackbar(apiErrorMessage(err, 'Erro ao salvar o produto.'), { variant: 'error' });
     }
-    setDialogOpen(false);
   };
 
   const handleDelete = async () => {
     if (deleteTarget) {
-      await deleteProduct.mutateAsync(deleteTarget);
+      try {
+        await deleteProduct.mutateAsync(deleteTarget);
+        enqueueSnackbar('Produto removido.', { variant: 'success' });
+      } catch (err) {
+        enqueueSnackbar(apiErrorMessage(err, 'Erro ao excluir o produto.'), {
+          variant: 'error',
+        });
+      }
       setDeleteTarget(null);
     }
   };
