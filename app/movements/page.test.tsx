@@ -2,12 +2,17 @@
  * Tests for the "Movimentações" page (post-Destinos extraction).
  *
  * Covered behavior:
- * - The Destinos tab no longer exists here (it lives in Cadastros now).
+ * - The Destinos tab no longer exists here (it lives in Cadastros now) and a
+ *   new "Devolver" tab lists written-off labels so they can be restored.
  * - The QR reader button on "Movimentar Etiqueta" and "Contagem" feeds the
  *   same lookup flow used by the manual code input.
  * - Counting deletions ("baixar") ALWAYS require a marked reason ("motivo"):
  *   no delete happens without confirming the "Motivo da baixa" dialog, and the
- *   created movement carries the reason string plus the proper destination.
+ *   created movement carries the reason string plus the destination selected.
+ *   The options come ONLY from the destinations registered as "Baixar" in
+ *   Cadastros → Destinos (the hardcoded list is gone).
+ * - Restoring a written-off label from "Devolver" re-creates it and records an
+ *   "entry" movement.
  * - A QR answered with HTTP 410 (label already used, UsedLabelInfo) shows a
  *   distinct "já usada" warning and the label is never selected.
  */
@@ -65,6 +70,31 @@ vi.mock('@/lib/api', () => {
   const gets: string[] = [];
   const movements: Array<{ url: string; body: Record<string, unknown> }> = [];
   const deletes: string[] = [];
+  const restores: string[] = [];
+  /**
+   * Destinos cadastrados como "Baixar" (Cadastros → Destinos): o motivo da
+   * baixa só pode ser um deles — 'Outro' (antigo valor hardcoded) NÃO é
+   * oferecido.
+   */
+  const destinations = [
+    { _id: 'd1', name: 'Vencido', type: 'writeoff', active: true, createdAt: '2026-10-01' },
+    { _id: 'd2', name: 'Fornecedor', type: 'writeoff', active: true, createdAt: '2026-10-01' },
+  ];
+  /** Etiquetas baixadas (tombstones) — base da aba "Devolver". */
+  const removals = [
+    {
+      _id: 'r1',
+      qrCode: 'XY9900',
+      productId: 'p1',
+      productName: 'Queijo',
+      type: 'raw',
+      weightGrams: 900,
+      lote: 'L-100',
+      destination: 'Perda',
+      userName: 'Robson',
+      removedAt: '2026-10-10',
+    },
+  ];
   const api = {
     get: async (url: string) => {
       gets.push(url);
@@ -90,8 +120,11 @@ vi.mock('@/lib/api', () => {
         return { data: { ...item } };
       }
       if (url === '/stock-items') return { data: items.map((i) => ({ ...i })) };
+      if (url === '/stock-items/removals') {
+        return { data: removals.map((r) => ({ ...r })) };
+      }
       if (url === '/products') return { data: [{ _id: 'p1', name: 'Queijo' }] };
-      if (url === '/movement-destinations') return { data: [] };
+      if (url === '/movement-destinations') return { data: destinations.map((d) => ({ ...d })) };
       if (url === '/users/me') {
         return { data: { _id: 'u1', name: 'Usuário Teste', username: 'teste' } };
       }
@@ -102,6 +135,10 @@ vi.mock('@/lib/api', () => {
         movements.push({ url, body });
         return { data: { _id: `m-${movements.length}`, ...body } };
       }
+      if (/^\/stock-items\/removals\/[^/]+\/restore$/.test(url)) {
+        restores.push(url);
+        return { data: { _id: url.split('/')[3], status: 'in_stock' } };
+      }
       return { data: {} };
     },
     put: async () => ({ data: {} }),
@@ -110,7 +147,13 @@ vi.mock('@/lib/api', () => {
       return { data: {} };
     },
   };
-  return { default: api, __gets: gets, __movements: movements, __deletes: deletes };
+  return {
+    default: api,
+    __gets: gets,
+    __movements: movements,
+    __deletes: deletes,
+    __restores: restores,
+  };
 });
 
 import MovementsPage from './page';
@@ -120,6 +163,7 @@ const mockApi = apiModule as unknown as {
   __gets: string[];
   __movements: Array<{ url: string; body: Record<string, unknown> }>;
   __deletes: string[];
+  __restores: string[];
 };
 
 function renderPage() {
@@ -161,6 +205,7 @@ beforeEach(() => {
   mockApi.__gets.length = 0;
   mockApi.__movements.length = 0;
   mockApi.__deletes.length = 0;
+  mockApi.__restores.length = 0;
 });
 
 afterEach(() => {
@@ -168,11 +213,15 @@ afterEach(() => {
 });
 
 describe('Movements page structure', () => {
-  it('no longer renders the Destinos tab (moved to Cadastros)', async () => {
+  it('renders Movimentar/Contagem/Devolver tabs (no Destinos tab)', async () => {
     renderPage();
 
     const tabs = await screen.findAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['Movimentar Etiqueta', 'Contagem']);
+    expect(tabs.map((t) => t.textContent)).toEqual([
+      'Movimentar Etiqueta',
+      'Contagem',
+      'Devolver',
+    ]);
     expect(screen.queryByRole('tab', { name: 'Destinos' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Novo Destino' })).toBeNull();
   });
@@ -322,7 +371,7 @@ describe('Counting write-offs require a motivo', () => {
     );
   });
 
-  it('"Outro" motivo requires a free-text description before confirming', async () => {
+  it('motivo options come only from the destinations registered as "Baixar"', async () => {
     renderPage();
     await setupCountMissing();
 
@@ -331,22 +380,63 @@ describe('Counting write-offs require a motivo', () => {
 
     const selectTrigger =
       dialog.querySelector('[role="combobox"]') ?? dialog.querySelector('.MuiSelect-select');
-    await pickSelectOption(selectTrigger as HTMLElement, 'Outro');
+    fireEvent.mouseDown(selectTrigger as HTMLElement);
 
+    const options = await screen.findAllByRole('option');
+    expect(
+      options
+        .map((o) => o.textContent)
+        .filter((t) => t !== 'Selecione...'),
+    ).toEqual(['Perda', 'Não encontrado', 'Vencido', 'Fornecedor']);
+    // valores antigos hardcoded que deixaram de existir
+    expect(screen.queryByRole('option', { name: 'Outro' })).toBeNull();
+
+    await pickSelectOption(selectTrigger as HTMLElement, 'Vencido');
     const confirm = within(dialog).getByRole('button', { name: 'Confirmar baixa' });
-    // still blocked: the free-text description is required
-    expect(confirm).toHaveProperty('disabled', true);
-
-    fireEvent.change(within(dialog).getByPlaceholderText('Ex: Contaminada na câmara fria'), {
-      target: { value: 'Contaminada' },
-    });
     expect(confirm).toHaveProperty('disabled', false);
     fireEvent.click(confirm);
 
     await waitFor(() => expect(mockApi.__movements).toHaveLength(1));
+    // o destino do movimento é o destino cadastrado selecionado
     expect(mockApi.__movements[0].body).toEqual(
-      expect.objectContaining({ reason: 'Contagem — Contaminada', destination: 'Perda' }),
+      expect.objectContaining({
+        movementType: 'exit',
+        reason: 'Contagem — Vencido',
+        destination: 'Vencido',
+      }),
     );
+    await waitFor(() => expect(mockApi.__deletes).toEqual(['/stock-items/i1']));
+  });
+});
+
+describe('Devolver (written-off labels)', () => {
+  it('lists the written-off labels and restoring creates an entry movement', async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Devolver' }));
+
+    // tombstone listado (produto + QR + destino da baixa)
+    expect(await screen.findByText('Queijo')).toBeTruthy();
+    expect(screen.getByText('XY9900')).toBeTruthy();
+    expect(screen.getByText('Perda')).toBeTruthy();
+    expect(screen.queryByText('Nenhuma etiqueta baixada')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Devolver$/ }));
+
+    await waitFor(() =>
+      expect(mockApi.__restores).toEqual(['/stock-items/removals/r1/restore']),
+    );
+    // a devolução registra uma movimentação de ENTRADA
+    await waitFor(() => expect(mockApi.__movements).toHaveLength(1));
+    expect(mockApi.__movements[0].body).toEqual(
+      expect.objectContaining({
+        movementType: 'entry',
+        productName: 'Queijo',
+        weightGrams: 900,
+        itemType: 'raw',
+      }),
+    );
+    expect(await screen.findByText(/devolvida ao estoque/)).toBeTruthy();
   });
 });
 

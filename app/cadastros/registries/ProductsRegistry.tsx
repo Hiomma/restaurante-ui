@@ -115,11 +115,15 @@ export default function ProductsRegistry() {
       storageMethod: '',
       shelfLifeDays: undefined,
       minQuantity: undefined,
+      unit: 'kg' as const,
       minPortionedQuantity: undefined,
       consumeAfterOpeningDays: undefined,
       allowLooseLabel: false,
     },
   });
+
+  // Unidade do produto: 'l' (marcado "Está em litro") ou 'kg' (desmarcado).
+  const unit = form.watch('unit') || 'kg';
 
   const filteredProducts = products?.filter((p) => {
     const term = normalize(search.trim());
@@ -154,6 +158,7 @@ export default function ProductsRegistry() {
       storageMethod: '',
       shelfLifeDays: undefined,
       minQuantity: undefined,
+      unit: 'kg' as const,
       minPortionedQuantity: undefined,
       consumeAfterOpeningDays: undefined,
       allowLooseLabel: false,
@@ -174,6 +179,7 @@ export default function ProductsRegistry() {
       storageMethod: p.storageMethod,
       shelfLifeDays: p.shelfLifeDays,
       minQuantity: p.minQuantity || undefined,
+      unit: p.unit === 'l' ? ('l' as const) : ('kg' as const),
       minPortionedQuantity: p.minPortionedQuantity || undefined,
       consumeAfterOpeningDays: p.consumeAfterOpeningDays || undefined,
       allowLooseLabel: !!p.allowLooseLabel,
@@ -192,6 +198,8 @@ export default function ProductsRegistry() {
       // Sempre enviado — inclusive `false` — para o cadastro nunca depender
       // do estado do checkbox para salvar.
       allowLooseLabel: !!data.allowLooseLabel,
+      // Unidade da quantidade mínima: marcado "Está em litro" → 'l', senão 'kg'.
+      unit: data.unit === 'l' ? 'l' : 'kg',
     };
     if (!payload.groupId) delete payload.groupId;
     try {
@@ -228,6 +236,16 @@ export default function ProductsRegistry() {
     if (!grams) return '—';
     if (grams >= 1000) return `${grams}g / ${(grams / 1000).toFixed(2)}kg`;
     return `${grams}g`;
+  };
+
+  // Produtos em litro mostram a quantidade mínima em ml/L (mesma base em
+  // gramas/ml usada pelo resto do sistema).
+  const formatMinQuantity = (value: number, productUnit?: 'kg' | 'l') => {
+    if (!value) return '—';
+    if (productUnit === 'l') {
+      return value >= 1000 ? `${value}ml / ${(value / 1000).toFixed(2)}L` : `${value}ml`;
+    }
+    return formatWeight(value);
   };
 
   return (
@@ -322,7 +340,7 @@ export default function ProductsRegistry() {
             id: 'minimo-estoque',
             header: 'Mínimo em Estoque',
             align: 'right',
-            cell: (p) => (p.minQuantity ? formatWeight(p.minQuantity) : '—'),
+            cell: (p) => (p.minQuantity ? formatMinQuantity(p.minQuantity, p.unit) : '—'),
           },
           {
             id: 'min-porcionadas',
@@ -498,17 +516,35 @@ export default function ProductsRegistry() {
             </Box>
 
             <Box>
-              <FieldLabel>Peso/Volume Mínimo em Estoque (g ou ml)</FieldLabel>
+              <FieldLabel>
+                {unit === 'l' ? 'Volume Mínimo em Estoque (ml)' : 'Peso Mínimo em Estoque (g)'}
+              </FieldLabel>
               <TextField
                 size="small"
                 type="number"
-                placeholder="Ex: 2000 (= 2kg)"
+                placeholder={unit === 'l' ? 'Ex: 2000 (= 2L)' : 'Ex: 2000 (= 2kg)'}
                 {...form.register('minQuantity', { valueAsNumber: true })}
                 error={!!form.formState.errors.minQuantity}
                 helperText={form.formState.errors.minQuantity?.message}
                 fullWidth
                 sx={fieldSx}
               />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                <input
+                  type="checkbox"
+                  checked={unit === 'l'}
+                  onChange={(e) => form.setValue('unit', e.target.checked ? 'l' : 'kg')}
+                  style={{ width: 20, height: 20 }}
+                />
+                <Typography variant="body2" fontWeight={600}>
+                  Está em litro
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {unit === 'l'
+                    ? 'Produto medido em litros (unidade: L).'
+                    : 'Desmarcado, o produto é medido em quilogramas (unidade: kg).'}
+                </Typography>
+              </Box>
             </Box>
 
             <Box>

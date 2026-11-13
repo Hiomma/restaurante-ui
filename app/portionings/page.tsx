@@ -254,8 +254,21 @@ export default function PortioningsPage() {
   const [looseActionOther, setLooseActionOther] = useState('');
   const [looseActionSaving, setLooseActionSaving] = useState(false);
 
-  /** Motivos de baixa (mesmos da Contagem) — medem o desperdício por motivo. */
-  const writeoffReasons = ['Perda', 'Não encontrado', 'Vencido', 'Avaria', 'Outro'];
+  /** Destinos fixos de baixa (mesmos do cadastro). */
+  const fixedWriteoffDestinations = ['Perda', 'Não encontrado'];
+  /**
+   * Motivos de baixa: os destinos cadastrados como "Baixar" em Cadastros →
+   * Destinos — os MESMOS da Contagem (a lista antiga era hardcoded).
+   */
+  const writeoffReasons = [
+    ...fixedWriteoffDestinations,
+    ...(looseDestinations ?? [])
+      .filter(
+        (d) =>
+          d.active && d.type === 'writeoff' && !fixedWriteoffDestinations.includes(d.name),
+      )
+      .map((d) => d.name),
+  ];
 
   const totalGrams = scanned.reduce((sum, item) => sum + item.weightGrams, 0);
   const limpo = Number(cleanWeight) || 0;
@@ -448,6 +461,11 @@ export default function PortioningsPage() {
       await createPortioning.mutateAsync({
         productId: rows[0].productId,
         productName: nameOf(rows[0].productId),
+        // Matéria-prima real escaneada (produto do item de entrada): sem
+        // isto a API gravava em `rawProduct` o produto de SAÍDA e o
+        // relatório de Rendimento descartava o registro.
+        rawProductId: first.product.productId,
+        rawProductName: first.product.productName,
         outputs: rows.map((row) => ({
           productId: row.productId,
           productName: nameOf(row.productId),
@@ -728,12 +746,9 @@ export default function PortioningsPage() {
     }
 
     const label = action === 'devolucao' ? 'Devolução' : 'Descarte';
-    const destination =
-      action === 'devolucao'
-        ? 'Devolução'
-        : motivo === 'Não encontrado'
-          ? 'Não encontrado'
-          : 'Perda';
+    // Descarte: o destino É o motivo marcado (já é um destino de baixa
+    // cadastrado) — a antiga lógica rebaixava tudo para 'Perda'.
+    const destination = action === 'devolucao' ? 'Devolução' : looseActionReason;
     const loteLabel = item.lote || '-';
 
     setLooseActionSaving(true);

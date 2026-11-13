@@ -220,9 +220,9 @@ export default function StockPage() {
   const searchQuery = search.trim().toLowerCase();
 
   /**
-   * Busca NO ITEM (produto OU lote): o nome casa para todas as etiquetas do
-   * produto; o lote casa SOMENTE para as etiquetas daquele lote — antes, a
-   * busca era feita por grupo e "puxava" todos os lotes do produto.
+   * Busca NO ITEM (produto OU lote OU QR da etiqueta): o nome casa para
+   * todas as etiquetas do produto; o lote casa SOMENTE para as etiquetas
+   * daquele lote; o QR casa só naquela etiqueta.
    */
   const matchesSearch = (item: StockItem): boolean => {
     if (!searchQuery) return true;
@@ -230,6 +230,7 @@ export default function StockPage() {
       (products ?? []).find((p) => p._id === item.product.productId)?.name ??
       item.product.productName;
     if (name.toLowerCase().includes(searchQuery)) return true;
+    if ((item.qrCode ?? '').toLowerCase().includes(searchQuery)) return true;
     const lote = (item.lote ?? '').toLowerCase();
     if (!lote) return false;
     return lote.includes(searchQuery) || `lote ${lote}`.includes(searchQuery);
@@ -795,7 +796,7 @@ export default function StockPage() {
           <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
             <TextField
               size="small"
-              placeholder="Buscar produto ou lote..."
+              placeholder="Buscar por produto, lote ou QR..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               InputProps={{

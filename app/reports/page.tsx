@@ -12,6 +12,8 @@ import {
   MenuItem,
   InputAdornment,
   CircularProgress,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
@@ -31,6 +33,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import {
   formatKg,
   formatDate,
+  formatPercent,
   downloadCsv,
   printReport,
   movementTypeView,
@@ -47,6 +50,7 @@ import type { Product, StockItem, StockMovement, Portioning } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import BrDateField from '../components/BrDateField/BrDateField';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
+import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
 
 const cardSx = {
@@ -122,6 +126,48 @@ const FIXED_MOVE_DESTINATIONS = ['Salão', 'Bar', 'Cozinha'];
 
 /** Destinos fixos de baixa (writeoff). */
 const FIXED_WRITEOFF_DESTINATIONS = ['Perda', 'Não encontrado'];
+
+/**
+ * Colunas OPCIONAIS do Relatório de Produção e Baixas (marcadas na tela):
+ * as colunas FIXAS são Data, Produto, Fornecedor, Lote do Produto, Lote de
+ * Origem, Peso Total Produzido, Total de Etiquetas Produzidas, Peso em
+ * Estoque (atual) e Quantidade de Etiquetas em Estoque (atual).
+ * Venda = saídas para Salão/Bar/Cozinha; Perda = saídas com destino de baixa.
+ */
+const OPTIONAL_REL_COLUMNS: { key: string; label: string }[] = [
+  { key: 'vendaPeso', label: 'Peso Venda (g)' },
+  { key: 'vendaPct', label: '% Venda' },
+  { key: 'vendaQtd', label: 'Porções Vendidas' },
+  { key: 'perdaPeso', label: 'Peso Perdido (g)' },
+  { key: 'perdaPct', label: '% Perda' },
+  { key: 'perdaQtd', label: 'Porções Perdidas' },
+];
+
+/**
+ * Linha do Relatório de Produção e Baixas: UM produto porcionado (saída de
+ * um porcionamento) por linha — saídas nunca são mais juntadas por vírgula.
+ */
+interface ProductionReportRow {
+  key: string;
+  /** Id do produto de SAÍDA, para o filtro de produto. */
+  productId: string;
+  data: string;
+  produto: string;
+  fornecedor: string;
+  lote: string;
+  loteOrigem: string;
+  /** Soma do peso de todas as etiquetas produzidas (sairam do estoque ou não). */
+  pesoProduzido: number;
+  etiquetasProduzidas: number;
+  pesoEstoque: number;
+  qtdEstoque: number;
+  vendaPeso: number;
+  vendaQtd: number;
+  pctVenda: number;
+  perdaPeso: number;
+  perdaQtd: number;
+  pctPerda: number;
+}
 
 /** Abre a aba correspondente ao parâmetro `?tab=` da URL. */
 const REPORT_TABS_BY_PARAM: Record<string, number> = {
@@ -537,6 +583,21 @@ function ReportsContent() {
   const [perdasFrom, setPerdasFrom] = useState('');
   const [perdasTo, setPerdasTo] = useState('');
 
+  // ===== Relatório de Produção e Baixas (aba Perdas) =====
+  const [relGroup, setRelGroup] = useState('');
+  const [relProduct, setRelProduct] = useState('');
+  const [relSupplier, setRelSupplier] = useState('');
+  const [relFrom, setRelFrom] = useState('');
+  const [relTo, setRelTo] = useState('');
+  /** Colunas opcionais marcadas do relatório (as fixas sempre aparecem). */
+  const [relCols, setRelCols] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(OPTIONAL_REL_COLUMNS.map((c) => [c.key, true])),
+  );
+  /** "Todas as opções" de baixa: marcada → sem filtro por destino. */
+  const [relAllWriteoffs, setRelAllWriteoffs] = useState(true);
+  /** Destinos de baixa (Cadastros → Destinos) marcados para filtrar. */
+  const [relWriteoffs, setRelWriteoffs] = useState<string[]>([]);
+
   const [comprasSearch, setComprasSearch] = useState('');
   const [comprasGroup, setComprasGroup] = useState('');
   const [comprasStatus, setComprasStatus] = useState('');
@@ -655,21 +716,15 @@ function ReportsContent() {
   const generalLossPct = rawSum > 0 ? (lossSum / rawSum) * 100 : 0;
 
   // Agrupa pela MATÉRIA-PRIMA (rawProduct): é dela que vêm as perdas na limpeza.
-  // Só entra produto classificado como "MATÉRIA PRIMA" (bruto): quando o
-  // registro antigo aponta para o produto PORCIONADO (sem snapshot de
-  // origem), o agrupamento ficava conflitante — iscas/tiras/medalhões de
-  // matérias-primas diferentes se misturavam com rendimentos distintos.
-  const isRawCategoryProduct = (productId: string): boolean => {
-    const p = productMap.get(productId);
-    // Sem cadastro (registro antigo): o porcionamento só existe para bruto.
-    if (!p) return true;
-    return isPurchaseProduct(p); // 'Materia Prima' (ou sem categoria) → true
-  };
+  // Registros novos gravam em `rawProduct` o produto REAL escaneado (matéria-
+  // prima). Registros antigos gravavam ali o produto de SAÍDA ('Porcionado') e
+  // o filtro de categoria descartava TODO o registro — por isso o relatório
+  // "Rendimento" não retornava nada. Agora nenhum registro é descartado: na
+  // dúvida (produto legado sem cadastro correspondente), ele entra.
 
   const productLossMap = new Map<string, LossAgg & { name: string }>();
   for (const pt of filteredPerdas) {
     const key = perdasProductKey(pt);
-    if (!isRawCategoryProduct(key)) continue;
     const curP = productLossMap.get(key) ?? {
       name: perdasProductName(pt),
       loss: 0,
@@ -698,6 +753,402 @@ function ReportsContent() {
     .sort((a, b) => b.loss - a.loss);
 
   const perdasHistory = [...filteredPerdas].sort((a, b) => b.date.localeCompare(a.date));
+
+  // ===== Relatório de Produção e Baixas (migrado da aba Histórico) =====
+
+  // Opções dos filtros: grupos vêm do cadastro de produtos; produtos = TODOS
+  // cadastrados como "Porcionado" (antes só os presentes nos porcionamentos);
+  // fornecedores vêm dos porcionamentos (mesma lista de Perdas).
+  const relGroupOptions = groupOptions;
+  const relProductOptions = [
+    { value: '', label: 'Todos os produtos' },
+    ...products
+      .filter((p) => p.category === 'Porcionado')
+      .map((p) => ({ value: p._id, label: p.name }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
+  ];
+  const relSupplierOptions = perdasSupplierOptions;
+
+  /** Destinos de baixa registrados (Cadastros → Destinos) — checkboxes. */
+  const writeoffFilterOptions = Array.from(
+    new Set([
+      ...FIXED_WRITEOFF_DESTINATIONS,
+      ...customDestinations
+        .filter((d) => d.active && d.type === 'writeoff')
+        .map((d) => d.name),
+    ]),
+  );
+
+  /** Destinos de venda (Salão/Bar/Cozinha + cadastrados tipo "mover"). */
+  const moveDestSet = new Set(
+    [
+      ...FIXED_MOVE_DESTINATIONS,
+      ...customDestinations
+        .filter((d) => d.active && (d.type ?? 'move') === 'move')
+        .map((d) => d.name),
+    ].map(normalizeText),
+  );
+
+  /** Todos os destinos de baixa (fixos + cadastrados). */
+  const writeoffDestSet = new Set(writeoffFilterOptions.map(normalizeText));
+
+  /**
+   * Destinos de baixa aceitos: `null` = "Todas as opções" marcada (sem
+   * filtro); caso contrário, apenas os checkboxes marcados.
+   */
+  const selectedWriteoffs = relAllWriteoffs
+    ? null
+    : new Set(relWriteoffs.map((n) => normalizeText(n).replace(/\s+/g, ' ').trim()));
+
+  const inWriteoffFilter = (dest: string): boolean => {
+    const key = normalizeText(dest).replace(/\s+/g, ' ').trim();
+    if (!writeoffDestSet.has(key)) return false;
+    return selectedWriteoffs === null || selectedWriteoffs.has(key);
+  };
+
+  // Mesmos filtros da aba Perdas (grupo, fornecedor, período) sobre a DATA
+  // do porcionamento; o filtro de produto é aplicado por linha (saída).
+  const filteredReportPortionings = portionings.filter((pt) => {
+    if (relGroup && (productMap.get(pt.product.productId)?.group ?? '') !== relGroup) {
+      return false;
+    }
+    if (relSupplier && (pt.supplier ?? '').trim() !== relSupplier) return false;
+    const d = pt.date.slice(0, 10);
+    if (relFrom && d < relFrom) return false;
+    if (relTo && d > relTo) return false;
+    return true;
+  });
+
+  const movementInRange = (m: StockMovement): boolean => {
+    const d = m.date.slice(0, 10);
+    if (relFrom && d < relFrom) return false;
+    if (relTo && d > relTo) return false;
+    return true;
+  };
+
+  const productIdsOf = (pt: Portioning): Set<string> =>
+    new Set(
+      pt.outputs && pt.outputs.length > 0
+        ? pt.outputs.map((o) => o.productId)
+        : [pt.product.productId],
+    );
+
+  /**
+   * Itens PORCIONADOS gerados por um porcionamento: `batchId` (registros
+   * novos), senão o lote + produtos gerados, senão a data do porcionamento
+   * (registros antigos, sem vínculo).
+   */
+  const itemsOfBatch = (pt: Portioning): StockItem[] => {
+    const portioned = stockItems.filter((i) => i.type === 'portioned');
+    if (pt.batchId) return portioned.filter((i) => i.batchId === pt.batchId);
+    const productIds = productIdsOf(pt);
+    if (pt.lote) {
+      return portioned.filter(
+        (i) => i.lote === pt.lote && productIds.has(i.product.productId),
+      );
+    }
+    const d = pt.date.slice(0, 10);
+    return portioned.filter(
+      (i) =>
+        productIds.has(i.product.productId) &&
+        (i.manipulationDate || '').slice(0, 10) === d,
+    );
+  };
+
+  /**
+   * Lote de ORIGEM da matéria-prima: `rawLote` do porcionamento; para
+   * registros antigos sem o campo, recupera o lote da etiqueta BRUTA do
+   * mesmo lote interno (as etiquetas escaneadas recebem o `batchId`).
+   */
+  const originLoteOf = (pt: Portioning): string => {
+    if (pt.rawLote) return pt.rawLote;
+    if (!pt.batchId) return '—';
+    const raw = stockItems.find(
+      (i) => i.type === 'raw' && i.batchId === pt.batchId && i.lote,
+    );
+    return raw?.lote || '—';
+  };
+
+  /** Porcionamento dono de uma movimentação (por lote; senão o mais recente). */
+  const batchOfMovement = (m: StockMovement): Portioning | null => {
+    const candidates = filteredReportPortionings.filter((pt) =>
+      productIdsOf(pt).has(m.product.productId),
+    );
+    if (candidates.length === 0) return null;
+    if (m.lote) {
+      const byLote = candidates.find((pt) => (pt.lote ?? '') === m.lote);
+      if (byLote) return byLote;
+    }
+    // Fallback p/ movimentações antigas sem lote: lote mais recente do
+    // produto anterior à movimentação.
+    return (
+      candidates
+        .filter((pt) => pt.date.slice(0, 10) <= m.date.slice(0, 10))
+        .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null
+    );
+  };
+
+  /** Vendas/perdas por `${porcionamento}-${produto de saída}` no período. */
+  const extrasByKey = new Map<
+    string,
+    { vendaPeso: number; vendaQtd: number; perdaPeso: number; perdaQtd: number }
+  >();
+  for (const m of movements) {
+    if (m.itemType !== 'portioned') continue;
+    if (m.movementType !== 'move' && m.movementType !== 'exit') continue;
+    if (!movementInRange(m)) continue;
+    const dest = movementDestination(m, registeredDestinations);
+    const isVenda = m.movementType === 'move' && moveDestSet.has(normalizeText(dest));
+    const isPerda = m.movementType === 'exit' && inWriteoffFilter(dest);
+    if (!isVenda && !isPerda) continue;
+    const pt = batchOfMovement(m);
+    if (!pt) continue;
+    const key = `${pt._id}-${m.product.productId}`;
+    const cur =
+      extrasByKey.get(key) ?? { vendaPeso: 0, vendaQtd: 0, perdaPeso: 0, perdaQtd: 0 };
+    if (isVenda) {
+      cur.vendaPeso += m.weightGrams ?? 0;
+      cur.vendaQtd += m.quantity;
+    } else {
+      cur.perdaPeso += m.weightGrams ?? 0;
+      cur.perdaQtd += m.quantity;
+    }
+    extrasByKey.set(key, cur);
+  }
+
+  // Uma linha por PRODUTO PORCIONADO gerado (saídas nunca juntadas por vírgula).
+  const productionReportRows: ProductionReportRow[] = filteredReportPortionings
+    .flatMap((pt) => {
+      const batchItems = itemsOfBatch(pt);
+      const outputs: {
+        productId: string;
+        productName: string;
+        portionsCount?: number;
+        portionWeightGrams?: number;
+      }[] =
+        pt.outputs && pt.outputs.length > 0
+          ? pt.outputs
+          : [
+              {
+                productId: pt.product.productId,
+                productName: pt.product.productName,
+                portionsCount: pt.portionsCount,
+                portionWeightGrams: pt.portionWeightGrams,
+              },
+            ];
+      const loteOrigem = originLoteOf(pt);
+      return outputs.map((o) => {
+        const labels = batchItems.filter((i) => i.product.productId === o.productId);
+        const inStock = labels.filter((i) => i.status === 'in_stock');
+        const declared = o.portionsCount ?? 0;
+        // Registros antigos sem vínculo de etiquetas: usa o que o próprio
+        // porcionamento declarou (qtd × peso da porção) como produção.
+        const etiquetasProduzidas = labels.length > 0 ? labels.length : declared;
+        const pesoProduzido =
+          labels.length > 0
+            ? labels.reduce((s, i) => s + i.weightGrams, 0)
+            : declared * (o.portionWeightGrams ?? 0);
+        const extras =
+          extrasByKey.get(`${pt._id}-${o.productId}`) ??
+          { vendaPeso: 0, vendaQtd: 0, perdaPeso: 0, perdaQtd: 0 };
+        const base = pesoProduzido;
+        return {
+          key: `${pt._id}-${o.productId}`,
+          productId: o.productId,
+          data: pt.date,
+          produto: o.productName,
+          fornecedor: pt.supplier || '—',
+          lote: pt.lote || '—',
+          loteOrigem,
+          pesoProduzido,
+          etiquetasProduzidas,
+          pesoEstoque: inStock.reduce((s, i) => s + i.weightGrams, 0),
+          qtdEstoque: inStock.length,
+          vendaPeso: extras.vendaPeso,
+          vendaQtd: extras.vendaQtd,
+          pctVenda: base > 0 ? (extras.vendaPeso / base) * 100 : 0,
+          perdaPeso: extras.perdaPeso,
+          perdaQtd: extras.perdaQtd,
+          pctPerda: base > 0 ? (extras.perdaPeso / base) * 100 : 0,
+        };
+      });
+    })
+    .filter((r) => !relProduct || r.productId === relProduct)
+    .sort((a, b) => b.data.localeCompare(a.data));
+
+  // Totais gerais (rodapé).
+  const totalPesoProduzido = productionReportRows.reduce((s, r) => s + r.pesoProduzido, 0);
+  const totalEtiquetasProduzidas = productionReportRows.reduce(
+    (s, r) => s + r.etiquetasProduzidas,
+    0,
+  );
+  const totalPesoEstoque = productionReportRows.reduce((s, r) => s + r.pesoEstoque, 0);
+  const totalQtdEstoque = productionReportRows.reduce((s, r) => s + r.qtdEstoque, 0);
+  const totalVendaPeso = productionReportRows.reduce((s, r) => s + r.vendaPeso, 0);
+  const totalVendaQtd = productionReportRows.reduce((s, r) => s + r.vendaQtd, 0);
+  const totalPerdaPeso = productionReportRows.reduce((s, r) => s + r.perdaPeso, 0);
+  const totalPerdaQtd = productionReportRows.reduce((s, r) => s + r.perdaQtd, 0);
+
+  const toggleRelCol = (key: string) =>
+    setRelCols((prev) => ({ ...prev, [key]: !prev[key]}));
+
+  const toggleRelWriteoff = (name: string) =>
+    setRelWriteoffs((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
+    );
+
+  /** Exporta o relatório filtrado para Excel (CSV separado por ";"). */
+  const exportProducaoBaixas = () => {
+    const headers = [
+      'Data',
+      'Produto',
+      'Fornecedor',
+      'Lote do Produto',
+      'Lote de Origem',
+      'Peso Total Produzido (g)',
+      'Total de Etiquetas Produzidas',
+      'Peso em Estoque (g)',
+      'Etiquetas em Estoque',
+    ];
+    for (const col of OPTIONAL_REL_COLUMNS) {
+      if (relCols[col.key]) headers.push(col.label);
+    }
+    const rowsOut = productionReportRows.map((r) => {
+      const cells: (string | number)[] = [
+        formatDate(r.data),
+        r.produto,
+        r.fornecedor,
+        r.lote === '—' ? '' : r.lote,
+        r.loteOrigem === '—' ? '' : r.loteOrigem,
+        r.pesoProduzido,
+        r.etiquetasProduzidas,
+        r.pesoEstoque,
+        r.qtdEstoque,
+      ];
+      if (relCols.vendaPeso) cells.push(r.vendaPeso);
+      if (relCols.vendaPct) cells.push(r.pctVenda.toFixed(1));
+      if (relCols.vendaQtd) cells.push(r.vendaQtd);
+      if (relCols.perdaPeso) cells.push(r.perdaPeso);
+      if (relCols.perdaPct) cells.push(r.pctPerda.toFixed(1));
+      if (relCols.perdaQtd) cells.push(r.perdaQtd);
+      return cells;
+    });
+    downloadCsv('relatorio-producao-e-baixas', headers, rowsOut);
+  };
+
+  /** Colunas da tabela: fixas + opcionais marcadas. */
+  const relTableColumns: ResponsiveTableColumn<ProductionReportRow>[] = [
+    { id: 'data', header: 'Data', cell: (r) => formatDate(r.data) },
+    {
+      id: 'produto',
+      header: 'Produto',
+      primary: true,
+      cell: (r) => (
+        <Typography variant="body2" fontWeight={500}>
+          {r.produto}
+        </Typography>
+      ),
+    },
+    { id: 'fornecedor', header: 'Fornecedor', cell: (r) => r.fornecedor },
+    {
+      id: 'lote',
+      header: 'Lote do Produto',
+      cell: (r) => (
+        <Typography
+          variant="body2"
+          sx={{ fontFamily: 'monospace', fontSize: 13, color: '#1565C0' }}
+        >
+          {r.lote}
+        </Typography>
+      ),
+    },
+    {
+      id: 'loteOrigem',
+      header: 'Lote de Origem',
+      cell: (r) => (
+        <Typography
+          variant="body2"
+          sx={{ fontFamily: 'monospace', fontSize: 13, color: '#888' }}
+        >
+          {r.loteOrigem}
+        </Typography>
+      ),
+    },
+    {
+      id: 'pesoProduzido',
+      header: 'Peso Total Produzido',
+      cell: (r) => `${r.pesoProduzido}g`,
+    },
+    {
+      id: 'etiquetasProduzidas',
+      header: 'Total de Etiquetas Produzidas',
+      align: 'right',
+      cell: (r) => r.etiquetasProduzidas,
+    },
+    { id: 'pesoEstoque', header: 'Peso em Estoque (atual)', cell: (r) => `${r.pesoEstoque}g` },
+    {
+      id: 'qtdEstoque',
+      header: 'Etiquetas em Estoque (atual)',
+      align: 'right',
+      cell: (r) => r.qtdEstoque,
+    },
+    ...(relCols.vendaPeso
+      ? [
+          {
+            id: 'vendaPeso',
+            header: 'Peso Venda',
+            cell: (r: ProductionReportRow) => `${r.vendaPeso}g`,
+          },
+        ]
+      : []),
+    ...(relCols.vendaPct
+      ? [
+          {
+            id: 'vendaPct',
+            header: '% Venda',
+            cell: (r: ProductionReportRow) => formatPercent(r.pctVenda),
+          },
+        ]
+      : []),
+    ...(relCols.vendaQtd
+      ? [
+          {
+            id: 'vendaQtd',
+            header: 'Porções Vendidas',
+            align: 'right' as const,
+            cell: (r: ProductionReportRow) => r.vendaQtd,
+          },
+        ]
+      : []),
+    ...(relCols.perdaPeso
+      ? [
+          {
+            id: 'perdaPeso',
+            header: 'Peso Perdido',
+            cell: (r: ProductionReportRow) => `${r.perdaPeso}g`,
+          },
+        ]
+      : []),
+    ...(relCols.perdaPct
+      ? [
+          {
+            id: 'perdaPct',
+            header: '% Perda',
+            cell: (r: ProductionReportRow) => formatPercent(r.pctPerda),
+          },
+        ]
+      : []),
+    ...(relCols.perdaQtd
+      ? [
+          {
+            id: 'perdaQtd',
+            header: 'Porções Perdidas',
+            align: 'right' as const,
+            cell: (r: ProductionReportRow) => r.perdaQtd,
+          },
+        ]
+      : []),
+  ];
 
   const exportPerdas = () => {
     downloadCsv(
@@ -1119,7 +1570,7 @@ function ReportsContent() {
 
               <Box sx={{ ...cardSx, p: 2, mb: 2 }}>
                 <Typography variant="h6" fontWeight={700} sx={{ mb: 1.5 }}>
-                  Perda por Produto
+                  Rendimento
                 </Typography>
                 <ResponsiveTable
                   paper={false}
@@ -1229,6 +1680,181 @@ function ReportsContent() {
                       ),
                     },
                   ]}
+                />
+              </Box>
+
+              {/* ===== Relatório de Produção e Baixas (migrado da aba Histórico) ===== */}
+              <Box sx={{ ...cardSx, p: 2, mt: 2 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 1.5,
+                    flexWrap: 'wrap',
+                    mb: 2,
+                  }}
+                >
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="h6" fontWeight={700}>
+                      Relatório de Produção e Baixas
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Uma linha por produto porcionado gerado: produção total, estoque atual
+                      e — nas colunas opcionais — vendas e perdas do período
+                    </Typography>
+                  </Box>
+                  <ExportButtons onExcel={exportProducaoBaixas} onPdf={printReport} />
+                </Box>
+
+                {/* Filtros no mesmo estilo do resto da aba: grupo, produto,
+                    fornecedor e período. */}
+                <Box
+                  className="no-print"
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 1.5,
+                    mb: 2,
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <FilterListIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+                    <Typography variant="subtitle2" fontWeight={700}>
+                      Filtros:
+                    </Typography>
+                  </Box>
+                  <SelectFilter
+                    value={relGroup}
+                    onChange={(v) => {
+                      setRelGroup(v);
+                      setRelProduct('');
+                    }}
+                    options={relGroupOptions}
+                    minWidth={190}
+                  />
+                  <SelectFilter
+                    value={relProduct}
+                    onChange={setRelProduct}
+                    options={relProductOptions}
+                    minWidth={210}
+                  />
+                  <SelectFilter
+                    value={relSupplier}
+                    onChange={setRelSupplier}
+                    options={relSupplierOptions}
+                    minWidth={210}
+                  />
+                  <DateRangeField
+                    from={relFrom}
+                    to={relTo}
+                    onFrom={setRelFrom}
+                    onTo={setRelTo}
+                  />
+                </Box>
+
+                {/* Baixas: todos os destinos registrados como "Baixar"
+                    (Cadastros → Destinos) + "Todas as opções" — filtram as
+                    colunas de perda do relatório. */}
+                <Box
+                  className="no-print"
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 0.5,
+                    mb: 1.5,
+                  }}
+                >
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mr: 1 }}>
+                    Baixas:
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={relAllWriteoffs}
+                        onChange={(e) => {
+                          setRelAllWriteoffs(e.target.checked);
+                          if (e.target.checked) setRelWriteoffs([]);
+                        }}
+                      />
+                    }
+                    label={<Typography variant="body2">Todas as opções</Typography>}
+                    sx={{ mr: 1 }}
+                  />
+                  {writeoffFilterOptions.map((name) => (
+                    <FormControlLabel
+                      key={name}
+                      control={
+                        <Checkbox
+                          size="small"
+                          disabled={relAllWriteoffs}
+                          checked={relAllWriteoffs || relWriteoffs.includes(name)}
+                          onChange={() => toggleRelWriteoff(name)}
+                        />
+                      }
+                      label={<Typography variant="body2">{name}</Typography>}
+                      sx={{ mr: 0.5 }}
+                    />
+                  ))}
+                </Box>
+
+                {/* Colunas opcionais: as fixas (Data, Produto, Fornecedor, Lote
+                    do Produto, Lote de Origem, Peso Total Produzido, Total de
+                    Etiquetas Produzidas e estoque atual) sempre aparecem. */}
+                <Box
+                  className="no-print"
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: 0.5,
+                    mb: 1.5,
+                  }}
+                >
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mr: 1 }}>
+                    Colunas opcionais:
+                  </Typography>
+                  {OPTIONAL_REL_COLUMNS.map((c) => (
+                    <FormControlLabel
+                      key={c.key}
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={!!relCols[c.key]}
+                          onChange={() => toggleRelCol(c.key)}
+                        />
+                      }
+                      label={<Typography variant="body2">{c.label}</Typography>}
+                      sx={{ mr: 0.5 }}
+                    />
+                  ))}
+                </Box>
+
+                <ResponsiveTable
+                  paper={false}
+                  size="small"
+                  loading={loading}
+                  headerCellSx={thSx}
+                  rows={productionReportRows}
+                  rowKey={(r) => r.key}
+                  emptyMessage="Nenhum porcionamento para os filtros selecionados"
+                  footerNote={
+                    productionReportRows.length > 0 ? (
+                      <Typography variant="body2" fontWeight={700}>
+                        Produzido: {totalEtiquetasProduzidas} etiqueta(s) ({totalPesoProduzido}g)
+                        {' · '}
+                        Em estoque: {totalQtdEstoque} etiqueta(s) ({totalPesoEstoque}g)
+                        {relCols.vendaQtd &&
+                          ` · Venda: ${totalVendaQtd} porção(ões) (${totalVendaPeso}g)`}
+                        {relCols.perdaQtd &&
+                          ` · Perdido: ${totalPerdaQtd} porção(ões) (${totalPerdaPeso}g)`}
+                      </Typography>
+                    ) : undefined
+                  }
+                  columns={relTableColumns}
                 />
               </Box>
             </Box>

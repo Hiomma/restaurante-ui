@@ -65,6 +65,8 @@ export interface Product {
   storageMethod: string;
   shelfLifeDays: number;
   minQuantity: number;
+  /** Unidade da quantidade mínima: 'kg' (quilograma) ou 'l' (litro). */
+  unit?: 'kg' | 'l';
   minPortionedQuantity: number;
   consumeAfterOpeningDays: number;
   allowLooseLabel?: boolean;
@@ -142,6 +144,36 @@ export interface StockItem {
   supplier?: string;
   employeeName?: string;
   createdAt: string;
+}
+
+/**
+ * Tombstone de etiqueta baixada (cópia do item no instante da baixa).
+ * Base da aba "Devolver" de Movimentações: permite listar as etiquetas
+ * baixadas e recriá-las no estoque.
+ */
+export interface StockItemRemoval {
+  _id: string;
+  qrCode: string;
+  productId: string;
+  productName: string;
+  type: 'raw' | 'portioned';
+  weightGrams: number;
+  lote?: string;
+  /** Para onde a peça foi no momento da baixa. */
+  destination?: string;
+  /** Quem removeu. */
+  userName?: string;
+  reason?: string;
+  removedAt: string;
+  manipulationDate?: string;
+  expiryDate?: string;
+  originalExpiryDate?: string;
+  nf?: string;
+  supplier?: string;
+  employeeName?: string;
+  batchId?: string;
+  productGroup?: string;
+  productStorage?: string;
 }
 
 export interface StockMovement {

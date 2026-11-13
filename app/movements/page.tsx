@@ -16,10 +16,13 @@ import {
   DialogContent,
   DialogActions,
   CircularProgress,
+  InputAdornment,
 } from '@mui/material';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import UndoIcon from '@mui/icons-material/Undo';
+import SearchIcon from '@mui/icons-material/Search';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import { useSnackbar } from 'notistack';
@@ -30,10 +33,12 @@ import {
   useDeleteStockItem,
   useCreateStockMovement,
   useMovementDestinations,
+  useStockItemRemovals,
+  useRestoreStockItemRemoval,
 } from '@/lib/queries';
 import { formatDate, formatWeight, todayISODate } from '@/lib/utils';
 import api from '@/lib/api';
-import type { StockItem, UsedLabelInfo } from '@/types';
+import type { StockItem, StockItemRemoval, UsedLabelInfo } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
@@ -71,12 +76,6 @@ const statusLabels: Record<string, string> = {
   discarded: 'Descartado',
   expired: 'Vencido',
 };
-
-/**
- * Motivos de baixa exigidos na contagem: toda exclusão de etiqueta precisa
- * de um motivo marcado antes de ser confirmado.
- */
-const writeoffReasons = ['Perda', 'Não encontrado', 'Vencido', 'Avaria', 'Outro'];
 
 /**
  * HTTP 410 devolvido quando o QR pertence a uma etiqueta que JÁ foi baixada.
@@ -142,6 +141,11 @@ export default function MovementsPage() {
 
   const [tab, setTab] = useState(0);
 
+  // ===== Aba "Devolver": etiquetas baixadas (tombstones) =====
+  const { data: removals = [], isLoading: loadingRemovals } = useStockItemRemovals();
+  const restoreRemoval = useRestoreStockItemRemoval();
+  const [devolverSearch, setDevolverSearch] = useState('');
+
   // Qual campo de código está com o leitor de QR aberto (Movimentar/Contagem).
   const [scanTarget, setScanTarget] = useState<'mover' | 'contagem' | null>(null);
 
@@ -163,8 +167,11 @@ export default function MovementsPage() {
     found: number;
     missing: StockItem[];
   } | null>(null);
-  const [missingDest, setMissingDest] = useState<Record<string, string>>({});
   const [missingSelected, setMissingSelected] = useState<Record<string, boolean>>({});
+  /**
+   * Destino da contagem: UM select no topo (aplicado em lote E às ações por
+   * linha) — o select por linha da coluna "Destino" era quebrado e saiu.
+   */
   const [bulkDest, setBulkDest] = useState('');
   const countScanRef = useRef<HTMLInputElement>(null);
 
@@ -174,7 +181,6 @@ export default function MovementsPage() {
     { mode: 'single'; item: StockItem } | { mode: 'bulk'; items: StockItem[] } | null
   >(null);
   const [motivo, setMotivo] = useState('');
-  const [motivoOther, setMotivoOther] = useState('');
 
   /**
    * Procura a etiqueta pelo código. `override` é usado quando o código vem do
@@ -233,6 +239,20 @@ export default function MovementsPage() {
     setDestino('');
   };
 
+  /**
+   * Motivos/destinos de baixa exigidos na contagem: as opções registradas
+   * como "Baixar" em Cadastros → Destinos (fixas + customizadas), e NADA
+   * além delas — a lista antiga era fixa no código.
+   */
+  const writeoffDestinationOptions = [
+    ...fixedWriteoffDestinations,
+    ...(destinations ?? [])
+      .filter(
+        (d) => d.active && d.type === 'writeoff' && !fixedWriteoffDestinations.includes(d.name),
+      )
+      .map((d) => d.name),
+  ];
+
   const destinationOptions =
     action === 'move'
       ? [
@@ -244,14 +264,7 @@ export default function MovementsPage() {
             .map((d) => d.name),
         ]
       : action === 'writeoff'
-        ? [
-            ...fixedWriteoffDestinations,
-            ...(destinations ?? [])
-              .filter(
-                (d) => d.active && d.type === 'writeoff' && !fixedWriteoffDestinations.includes(d.name),
-              )
-              .map((d) => d.name),
-          ]
+        ? writeoffDestinationOptions
         : [];
 
   const moving = createMovement.isPending || updateItem.isPending || deleteItem.isPending;
@@ -319,20 +332,13 @@ export default function MovementsPage() {
         (d) => d.active && (d.type ?? 'move') === 'move' && !fixedMoveDestinations.includes(d.name),
       )
       .map((d) => d.name),
-    ...fixedWriteoffDestinations,
-    ...(destinations ?? [])
-      .filter(
-        (d) =>
-          d.active && d.type === 'writeoff' && !fixedWriteoffDestinations.includes(d.name),
-      )
-      .map((d) => d.name),
+    ...writeoffDestinationOptions,
   ];
 
   const resetCount = () => {
     setCountScanInput('');
     setCountScanned([]);
     setCountResult(null);
-    setMissingDest({});
     setMissingSelected({});
     setBulkDest('');
   };
@@ -389,7 +395,6 @@ export default function MovementsPage() {
     const found = countItems.filter((i) => countScanned.includes(i.qrCode)).length;
     const missing = countItems.filter((i) => !countScanned.includes(i.qrCode));
     setCountResult({ expected: countItems.length, found, missing });
-    setMissingDest({});
     setMissingSelected({});
     setBulkDest('');
   };
@@ -405,10 +410,11 @@ export default function MovementsPage() {
     });
   };
 
+  /** Mover etiqueta faltante: usa o destino do select do topo (bulk). */
   const handleMoveMissing = async (item: StockItem) => {
-    const dest = missingDest[item._id];
+    const dest = bulkDest;
     if (!dest) {
-      enqueueSnackbar('Selecione o destino da etiqueta.', { variant: 'warning' });
+      enqueueSnackbar('Selecione o destino no topo da lista.', { variant: 'warning' });
       return;
     }
     try {
@@ -435,18 +441,22 @@ export default function MovementsPage() {
   /** Baixar na contagem exige motivo: abre o diálogo antes de excluir. */
   const askMotivoSingle = (item: StockItem) => {
     setMotivo('');
-    setMotivoOther('');
     setMotivoDialog({ mode: 'single', item });
   };
 
   const closeMotivoDialog = () => setMotivoDialog(null);
 
-  /** Destino do movimento de baixa, a partir do motivo marcado. */
-  const motivoDestination = () => (motivo === 'Não encontrado' ? 'Não encontrado' : 'Perda');
+  /**
+   * Destino do movimento de baixa: a opção marcada JÁ é um destino
+   * cadastrado como "Baixar" (Cadastros → Destinos) — a antiga lógica
+   * rebaixava tudo para 'Perda'/'Não encontrado'.
+   */
+  const motivoDestination = () => motivo;
 
   const handleMotivoConfirm = async () => {
     if (!motivoDialog) return;
-    const label = motivo === 'Outro' ? motivoOther.trim() : motivo;
+    // A opção marcada JÁ é o destino de baixa cadastrado — sem texto livre.
+    const label = motivo;
     if (!label) return;
     const targets = motivoDialog.mode === 'single' ? [motivoDialog.item] : motivoDialog.items;
     setMotivoDialog(null);
@@ -538,8 +548,44 @@ export default function MovementsPage() {
   const askMotivoBulk = () => {
     if (selectedMissing.length === 0) return;
     setMotivo('');
-    setMotivoOther('');
     setMotivoDialog({ mode: 'bulk', items: selectedMissing });
+  };
+
+  /** Etiquetas baixadas filtradas pela busca (produto, lote ou QR). */
+  const filteredRemovals = removals.filter((r) => {
+    const q = devolverSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      r.productName.toLowerCase().includes(q) ||
+      (r.lote ?? '').toLowerCase().includes(q) ||
+      r.qrCode.toLowerCase().includes(q)
+    );
+  });
+
+  /**
+   * Devolve a etiqueta baixada ao estoque: recria o item (API apaga o
+   * tombstone) e registra a movimentação de ENTRADA correspondente.
+   */
+  const handleRestore = async (removal: StockItemRemoval) => {
+    try {
+      await restoreRemoval.mutateAsync(removal._id);
+      await createMovement.mutateAsync({
+        productId: removal.productId,
+        productName: removal.productName,
+        movementType: 'entry',
+        quantity: 1,
+        weightGrams: removal.weightGrams,
+        itemType: removal.type,
+        lote: removal.lote,
+        reason: `Devolução — etiqueta ${removal.qrCode} devolvida ao estoque`,
+        date: todayISODate(),
+      });
+      enqueueSnackbar(`Etiqueta ${removal.qrCode} devolvida ao estoque.`, {
+        variant: 'success',
+      });
+    } catch {
+      enqueueSnackbar('Erro ao devolver etiqueta.', { variant: 'error' });
+    }
   };
 
   return (
@@ -597,6 +643,7 @@ export default function MovementsPage() {
       >
         <Tab icon={<QrCodeScannerIcon fontSize="small" />} iconPosition="start" label="Movimentar Etiqueta" />
         <Tab icon={<AssignmentIcon fontSize="small" />} iconPosition="start" label="Contagem" />
+        <Tab icon={<UndoIcon fontSize="small" />} iconPosition="start" label="Devolver" />
       </ResponsiveTabs>
 
       {tab === 0 && (
@@ -1112,64 +1159,68 @@ export default function MovementsPage() {
                           <Typography variant="body2" fontWeight={600}>
                             Selecionar tudo
                           </Typography>
-                          {selectedMissing.length > 0 && (
-                            <Box
-                              sx={{
-                                ml: 'auto',
-                                display: 'flex',
-                                gap: 1,
-                                alignItems: 'center',
-                                flexWrap: 'wrap',
+                          <Box
+                            sx={{
+                              ml: 'auto',
+                              display: 'flex',
+                              gap: 1,
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            {/* ÚNICO select de destino (topo): serve para o
+                                bulk E para as ações de cada linha. */}
+                            <TextField
+                              select
+                              size="small"
+                              sx={{ minWidth: { xs: 140, md: 160 }, width: { xs: '100%', sm: 'auto' } }}
+                              value={bulkDest}
+                              onChange={(e) => setBulkDest(e.target.value)}
+                              SelectProps={{
+                                displayEmpty: true,
+                                renderValue: (v) =>
+                                  v === '' ? (
+                                    <Box component="span" sx={{ color: 'text.disabled' }}>
+                                      Destino...
+                                    </Box>
+                                  ) : (
+                                    String(v)
+                                  ),
                               }}
                             >
-                              <TextField
-                                select
-                                size="small"
-                                sx={{ minWidth: { xs: 140, md: 160 }, width: { xs: '100%', sm: 'auto' } }}
-                                value={bulkDest}
-                                onChange={(e) => setBulkDest(e.target.value)}
-                                SelectProps={{
-                                  displayEmpty: true,
-                                  renderValue: (v) =>
-                                    v === '' ? (
-                                      <Box component="span" sx={{ color: 'text.disabled' }}>
-                                        Destino...
-                                      </Box>
-                                    ) : (
-                                      String(v)
-                                    ),
-                                }}
-                              >
-                                <MenuItem value="" disabled>
-                                  Destino...
+                              <MenuItem value="" disabled>
+                                Destino...
+                              </MenuItem>
+                              {allCountDestinations.map((d) => (
+                                <MenuItem key={d} value={d}>
+                                  {d}
                                 </MenuItem>
-                                {allCountDestinations.map((d) => (
-                                  <MenuItem key={d} value={d}>
-                                    {d}
-                                  </MenuItem>
-                                ))}
-                              </TextField>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={!bulkDest || moving}
-                                onClick={() => void handleBulkMove()}
-                                sx={{ textTransform: 'none' }}
-                              >
-                                Mover ({selectedMissing.length})
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="contained"
-                                color="error"
-                                disabled={moving}
-                                onClick={() => askMotivoBulk()}
-                                sx={{ textTransform: 'none' }}
-                              >
-                                Baixar ({selectedMissing.length})
-                              </Button>
-                            </Box>
-                          )}
+                              ))}
+                            </TextField>
+                            {selectedMissing.length > 0 && (
+                              <>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={!bulkDest || moving}
+                                  onClick={() => void handleBulkMove()}
+                                  sx={{ textTransform: 'none' }}
+                                >
+                                  Mover ({selectedMissing.length})
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="error"
+                                  disabled={moving}
+                                  onClick={() => askMotivoBulk()}
+                                  sx={{ textTransform: 'none' }}
+                                >
+                                  Baixar ({selectedMissing.length})
+                                </Button>
+                              </>
+                            )}
+                          </Box>
                         </Box>
                         <ResponsiveTable
                           paper={false}
@@ -1195,7 +1246,7 @@ export default function MovementsPage() {
                               <IconButton
                                 size="small"
                                 aria-label="mover etiqueta"
-                                disabled={!missingDest[item._id] || moving}
+                                disabled={!bulkDest || moving}
                                 onClick={() => void handleMoveMissing(item)}
                                 sx={{ color: '#1976D2' }}
                               >
@@ -1240,45 +1291,6 @@ export default function MovementsPage() {
                                 </Box>
                               ),
                             },
-                            {
-                              id: 'destino',
-                              header: 'Destino',
-                              fullWidthOnMobile: true,
-                              cell: (item) => (
-                                <TextField
-                                  select
-                                  size="small"
-                                  sx={{ minWidth: { xs: '100%', md: 130 } }}
-                                  value={missingDest[item._id] ?? ''}
-                                  onChange={(e) =>
-                                    setMissingDest((prev) => ({
-                                      ...prev,
-                                      [item._id]: e.target.value,
-                                    }))
-                                  }
-                                  SelectProps={{
-                                    displayEmpty: true,
-                                    renderValue: (v) =>
-                                      v === '' ? (
-                                        <Box component="span" sx={{ color: 'text.disabled' }}>
-                                          Destino...
-                                        </Box>
-                                      ) : (
-                                        String(v)
-                                      ),
-                                  }}
-                                >
-                                  <MenuItem value="" disabled>
-                                    Destino...
-                                  </MenuItem>
-                                  {allCountDestinations.map((d) => (
-                                    <MenuItem key={d} value={d}>
-                                      {d}
-                                    </MenuItem>
-                                  ))}
-                                </TextField>
-                              ),
-                            },
                           ]}
                         />
                       </Box>
@@ -1287,6 +1299,105 @@ export default function MovementsPage() {
                 )}
               </>
             ))}
+        </Box>
+      )}
+
+      {tab === 2 && (
+        <Box>
+          <Box sx={{ ...cardSx, p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <UndoIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+              <Typography variant="subtitle1" fontWeight={700}>
+                Devolver etiquetas ao estoque
+              </Typography>
+            </Box>
+            <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+              Todas as etiquetas baixadas. Ao devolver, a etiqueta volta ao estoque e uma
+              movimentação de Entrada é registrada.
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Buscar por produto, lote ou QR..."
+              value={devolverSearch}
+              onChange={(e) => setDevolverSearch(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
+            />
+          </Box>
+
+          <Box sx={{ ...cardSx, p: 2, mt: 2 }}>
+            <ResponsiveTable
+              paper={false}
+              size="small"
+              loading={loadingRemovals}
+              headerCellSx={thSx}
+              rows={filteredRemovals}
+              rowKey={(r) => r._id}
+              emptyMessage="Nenhuma etiqueta baixada"
+              columns={[
+                { id: 'data', header: 'Data da Baixa', cell: (r) => formatDate(r.removedAt) },
+                {
+                  id: 'produto',
+                  header: 'Produto',
+                  primary: true,
+                  cell: (r) => (
+                    <Typography variant="body2" fontWeight={600}>
+                      {r.productName}
+                    </Typography>
+                  ),
+                },
+                {
+                  id: 'tipo',
+                  header: 'Tipo',
+                  cell: (r) => (
+                    <Chip
+                      label={r.type === 'raw' ? 'Bruto' : 'Porcionado'}
+                      size="small"
+                      sx={grayChipSx}
+                    />
+                  ),
+                },
+                { id: 'peso', header: 'Peso', cell: (r) => `${r.weightGrams}g` },
+                { id: 'lote', header: 'Lote', cell: (r) => r.lote || '—' },
+                {
+                  id: 'qr',
+                  header: 'QR',
+                  sx: { fontFamily: 'monospace' },
+                  cell: (r) => (
+                    <Box component="span" sx={{ fontFamily: 'monospace' }}>
+                      {r.qrCode}
+                    </Box>
+                  ),
+                },
+                { id: 'destino', header: 'Destino da Baixa', cell: (r) => r.destination || '—' },
+                { id: 'usuario', header: 'Baixado por', cell: (r) => r.userName || '—' },
+              ]}
+              actions={(r) => (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<UndoIcon fontSize="small" />}
+                  disabled={restoreRemoval.isPending || moving}
+                  onClick={() => void handleRestore(r)}
+                  sx={{
+                    textTransform: 'none',
+                    color: '#1976D2',
+                    borderColor: '#90CAF9',
+                    '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                  }}
+                >
+                  Devolver
+                </Button>
+              )}
+            />
+          </Box>
         </Box>
       )}
 
@@ -1341,26 +1452,13 @@ export default function MovementsPage() {
                 <MenuItem value="" disabled>
                   Selecione...
                 </MenuItem>
-                {writeoffReasons.map((r) => (
+                {writeoffDestinationOptions.map((r) => (
                   <MenuItem key={r} value={r}>
                     {r}
                   </MenuItem>
                 ))}
               </TextField>
             </Box>
-            {motivo === 'Outro' && (
-              <Box>
-                <FieldLabel required>Descreva o motivo</FieldLabel>
-                <TextField
-                  fullWidth
-                  size="small"
-                  sx={{ '& .MuiOutlinedInput-root': { height: 44 } }}
-                  placeholder="Ex: Contaminada na câmara fria"
-                  value={motivoOther}
-                  onChange={(e) => setMotivoOther(e.target.value)}
-                />
-              </Box>
-            )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1.5 }}>
@@ -1382,9 +1480,7 @@ export default function MovementsPage() {
           <Button
             variant="contained"
             color="error"
-            disabled={
-              !(motivo === 'Outro' ? motivoOther.trim() : motivo) || moving
-            }
+            disabled={!motivo || moving}
             onClick={() => void handleMotivoConfirm()}
             sx={{
               textTransform: 'none' as const,

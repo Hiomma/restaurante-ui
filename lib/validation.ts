@@ -46,6 +46,7 @@ export const productSchema = z.object({
   storageMethod: z.string().min(1, 'Storage method is required'),
   shelfLifeDays: z.preprocess(emptyToUndefined, z.number({ message: 'Shelf life is required' }).min(0)),
   minQuantity: z.preprocess(emptyToUndefined, z.number().min(0).optional()),
+  unit: z.enum(['kg', 'l']).optional(),
   minPortionedQuantity: z.preprocess(emptyToUndefined, z.number().min(0).optional()),
   consumeAfterOpeningDays: z.preprocess(emptyToUndefined, z.number().min(0).optional()),
   allowLooseLabel: z.boolean().optional(),
@@ -54,6 +55,9 @@ export const productSchema = z.object({
 export const portioningSchema = z.object({
   productId: z.string().min(1),
   productName: z.string().min(1),
+  /** Matéria-prima real escaneada (produto de origem, não o de saída). */
+  rawProductId: z.string().optional(),
+  rawProductName: z.string().optional(),
   rawWeightGrams: z.number().min(0),
   cleanWeightGrams: z.number().min(0),
   lossGrams: z.number().min(0),

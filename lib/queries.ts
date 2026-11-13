@@ -11,6 +11,7 @@ import type {
   Product,
   Portioning,
   StockItem,
+  StockItemRemoval,
   StockMovement,
 } from '../types';
 
@@ -386,6 +387,29 @@ export function useLowStock() {
   return useQuery({
     queryKey: ['stock-items', 'low-stock'],
     queryFn: () => api.get('/stock-items/low-stock').then((res) => res.data as StockItem[]),
+  });
+}
+
+/** Etiquetas baixadas (tombstones) — lista da aba "Devolver". */
+export function useStockItemRemovals() {
+  return useQuery({
+    queryKey: ['stock-item-removals'],
+    queryFn: () =>
+      api.get('/stock-items/removals').then((res) => res.data as StockItemRemoval[]),
+  });
+}
+
+/** Devolve a etiqueta baixada ao estoque (recria o item e apaga o tombstone). */
+export function useRestoreStockItemRemoval() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post(`/stock-items/removals/${id}/restore`).then((res) => res.data as StockItem),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stock-item-removals'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-items'] });
+      queryClient.invalidateQueries({ queryKey: ['stock-movements'] });
+    },
   });
 }
 
