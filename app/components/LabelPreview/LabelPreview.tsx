@@ -2,7 +2,7 @@
 
 import { Box, Typography } from '@mui/material';
 import { QRCodeSVG } from 'qrcode.react';
-import { formatDate } from '@/lib/utils';
+import { formatDate, unitSuffix } from '@/lib/utils';
 
 export interface LabelData {
   key: string;
@@ -10,6 +10,8 @@ export interface LabelData {
   productName: string;
   storage: string;
   weightGrams: number;
+  /** Unidade do produto no cadastro (kg | l) — em litro a etiqueta sai em ml. */
+  unit?: 'kg' | 'l';
   recebimentoDate: string;
   expiryDate: string;
   lote?: string;
@@ -69,7 +71,7 @@ export default function LabelPreview({ data }: { data: LabelData }) {
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
           {[
             { label: null as string | null, value: data.storage, align: 'left' as const },
-            { label: null, value: `${data.weightGrams}g`, align: 'right' as const },
+            { label: null, value: `${data.weightGrams}${unitSuffix(data.unit)}`, align: 'right' as const },
             { label: 'Data do recebimento:', value: formatDate(data.recebimentoDate), align: 'left' as const },
             { label: 'Lote:', value: data.lote || '—', align: 'left' as const },
             { label: 'Data validade:', value: formatDate(data.expiryDate), align: 'left' as const },

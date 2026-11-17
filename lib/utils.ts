@@ -49,6 +49,42 @@ export function formatKg(grams?: number | null): string {
   return `${(grams / 1000).toFixed(2)}kg`;
 }
 
+/**
+ * Unidade de medida do produto (cadastro): 'kg' (quilograma) ou 'l' (litro).
+ * A base numérica do sistema continua sendo gramas — em produtos em litro
+ * 1g = 1ml, então o MESMO número é exibido com o sufixo da unidade.
+ */
+export type ProductUnit = 'kg' | 'l';
+
+/** Sufixo curto da unidade do produto: 'g' (padrão) ou 'ml' (litro). */
+export function unitSuffix(unit?: ProductUnit | null): string {
+  return unit === 'l' ? 'ml' : 'g';
+}
+
+/**
+ * Quantidade de um produto na própria unidade, no formato do sistema:
+ * `800g` / `1500g / 1.50kg` (peso) e `800ml` / `1500ml / 1.50L` (volume).
+ * Valores ausentes viram '—'.
+ */
+export function formatQuantity(
+  grams?: number | null,
+  unit?: ProductUnit | null,
+): string {
+  if (grams === undefined || grams === null || Number.isNaN(grams)) return '—';
+  if (unit === 'l') {
+    return grams >= 1000 ? `${grams}ml / ${(grams / 1000).toFixed(2)}L` : `${grams}ml`;
+  }
+  return formatWeight(grams);
+}
+
+/** Total na grandeza principal do produto: `1.50kg` (padrão) ou `1.50L`. */
+export function formatUnitTotal(grams?: number | null, unit?: ProductUnit | null): string {
+  if (grams === undefined || grams === null || Number.isNaN(grams)) return '—';
+  return unit === 'l'
+    ? `${(grams / 1000).toFixed(2)}L`
+    : `${(grams / 1000).toFixed(2)}kg`;
+}
+
 export function formatDate(iso?: string | null): string {
   if (!iso) return '—';
   if (isCalendarDate(iso)) {

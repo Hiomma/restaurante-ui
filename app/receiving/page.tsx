@@ -180,6 +180,7 @@ export default function ReceivingPage() {
             productName: product.name,
             storage: product.storageMethod,
             weightGrams: weightEach,
+            unit: product.unit,
             recebimentoDate,
             expiryDate,
             lote: row.lote,

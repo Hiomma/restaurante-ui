@@ -36,7 +36,7 @@ import {
   useStockItemRemovals,
   useRestoreStockItemRemoval,
 } from '@/lib/queries';
-import { formatDate, formatWeight, todayISODate } from '@/lib/utils';
+import { formatDate, formatQuantity, unitSuffix, todayISODate } from '@/lib/utils';
 import api from '@/lib/api';
 import type { StockItem, StockItemRemoval, UsedLabelInfo } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
@@ -140,6 +140,10 @@ export default function MovementsPage() {
   const deleteItem = useDeleteStockItem();
 
   const [tab, setTab] = useState(0);
+
+  /** Unidade (kg | l) de um produto, lida no cadastro. */
+  const unitOf = (productId?: string) =>
+    (products ?? []).find((p) => p._id === productId)?.unit;
 
   // ===== Aba "Devolver": etiquetas baixadas (tombstones) =====
   const { data: removals = [], isLoading: loadingRemovals } = useStockItemRemovals();
@@ -768,7 +772,7 @@ export default function MovementsPage() {
                           }}
                         />
                         <Chip
-                          label={formatWeight(item.weightGrams)}
+                          label={formatQuantity(item.weightGrams, unitOf(item.product.productId))}
                           size="small"
                           sx={{ ...grayChipSx, height: 20 }}
                         />
@@ -1274,7 +1278,7 @@ export default function MovementsPage() {
                                 </Typography>
                               ),
                             },
-                            { id: 'peso', header: 'Peso', cell: (item) => `${item.weightGrams}g` },
+                            { id: 'peso', header: 'Peso', cell: (item) => `${item.weightGrams}${unitSuffix(unitOf(item.product.productId))}` },
                             { id: 'lote', header: 'Lote', cell: (item) => item.lote || '—' },
                             {
                               id: 'validade',
@@ -1364,7 +1368,7 @@ export default function MovementsPage() {
                     />
                   ),
                 },
-                { id: 'peso', header: 'Peso', cell: (r) => `${r.weightGrams}g` },
+                { id: 'peso', header: 'Peso', cell: (r) => `${r.weightGrams}${unitSuffix(unitOf(r.productId))}` },
                 { id: 'lote', header: 'Lote', cell: (r) => r.lote || '—' },
                 {
                   id: 'qr',

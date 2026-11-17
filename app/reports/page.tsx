@@ -34,6 +34,9 @@ import {
   formatKg,
   formatDate,
   formatPercent,
+  formatQuantity,
+  formatUnitTotal,
+  unitSuffix,
   downloadCsv,
   printReport,
   movementTypeView,
@@ -167,6 +170,8 @@ interface ProductionReportRow {
   perdaPeso: number;
   perdaQtd: number;
   pctPerda: number;
+  /** Unidade do produto de SAÍDA no cadastro (kg | l). */
+  unit?: 'kg' | 'l';
 }
 
 /** Abre a aba correspondente ao parâmetro `?tab=` da URL. */
@@ -206,8 +211,8 @@ const recvStatusLabel: Record<StockItem['status'], string> = {
   expired: 'vencido',
 };
 
-const fmtG = (grams: number) =>
-  `${new Intl.NumberFormat('pt-BR').format(Math.round(grams))}g`;
+const fmtG = (grams: number, unit?: 'kg' | 'l') =>
+  `${new Intl.NumberFormat('pt-BR').format(Math.round(grams))}${unit === 'l' ? 'ml' : 'g'}`;
 
 /** Remove acentos e padroniza para minúsculas (busca sem depender de acentos). */
 const normalizeText = (s: string) =>
@@ -399,9 +404,12 @@ function ExportButtons({
 function WeightPair({
   grams,
   tone = 'default',
+  unit,
 }: {
   grams?: number | null;
   tone?: 'default' | 'amber';
+  /** Unidade do produto (kg | l) — em litro mostra ml/L. */
+  unit?: 'kg' | 'l';
 }) {
   if (grams === undefined || grams === null) {
     return <Typography color="text.secondary">—</Typography>;
@@ -412,10 +420,11 @@ function WeightPair({
         component="span"
         sx={{ fontWeight: 700, color: tone === 'amber' ? '#E65100' : 'inherit' }}
       >
-        {grams}g
+        {grams}
+        {unitSuffix(unit)}
       </Box>
       <Box component="span" sx={{ color: 'text.secondary', ml: 0.5 }}>
-        ({formatKg(grams)})
+        ({formatUnitTotal(grams, unit)})
       </Box>
     </Typography>
   );
@@ -749,10 +758,16 @@ function ReportsContent() {
       count: v.count,
       pct: v.raw > 0 ? (v.loss / v.raw) * 100 : 0,
       gainPct: v.raw > 0 ? (v.gain / v.raw) * 100 : 0,
+      // Unidade da matéria-prima no cadastro (kg | l).
+      unit: productMap.get(productId)?.unit,
     }))
     .sort((a, b) => b.loss - a.loss);
 
-  const perdasHistory = [...filteredPerdas].sort((a, b) => b.date.localeCompare(a.date));
+  // `unit` acompanha a matéria-prima para exibir os pesos na unidade
+  // cadastrada do produto (kg | l) — a base continua em gramas.
+  const perdasHistory = [...filteredPerdas]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((p) => ({ ...p, unit: productMap.get(perdasProductKey(p))?.unit }));
 
   // ===== Relatório de Produção e Baixas (migrado da aba Histórico) =====
 
@@ -960,6 +975,7 @@ function ReportsContent() {
           fornecedor: pt.supplier || '—',
           lote: pt.lote || '—',
           loteOrigem,
+          unit: productMap.get(o.productId)?.unit,
           pesoProduzido,
           etiquetasProduzidas,
           pesoEstoque: inStock.reduce((s, i) => s + i.weightGrams, 0),
@@ -1077,7 +1093,7 @@ function ReportsContent() {
     {
       id: 'pesoProduzido',
       header: 'Peso Total Produzido',
-      cell: (r) => `${r.pesoProduzido}g`,
+      cell: (r) => `${r.pesoProduzido}${unitSuffix(r.unit)}`,
     },
     {
       id: 'etiquetasProduzidas',
@@ -1085,7 +1101,11 @@ function ReportsContent() {
       align: 'right',
       cell: (r) => r.etiquetasProduzidas,
     },
-    { id: 'pesoEstoque', header: 'Peso em Estoque (atual)', cell: (r) => `${r.pesoEstoque}g` },
+    {
+      id: 'pesoEstoque',
+      header: 'Peso em Estoque (atual)',
+      cell: (r) => `${r.pesoEstoque}${unitSuffix(r.unit)}`,
+    },
     {
       id: 'qtdEstoque',
       header: 'Etiquetas em Estoque (atual)',
@@ -1097,7 +1117,7 @@ function ReportsContent() {
           {
             id: 'vendaPeso',
             header: 'Peso Venda',
-            cell: (r: ProductionReportRow) => `${r.vendaPeso}g`,
+            cell: (r: ProductionReportRow) => `${r.vendaPeso}${unitSuffix(r.unit)}`,
           },
         ]
       : []),
@@ -1125,7 +1145,7 @@ function ReportsContent() {
           {
             id: 'perdaPeso',
             header: 'Peso Perdido',
-            cell: (r: ProductionReportRow) => `${r.perdaPeso}g`,
+            cell: (r: ProductionReportRow) => `${r.perdaPeso}${unitSuffix(r.unit)}`,
           },
         ]
       : []),
@@ -1216,8 +1236,8 @@ function ReportsContent() {
         r.status === 'sem'
           ? 'Sem mínimo'
           : r.status === 'comprar'
-            ? `Comprar (falta ${fmtG(r.product.minQuantity - r.weight)})`
-            : `OK (+${fmtG(r.weight - r.product.minQuantity)})`,
+            ? `Comprar (falta ${fmtG(r.product.minQuantity - r.weight, r.product.unit)})`
+            : `OK (+${fmtG(r.weight - r.product.minQuantity, r.product.unit)})`,
       ]),
     );
   };
@@ -1583,10 +1603,10 @@ function ReportsContent() {
                     { id: 'produto', header: 'Produto', primary: true, cell: (r) => r.name },
                     {
                       id: 'perda',
-                      header: 'Perda (g)',
+                      header: 'Perda',
                       cell: (r) => (
                         <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                          {fmtG(r.loss)}
+                          {fmtG(r.loss, r.unit)}
                         </Typography>
                       ),
                     },
@@ -1599,15 +1619,15 @@ function ReportsContent() {
                       // Saldo por matéria-prima: azul com "+" quando houve ganho
                       // (rendimento acima do bruto); vermelho com "−" quando houve perda.
                       id: 'ganho',
-                      header: 'Ganho (g)',
+                      header: 'Ganho',
                       cell: (r) =>
                         r.gain > 0 ? (
                           <Typography fontWeight={700} sx={{ color: '#1565C0' }}>
-                            {`+${fmtG(r.gain)}`}
+                            {`+${fmtG(r.gain, r.unit)}`}
                           </Typography>
                         ) : r.loss > 0 ? (
                           <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                            {`-${fmtG(r.loss)}`}
+                            {`-${fmtG(r.loss, r.unit)}`}
                           </Typography>
                         ) : (
                           '—'
@@ -1658,14 +1678,22 @@ function ReportsContent() {
                       header: 'Lote Origem',
                       cell: (p) => perdasRawLote(p) || '—',
                     },
-                    { id: 'bruto', header: 'Bruto', cell: (p) => `${p.rawWeightGrams}g` },
-                    { id: 'limpo', header: 'Limpo', cell: (p) => `${p.cleanWeightGrams}g` },
+                    {
+                      id: 'bruto',
+                      header: 'Bruto',
+                      cell: (p) => `${p.rawWeightGrams}${unitSuffix(p.unit)}`,
+                    },
+                    {
+                      id: 'limpo',
+                      header: 'Limpo',
+                      cell: (p) => `${p.cleanWeightGrams}${unitSuffix(p.unit)}`,
+                    },
                     {
                       id: 'perda',
-                      header: 'Perda (g)',
+                      header: 'Perda',
                       cell: (p) => (
                         <Typography fontWeight={700} sx={{ color: '#C62828' }}>
-                          {fmtG(p.lossGrams)}
+                          {fmtG(p.lossGrams, p.unit)}
                         </Typography>
                       ),
                     },
@@ -1915,14 +1943,14 @@ function ReportsContent() {
                     {
                       id: 'peso',
                       header: 'Peso em Estoque',
-                      cell: (r) => <WeightPair grams={r.weight} />,
+                      cell: (r) => <WeightPair grams={r.weight} unit={r.product.unit} />,
                     },
                     {
                       id: 'minimo',
-                      header: 'Mínimo (g)',
+                      header: 'Mínimo',
                       cell: (r) =>
                         r.product.minQuantity
-                          ? `${r.product.minQuantity}g (${formatKg(r.product.minQuantity)})`
+                          ? formatQuantity(r.product.minQuantity, r.product.unit)
                           : '—',
                     },
                     {
@@ -1936,11 +1964,11 @@ function ReportsContent() {
                           </Typography>
                         ) : r.status === 'comprar' ? (
                           <SolidRedChip
-                            label={`Comprar (falta ${fmtG(r.product.minQuantity - r.weight)})`}
+                            label={`Comprar (falta ${fmtG(r.product.minQuantity - r.weight, r.product.unit)})`}
                           />
                         ) : (
                           <ToneChip
-                            label={`OK (+${fmtG(r.weight - r.product.minQuantity)})`}
+                            label={`OK (+${fmtG(r.weight - r.product.minQuantity, r.product.unit)})`}
                             tone="green"
                           />
                         ),
@@ -1992,7 +2020,13 @@ function ReportsContent() {
                       cell: (i) => i.product.productName,
                     },
                     { id: 'grupo', header: 'Grupo', cell: (i) => i.product.productGroup || '—' },
-                    { id: 'peso', header: 'Peso', cell: (i) => <WeightPair grams={i.weightGrams} /> },
+                    {
+                      id: 'peso',
+                      header: 'Peso',
+                      cell: (i) => (
+                        <WeightPair grams={i.weightGrams} unit={productMap.get(i.product.productId)?.unit} />
+                      ),
+                    },
                     { id: 'validade', header: 'Validade', cell: (i) => formatDate(i.expiryDate) },
                     { id: 'qr', header: 'QR', cell: (i) => i.qrCode || '—' },
                     { id: 'lote', header: 'Lote', cell: (i) => i.lote || '—' },
@@ -2090,7 +2124,12 @@ function ReportsContent() {
                     {
                       id: 'peso',
                       header: 'Peso Total',
-                      cell: (m) => <WeightPair grams={m.weightGrams ?? null} />,
+                      cell: (m) => (
+                        <WeightPair
+                          grams={m.weightGrams ?? null}
+                          unit={productMap.get(m.product.productId)?.unit}
+                        />
+                      ),
                     },
                     {
                       id: 'tipoItem',
@@ -2236,14 +2275,15 @@ function ReportsContent() {
                     {
                       id: 'pesoPorcao',
                       header: 'Peso Porção',
-                      cell: (r) => (r.latest ? `${r.latest.portionWeightGrams}g` : '—'),
+                      cell: (r) =>
+                        r.latest ? `${r.latest.portionWeightGrams}${unitSuffix(r.product.unit)}` : '—',
                     },
                     {
                       id: 'brutoEstimado',
                       header: 'Bruto Estimado a Retirar',
                       cell: (r) =>
                         r.below && r.latest ? (
-                          <WeightPair grams={r.estimatedRaw} tone="amber" />
+                          <WeightPair grams={r.estimatedRaw} tone="amber" unit={r.product.unit} />
                         ) : (
                           '—'
                         ),

@@ -31,7 +31,7 @@ import {
   useMe,
   useProducts,
 } from '@/lib/queries';
-import { formatDate, movementTypeView, stripBatchCodes } from '@/lib/utils';
+import { formatDate, movementTypeView, stripBatchCodes, unitSuffix } from '@/lib/utils';
 import { printEtiquetasNativas } from '@/lib/printService';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
@@ -64,6 +64,7 @@ function toLabelData(
   item: StockItem,
   companyName: string,
   consumeAfterOpeningDays?: number,
+  unit?: 'kg' | 'l',
 ): LabelData {
   return {
     key: item._id,
@@ -76,6 +77,7 @@ function toLabelData(
     lote: item.lote,
     responsavel: item.employeeName,
     consumeAfterOpeningDays,
+    unit,
     qrCode: item.qrCode,
   };
 }
@@ -95,10 +97,13 @@ function LabelCard({
   item,
   checked,
   onToggle,
+  unit,
 }: {
   item: StockItem;
   checked: boolean;
   onToggle: () => void;
+  /** Unidade (kg | l) do produto no cadastro. */
+  unit?: 'kg' | 'l';
 }) {
   const statusLabel =
     item.status === 'in_stock'
@@ -132,7 +137,10 @@ function LabelCard({
           {item.product.productName}
         </Typography>
       </Box>
-      <Typography variant="body2" fontWeight={700}>{item.weightGrams}g</Typography>
+      <Typography variant="body2" fontWeight={700}>
+        {item.weightGrams}
+        {unitSuffix(unit)}
+      </Typography>
       <Typography variant="caption" sx={{ color: '#666', display: 'block' }}>
         Val: {formatDate(item.expiryDate)}
       </Typography>
@@ -152,6 +160,10 @@ export default function HistoryPage() {
   const { data: movements, isLoading } = useStockMovements();
   const { data: me } = useMe();
   const { data: products } = useProducts();
+
+  /** Unidade (kg | l) de um produto, lida no cadastro. */
+  const unitOf = (productId?: string) =>
+    (products ?? []).find((p) => p._id === productId)?.unit;
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   /** Filtro de PERÍODO da lista de movimentações (aba Histórico). */
@@ -214,6 +226,7 @@ export default function HistoryPage() {
       item,
       me?.company?.name ?? '',
       products?.find((p) => p._id === item.product.productId)?.consumeAfterOpeningDays,
+      products?.find((p) => p._id === item.product.productId)?.unit,
     ),
   );
 
@@ -402,7 +415,10 @@ export default function HistoryPage() {
           {
             id: 'peso',
             header: 'Peso',
-            cell: (m) => (m.weightGrams != null ? `${m.weightGrams}g` : '—'),
+            cell: (m) =>
+              m.weightGrams != null
+                ? `${m.weightGrams}${unitSuffix(unitOf(m.product.productId))}`
+                : '—',
           },
           {
             id: 'motivo',
@@ -486,7 +502,11 @@ export default function HistoryPage() {
               <InfoField label="Quantidade" value={detail ? String(detail.quantity) : '—'} />
               <InfoField
                 label="Peso"
-                value={detail?.weightGrams != null ? `${detail.weightGrams}g` : '—'}
+                value={
+                  detail?.weightGrams != null
+                    ? `${detail.weightGrams}${unitSuffix(unitOf(detail.product.productId))}`
+                    : '—'
+                }
               />
               <InfoField
                 label="Tipo"
@@ -566,6 +586,7 @@ export default function HistoryPage() {
                     item={item}
                     checked={selectedLabels.includes(item._id)}
                     onToggle={() => toggleLabel(item._id)}
+                    unit={products?.find((p) => p._id === item.product.productId)?.unit}
                   />
                 ))}
               </Box>

@@ -32,6 +32,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import {
   useProducts,
   useStockItems,
@@ -41,12 +42,13 @@ import {
   useUpdateStockItem,
   useMe,
 } from '@/lib/queries';
-import { formatDate, formatKg, formatWeight, daysUntil, lifeStatus, todayISODate, downloadCsv } from '@/lib/utils';
+import { formatDate, formatKg, formatQuantity, formatUnitTotal, unitSuffix, daysUntil, lifeStatus, todayISODate, downloadCsv } from '@/lib/utils';
 import { useAccess } from '@/lib/permissions';
 import type { StockItem } from '@/types';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
+import QrScannerDialog from '../components/QrScannerDialog/QrScannerDialog';
 
 const cardSx = {
   bgcolor: '#fff',
@@ -132,6 +134,8 @@ interface ProductGroupRow {
   minQuantity: number;
   minPortionedQuantity: number;
   belowMin: boolean;
+  /** Unidade do produto no cadastro (kg | l) — pesos seguem a unidade. */
+  unit?: 'kg' | 'l';
 }
 
 function DaysChip({ expiryDate }: { expiryDate: string }) {
@@ -169,6 +173,8 @@ export default function StockPage() {
   const [kpiFilter, setKpiFilter] = useState<KpiFilterState>({ life: 'all', type: 'all' });
   const [pdfOpen, setPdfOpen] = useState(false);
   const [conferenceAt, setConferenceAt] = useState('');
+  // Leitura de QR pela câmera: preenche o campo de busca do estoque.
+  const [scanOpen, setScanOpen] = useState(false);
 
   // Clicar de novo no mesmo card limpa só esse filtro; cards de chaves
   // diferentes (ex.: "Vencidos" + "Total Bruto") permanecem combinados.
@@ -268,10 +274,15 @@ export default function StockPage() {
       minQuantity,
       minPortionedQuantity,
       belowMin: minQuantity > 0 && totalWeight < minQuantity,
+      unit: product?.unit,
     });
   });
 
   const groupOptions = Array.from(new Set((products ?? []).map((p) => p.group))).sort();
+
+  /** Unidade (kg | l) do produto, lida no cadastro. */
+  const unitOf = (productId: string) =>
+    (products ?? []).find((p) => p._id === productId)?.unit;
 
   const filteredRows = rows
     .filter((r) => groupFilter === 'all' || r.group === groupFilter)
@@ -805,6 +816,19 @@ export default function StockPage() {
                     <SearchIcon color="action" />
                   </InputAdornment>
                 ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label="Ler QR Code da câmera"
+                      edge="end"
+                      size="small"
+                      onClick={() => setScanOpen(true)}
+                      sx={{ color: '#1976D2' }}
+                    >
+                      <QrCodeScannerIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
               }}
               sx={{
                 bgcolor: '#fff',
@@ -1004,7 +1028,7 @@ export default function StockPage() {
                           {r.items.length} etiquetas
                         </Typography>
                         <Typography variant="body2" fontWeight={700} sx={{ color: '#333' }}>
-                          {formatKg(r.totalWeight)} total
+                          {formatUnitTotal(r.totalWeight, r.unit)} total
                         </Typography>
                         <Typography variant="body2" sx={{ color: '#666' }}>
                           {r.rawCount} bruto
@@ -1018,7 +1042,7 @@ export default function StockPage() {
                             fontWeight={700}
                             sx={{ color: r.totalWeight < r.minQuantity ? '#C62828' : '#2E7D32' }}
                           >
-                            {r.totalWeight}/{r.minQuantity} min.
+                            {`${r.totalWeight}${unitSuffix(r.unit)}/${r.minQuantity}${unitSuffix(r.unit)} min.`}
                           </Typography>
                         )}
                         {showBuy && r.minPortionedQuantity > 0 && (
@@ -1135,7 +1159,7 @@ export default function StockPage() {
                           {
                             id: 'peso',
                             header: 'Peso',
-                            cell: (item) => formatWeight(item.weightGrams),
+                            cell: (item) => formatQuantity(item.weightGrams, r.unit),
                           },
                           {
                             id: 'local',
@@ -1319,7 +1343,7 @@ export default function StockPage() {
             </Typography>
             {deleteTargetRow && (
               <Typography variant="caption" color="text.secondary">
-                (etiqueta: {deleteTargetRow.weightGrams}g)
+                {`(etiqueta: ${deleteTargetRow.weightGrams}${unitSuffix(unitOf(deleteTargetRow.product.productId))})`}
               </Typography>
             )}
           </Box>
@@ -1329,7 +1353,7 @@ export default function StockPage() {
                 type="number"
                 fullWidth
                 size="small"
-                placeholder={`Peso a baixar em g (máx. ${deleteTargetRow.weightGrams - 1}g)`}
+                placeholder={`Peso a baixar em ${unitSuffix(unitOf(deleteTargetRow.product.productId))} (máx. ${deleteTargetRow.weightGrams - 1}${unitSuffix(unitOf(deleteTargetRow.product.productId))})`}
                 value={deletePartialWeight}
                 onChange={(e) => setDeletePartialWeight(e.target.value)}
               />
@@ -1485,7 +1509,9 @@ export default function StockPage() {
                         <td style={confTdStyle}>
                           {item.type === 'raw' ? 'Bruto' : 'Porcionado'}
                         </td>
-                        <td style={confTdStyle}>{formatWeight(item.weightGrams)}</td>
+                        <td style={confTdStyle}>
+                          {formatQuantity(item.weightGrams, unitOf(item.product.productId))}
+                        </td>
                         <td style={confTdStyle}>{item.lote || '—'}</td>
                         <td style={confTdStyle}>{formatDate(item.expiryDate)}</td>
                         <td style={{ ...confTdStyle, fontFamily: 'monospace' }}>
@@ -1516,6 +1542,13 @@ export default function StockPage() {
           </Box>
         </Box>
       )}
+
+      <QrScannerDialog
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Buscar etiqueta no estoque"
+        onScan={(value) => setSearch(value)}
+      />
     </LoggedLayout>
   );
 }

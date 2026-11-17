@@ -24,6 +24,7 @@ import { useSnackbar } from 'notistack';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { productSchema } from '@/lib/validation';
+import { formatQuantity } from '@/lib/utils';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useGroups } from '@/lib/queries';
 import ConfirmDialog from '@/app/components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
@@ -232,22 +233,6 @@ export default function ProductsRegistry() {
     }
   };
 
-  const formatWeight = (grams: number) => {
-    if (!grams) return '—';
-    if (grams >= 1000) return `${grams}g / ${(grams / 1000).toFixed(2)}kg`;
-    return `${grams}g`;
-  };
-
-  // Produtos em litro mostram a quantidade mínima em ml/L (mesma base em
-  // gramas/ml usada pelo resto do sistema).
-  const formatMinQuantity = (value: number, productUnit?: 'kg' | 'l') => {
-    if (!value) return '—';
-    if (productUnit === 'l') {
-      return value >= 1000 ? `${value}ml / ${(value / 1000).toFixed(2)}L` : `${value}ml`;
-    }
-    return formatWeight(value);
-  };
-
   return (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
@@ -340,7 +325,7 @@ export default function ProductsRegistry() {
             id: 'minimo-estoque',
             header: 'Mínimo em Estoque',
             align: 'right',
-            cell: (p) => (p.minQuantity ? formatMinQuantity(p.minQuantity, p.unit) : '—'),
+            cell: (p) => (p.minQuantity ? formatQuantity(p.minQuantity, p.unit) : '—'),
           },
           {
             id: 'min-porcionadas',

@@ -41,7 +41,7 @@ import {
   useSuppliers,
   useMovementDestinations,
 } from '@/lib/queries';
-import { formatDate, todayISODate, toInputDate } from '@/lib/utils';
+import { formatDate, todayISODate, toInputDate, unitSuffix } from '@/lib/utils';
 import { printEtiquetasNativas } from '@/lib/printService';
 import { useAccess } from '@/lib/permissions';
 import api from '@/lib/api';
@@ -109,7 +109,14 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const portioningColumns: ResponsiveTableColumn<Portioning>[] = [
+/**
+ * Colunas do histórico de porcionamentos. Recebe `unitOf` porque os pesos
+ * são exibidos na unidade CADASTRA do produto (kg | l) — a base é sempre g.
+ */
+function buildPortioningColumns(
+  unitOf: (productId?: string) => 'kg' | 'l' | undefined,
+): ResponsiveTableColumn<Portioning>[] {
+  return [
   {
     id: 'product',
     header: 'Produto',
@@ -121,7 +128,9 @@ const portioningColumns: ResponsiveTableColumn<Portioning>[] = [
               .map(
                 (o) =>
                   `${o.productName} (${o.portionsCount}${
-                    o.portionWeightGrams ? ` × ${o.portionWeightGrams}g` : ''
+                    o.portionWeightGrams
+                      ? ` × ${o.portionWeightGrams}${unitSuffix(unitOf(o.productId))}`
+                      : ''
                   })`,
               )
               .join(', ')
@@ -156,12 +165,14 @@ const portioningColumns: ResponsiveTableColumn<Portioning>[] = [
   {
     id: 'rawWeight',
     header: 'Peso Bruto',
-    cell: (p) => `${p.rawWeightGrams}g`,
+    cell: (p) =>
+      `${p.rawWeightGrams}${unitSuffix(unitOf(p.rawProduct?.productId ?? p.product.productId))}`,
   },
   {
     id: 'cleanWeight',
     header: 'Peso Limpo',
-    cell: (p) => `${p.cleanWeightGrams}g`,
+    cell: (p) =>
+      `${p.cleanWeightGrams}${unitSuffix(unitOf(p.rawProduct?.productId ?? p.product.productId))}`,
   },
   {
     id: 'lossPercentage',
@@ -182,7 +193,8 @@ const portioningColumns: ResponsiveTableColumn<Portioning>[] = [
   {
     id: 'portions',
     header: 'Porções',
-    cell: (p) => `${p.portionsCount} (${p.portionWeightGrams}g)`,
+    cell: (p) =>
+      `${p.portionsCount} (${p.portionWeightGrams}${unitSuffix(unitOf(p.product.productId))})`,
   },
   {
     id: 'employee',
@@ -194,12 +206,17 @@ const portioningColumns: ResponsiveTableColumn<Portioning>[] = [
     header: 'Data',
     cell: (p) => formatDate(p.date),
   },
-];
+  ];
+}
 
 export default function PortioningsPage() {
   const { enqueueSnackbar } = useSnackbar();
   const { data: portionings, isLoading } = usePortionings();
   const { data: products } = useProducts();
+
+  /** Unidade (kg | l) de um produto, lida no cadastro. */
+  const unitOf = (productId?: string) =>
+    (products ?? []).find((p) => p._id === productId)?.unit;
   const { data: employees } = useEmployees();
   const { data: me } = useMe();
   const { data: suppliers } = useSuppliers();
@@ -561,6 +578,7 @@ export default function PortioningsPage() {
           productName: item.product.productName,
           storage: item.product.productStorage ?? '',
           weightGrams: item.weightGrams,
+          unit: rowProduct?.unit,
           recebimentoDate: item.manipulationDate,
           expiryDate: item.expiryDate,
           lote: item.lote,
@@ -811,6 +829,7 @@ export default function PortioningsPage() {
     productName: item.product.productName,
     storage: item.product.productStorage ?? '',
     weightGrams: item.weightGrams,
+    unit: products?.find((p) => p._id === item.product.productId)?.unit,
     recebimentoDate: item.manipulationDate,
     expiryDate: item.expiryDate,
     lote: item.lote,
@@ -911,7 +930,7 @@ export default function PortioningsPage() {
       </Box>
 
       <ResponsiveTable
-        columns={portioningColumns}
+        columns={buildPortioningColumns(unitOf)}
         rows={filteredPortioningRows}
         rowKey={(p) => p._id}
         loading={isLoading}
@@ -1040,7 +1059,8 @@ export default function PortioningsPage() {
                         {item.product.productName}
                       </Typography>
                       <Typography variant="caption" sx={{ color: '#666' }}>
-                        {item.weightGrams}g — QR {item.qrCode}
+                        {item.weightGrams}
+                        {unitSuffix(unitOf(item.product.productId))} — QR {item.qrCode}
                         {item.lote ? ` — Lote ${item.lote}` : ''}
                       </Typography>
                     </Box>
@@ -1605,7 +1625,8 @@ export default function PortioningsPage() {
               >
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="body2" fontWeight={600}>
-                    {item.product.productName} — {item.weightGrams}g
+                    {item.product.productName} — {item.weightGrams}
+                    {unitSuffix(unitOf(item.product.productId))}
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#666' }}>
                     Lote {item.lote || '—'} — QR {item.qrCode} — Destino {item.destination || '—'}
@@ -1665,7 +1686,11 @@ export default function PortioningsPage() {
               <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
                 {looseAction.item.product.productName} — lote{' '}
                 <b>{looseAction.item.lote || '—'}</b> — etiqueta de{' '}
-                <b>{looseAction.item.weightGrams}g</b>. Escolha o modo e o motivo da
+                <b>
+                  {looseAction.item.weightGrams}
+                  {unitSuffix(unitOf(looseAction.item.product.productId))}
+                </b>
+                . Escolha o modo e o motivo da
                 baixa.
               </Typography>
               <Typography variant="body2" fontWeight={600} sx={{ mb: 0.75 }}>
@@ -1818,10 +1843,10 @@ export default function PortioningsPage() {
                     ? viewTarget.outputs
                         .map(
                           (o) =>
-                            `${o.productName}: ${o.portionWeightGrams ?? viewTarget.portionWeightGrams}g`,
+                            `${o.productName}: ${o.portionWeightGrams ?? viewTarget.portionWeightGrams}${unitSuffix(unitOf(o.productId))}`,
                         )
                         .join(', ')
-                    : `${viewTarget.portionWeightGrams}g`
+                    : `${viewTarget.portionWeightGrams}${unitSuffix(unitOf(viewTarget.product.productId))}`
                   : '—'
               }
             />
@@ -1832,17 +1857,25 @@ export default function PortioningsPage() {
             />
             <DetailRow
               label="Peso Bruto"
-              value={viewTarget ? `${viewTarget.rawWeightGrams}g` : '—'}
+              value={
+                viewTarget
+                  ? `${viewTarget.rawWeightGrams}${unitSuffix(unitOf(viewTarget.rawProduct?.productId ?? viewTarget.product.productId))}`
+                  : '—'
+              }
             />
             <DetailRow
               label="Peso Limpo"
-              value={viewTarget ? `${viewTarget.cleanWeightGrams}g` : '—'}
+              value={
+                viewTarget
+                  ? `${viewTarget.cleanWeightGrams}${unitSuffix(unitOf(viewTarget.rawProduct?.productId ?? viewTarget.product.productId))}`
+                  : '—'
+              }
             />
             <DetailRow
               label="Perda"
               value={
                 viewTarget
-                  ? `${viewTarget.lossGrams}g (${viewTarget.lossPercentage?.toFixed(1) ?? '0.0'}%)`
+                  ? `${viewTarget.lossGrams}${unitSuffix(unitOf(viewTarget.rawProduct?.productId ?? viewTarget.product.productId))} (${viewTarget.lossPercentage?.toFixed(1) ?? '0.0'}%)`
                   : '—'
               }
             />
@@ -1850,7 +1883,7 @@ export default function PortioningsPage() {
               label="Ganho"
               value={
                 viewTarget
-                  ? `${(viewTarget.gainGrams ?? 0).toFixed(0)}g (${
+                  ? `${(viewTarget.gainGrams ?? 0).toFixed(0)}${unitSuffix(unitOf(viewTarget.rawProduct?.productId ?? viewTarget.product.productId))} (${
                       viewTarget.rawWeightGrams > 0
                         ? (((viewTarget.gainGrams ?? 0) / viewTarget.rawWeightGrams) * 100).toFixed(1)
                         : 0

@@ -24,7 +24,14 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import { useProducts, useStockItems, useAgendaItems } from '@/lib/queries';
-import { formatKg, formatDate, daysUntil, lifeStatus, agendaStatusView } from '@/lib/utils';
+import {
+  formatDate,
+  daysUntil,
+  lifeStatus,
+  agendaStatusView,
+  formatUnitTotal,
+  unitSuffix,
+} from '@/lib/utils';
 import type { AgendaItem, StockItem } from '@/types';
 import LoggedLayout from './components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from './components/ResponsiveTable/ResponsiveTable';
@@ -61,6 +68,8 @@ interface ProductGroupRow {
   expiredCount: number;
   expiringCount: number;
   totalWeight: number;
+  /** Unidade do produto no cadastro (kg | l) — os totais seguem ela. */
+  unit?: 'kg' | 'l';
 }
 
 interface LowStockRow {
@@ -68,6 +77,7 @@ interface LowStockRow {
   weight: number;
   minQuantity: number;
   falta: number;
+  unit?: 'kg' | 'l';
 }
 
 interface LowProductionRow {
@@ -143,7 +153,7 @@ export default function DashboardPage() {
       const weight = inStock
         .filter((i) => i.product.productId === p._id)
         .reduce((s, i) => s + i.weightGrams, 0);
-      return { name: p.name, weight, minQuantity: p.minQuantity, falta: p.minQuantity - weight };
+      return { name: p.name, weight, minQuantity: p.minQuantity, falta: p.minQuantity - weight, unit: p.unit };
     })
     .filter((r) => r.weight < r.minQuantity);
 
@@ -171,14 +181,18 @@ export default function DashboardPage() {
   });
 
   const groups: ProductGroupRow[] = Array.from(groupedMap.entries())
-    .map(([productId, gItems]) => ({
-      productId,
-      name: products?.find((p) => p._id === productId)?.name ?? gItems[0].product.productName,
-      items: gItems,
-      expiredCount: gItems.filter((i) => lifeStatus(i) === 'expired').length,
-      expiringCount: gItems.filter((i) => lifeStatus(i) === 'expiring').length,
-      totalWeight: gItems.reduce((s, i) => s + i.weightGrams, 0),
-    }))
+    .map(([productId, gItems]) => {
+      const product = products?.find((p) => p._id === productId);
+      return {
+        productId,
+        name: product?.name ?? gItems[0].product.productName,
+        items: gItems,
+        expiredCount: gItems.filter((i) => lifeStatus(i) === 'expired').length,
+        expiringCount: gItems.filter((i) => lifeStatus(i) === 'expiring').length,
+        totalWeight: gItems.reduce((s, i) => s + i.weightGrams, 0),
+        unit: product?.unit,
+      };
+    })
     .sort((a, b) => {
       const pa = a.expiredCount > 0 ? 0 : a.expiringCount > 0 ? 1 : 2;
       const pb = b.expiredCount > 0 ? 0 : b.expiringCount > 0 ? 1 : 2;
@@ -416,12 +430,18 @@ export default function DashboardPage() {
                         fullWidthOnMobile: true,
                         cell: (r) => <Typography fontWeight={600}>{r.name}</Typography>,
                       },
-                      { id: 'estoque', header: 'Estoque', cell: (r) => `${r.weight}g` },
-                      { id: 'minimo', header: 'Mínimo', cell: (r) => `${r.minQuantity}g` },
+                      { id: 'estoque', header: 'Estoque', cell: (r) => `${r.weight}${unitSuffix(r.unit)}` },
+                      { id: 'minimo', header: 'Mínimo', cell: (r) => `${r.minQuantity}${unitSuffix(r.unit)}` },
                       {
                         id: 'falta',
                         header: 'Falta',
-                        cell: (r) => <Chip label={`${r.falta}g`} size="small" sx={chipRed} />,
+                        cell: (r) => (
+                          <Chip
+                            label={`${r.falta}${unitSuffix(r.unit)}`}
+                            size="small"
+                            sx={chipRed}
+                          />
+                        ),
                       },
                     ]}
                   />
@@ -666,7 +686,7 @@ export default function DashboardPage() {
                           </Box>
                           {' · '}
                           <Box component="span" fontWeight={700}>
-                            {formatKg(g.totalWeight)}
+                            {formatUnitTotal(g.totalWeight, g.unit)}
                           </Box>
                         </Typography>
                       </Box>
@@ -695,7 +715,7 @@ export default function DashboardPage() {
                                 />
                               ),
                             },
-                            { id: 'peso', header: 'Peso', cell: (item) => `${item.weightGrams}g` },
+                            { id: 'peso', header: 'Peso', cell: (item) => `${item.weightGrams}${unitSuffix(g.unit)}` },
                             {
                               id: 'validade',
                               header: 'Validade',
