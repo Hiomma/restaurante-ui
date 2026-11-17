@@ -25,6 +25,8 @@ interface EtiquetaPayload {
   produto: string;
   conservacao: string;
   pesoGramas: number;
+  /** Unidade do produto no cadastro: 'kg' (padrão) ou 'l' → sai em ml. */
+  unidade?: 'kg' | 'l';
   recebimento: string;
   validade: string;
   lote?: string;
@@ -34,13 +36,17 @@ interface EtiquetaPayload {
   quantidade: number;
 }
 
-/** Mapeia o `LabelData` da tela para o contrato do serviço. */
-function toEtiquetaPayload(label: LabelData): EtiquetaPayload {
+/**
+ * Mapeia o `LabelData` da tela para o contrato do serviço.
+ * Exportado para o teste de contrato (`unidade` precisa sair no JSON).
+ */
+export function toEtiquetaPayload(label: LabelData): EtiquetaPayload {
   return {
     empresa: label.companyName,
     produto: label.productName,
     conservacao: label.storage,
     pesoGramas: label.weightGrams,
+    unidade: label.unit,
     recebimento: label.recebimentoDate,
     validade: label.expiryDate,
     lote: label.lote,
