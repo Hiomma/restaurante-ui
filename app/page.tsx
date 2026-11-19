@@ -35,21 +35,22 @@ import {
 import type { AgendaItem, StockItem } from '@/types';
 import LoggedLayout from './components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from './components/ResponsiveTable/ResponsiveTable';
+import { colors } from '@/lib/design-system';
 
 const cardSx = {
-  bgcolor: '#fff',
+  bgcolor: colors.common.white,
   borderRadius: 2,
-  border: '1px solid #e8ecf1',
+  border: `1px solid ${colors.border.subtle}`,
   boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
 };
 
-const thSx = { fontWeight: 700, color: '#333', fontSize: 13 };
+const thSx = { fontWeight: 700, color: colors.gray[800], fontSize: 13 };
 
-const chipGreen = { bgcolor: '#E8F5E9', color: '#2E7D32', fontWeight: 600, fontSize: 12 };
-const chipRed = { bgcolor: '#FFEBEE', color: '#C62828', fontWeight: 600, fontSize: 12 };
-const chipAmber = { bgcolor: '#FFF3E0', color: '#E65100', fontWeight: 600, fontSize: 12 };
-const chipGray = { bgcolor: '#F1F3F5', color: '#495057', fontWeight: 600, fontSize: 12 };
-const chipBlue = { bgcolor: '#E3F2FD', color: '#1976D2', fontWeight: 600, fontSize: 12 };
+const chipGreen = { bgcolor: colors.status.successTint, color: colors.status.success, fontWeight: 600, fontSize: 12 };
+const chipRed = { bgcolor: colors.status.dangerTint, color: colors.status.danger, fontWeight: 600, fontSize: 12 };
+const chipAmber = { bgcolor: colors.status.warningTint, color: colors.status.warning, fontWeight: 600, fontSize: 12 };
+const chipGray = { bgcolor: colors.status.neutralTint, color: colors.status.neutral, fontWeight: 600, fontSize: 12 };
+const chipBlue = { bgcolor: colors.brand.navyTint, color: colors.brand.navy, fontWeight: 600, fontSize: 12 };
 
 const agendaToneSx: Record<string, typeof chipGreen> = {
   green: chipGreen,
@@ -59,7 +60,7 @@ const agendaToneSx: Record<string, typeof chipGreen> = {
   blue: chipBlue,
 };
 
-const tableSx = { '& td': { borderBottom: '1px solid #eef1f5' } };
+const tableSx = { '& td': { borderBottom: `1px solid ${colors.border.subtle}` } };
 
 interface ProductGroupRow {
   productId: string;
@@ -113,13 +114,13 @@ function KpiCard({
       <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+            <Typography variant="body2" sx={{ color: colors.gray[500], mb: 1 }}>
               {label}
             </Typography>
             <Typography variant="h4" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
               {value}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#999', mt: 0.5 }}>
+            <Typography variant="body2" sx={{ color: colors.gray[300], mt: 0.5 }}>
               {caption}
             </Typography>
           </Box>
@@ -235,19 +236,19 @@ export default function DashboardPage() {
               width: 40,
               height: 40,
               borderRadius: '50%',
-              bgcolor: '#E3F2FD',
+              bgcolor: colors.brand.navyTint,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <GridOnIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+            <GridOnIcon sx={{ color: colors.brand.navy, fontSize: 20 }} />
           </Box>
           <Typography variant="h5" fontWeight="bold">
             Dashboard
           </Typography>
         </Box>
-        <Typography variant="body2" sx={{ color: '#666', ml: 6.5 }} suppressHydrationWarning>
+        <Typography variant="body2" sx={{ color: colors.gray[500], ml: 6.5 }} suppressHydrationWarning>
           Visão geral do sistema — {new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
         </Typography>
       </Box>
@@ -263,19 +264,19 @@ export default function DashboardPage() {
                 alignItems: 'center',
                 gap: 2,
                 flexWrap: 'wrap',
-                bgcolor: '#FDECEC',
-                border: '1px solid #F5C2C7',
+                bgcolor: colors.status.dangerBg,
+                border: `1px solid ${colors.status.dangerBorder}`,
                 borderRadius: 2,
                 p: 2,
                 mb: 2.5,
               }}
             >
-              <WarningAmberIcon sx={{ color: '#C62828', flexShrink: 0 }} />
+              <WarningAmberIcon sx={{ color: colors.status.danger, flexShrink: 0 }} />
               <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 700, color: '#C62828' }}>
+                <Typography sx={{ fontWeight: 700, color: colors.status.danger }}>
                   {expiredCount} etiqueta(s) VENCIDA(S) no estoque!
                 </Typography>
-                <Typography variant="body2" sx={{ color: '#C62828', mt: 0.25 }}>
+                <Typography variant="body2" sx={{ color: colors.status.danger, mt: 0.25 }}>
                   Verifique e dê baixa imediatamente.
                 </Typography>
               </Box>
@@ -283,12 +284,12 @@ export default function DashboardPage() {
                 variant="contained"
                 onClick={() => router.push('/stock')}
                 sx={{
-                  bgcolor: '#C62828',
+                  bgcolor: colors.status.danger,
                   textTransform: 'none',
                   borderRadius: 1.5,
                   flexShrink: 0,
                   px: 2.5,
-                  '&:hover': { bgcolor: '#B71C1C' },
+                  '&:hover': { bgcolor: colors.status.dangerDeep },
                 }}
               >
                 Ver Estoque
@@ -299,11 +300,11 @@ export default function DashboardPage() {
                 sx={{
                   textTransform: 'none',
                   borderRadius: 1.5,
-                  color: '#C62828',
-                  borderColor: '#C62828',
+                  color: colors.status.danger,
+                  borderColor: colors.status.danger,
                   flexShrink: 0,
                   px: 2.5,
-                  '&:hover': { borderColor: '#C62828', bgcolor: 'rgba(198,40,40,0.06)' },
+                  '&:hover': { borderColor: colors.status.danger, bgcolor: 'rgba(198,40,40,0.06)' },
                 }}
               >
                 Ver relatório
@@ -318,19 +319,19 @@ export default function DashboardPage() {
                 alignItems: 'center',
                 gap: 2,
                 flexWrap: 'wrap',
-                bgcolor: '#FFF4E5',
-                border: '1px solid #FFD699',
+                bgcolor: colors.status.warningBg,
+                border: `1px solid ${colors.status.warningBorder}`,
                 borderRadius: 2,
                 p: 2,
                 mb: 3,
               }}
             >
-              <ShoppingCartIcon sx={{ color: '#E65100', flexShrink: 0 }} />
+              <ShoppingCartIcon sx={{ color: colors.status.warning, flexShrink: 0 }} />
               <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 700, color: '#E65100' }}>
+                <Typography sx={{ fontWeight: 700, color: colors.status.warning }}>
                   {lowStockList.length} produto(s) abaixo do peso mínimo em estoque!
                 </Typography>
-                <Typography variant="body2" sx={{ color: '#E65100', mt: 0.25 }}>
+                <Typography variant="body2" sx={{ color: colors.status.warning, mt: 0.25 }}>
                   {lowStockList.map((r) => r.name).join(', ')}
                 </Typography>
               </Box>
@@ -340,11 +341,11 @@ export default function DashboardPage() {
                 sx={{
                   textTransform: 'none',
                   borderRadius: 1.5,
-                  color: '#E65100',
-                  borderColor: '#E65100',
+                  color: colors.status.warning,
+                  borderColor: colors.status.warning,
                   flexShrink: 0,
                   px: 2.5,
-                  '&:hover': { borderColor: '#E65100', bgcolor: 'rgba(230,81,0,0.06)' },
+                  '&:hover': { borderColor: colors.status.warning, bgcolor: 'rgba(230,81,0,0.06)' },
                 }}
               >
                 Ver Relatório
@@ -358,8 +359,8 @@ export default function DashboardPage() {
                 label="Total em Estoque"
                 value={inStock.length}
                 caption="etiquetas"
-                iconBg="#E3F2FD"
-                icon={<Inventory2Icon sx={{ color: '#1976D2', fontSize: 22 }} />}
+                iconBg={colors.brand.navyTint}
+                icon={<Inventory2Icon sx={{ color: colors.brand.navy, fontSize: 22 }} />}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -367,8 +368,8 @@ export default function DashboardPage() {
                 label="Produtos"
                 value={distinctProducts}
                 caption="diferentes"
-                iconBg="#E8F5E9"
-                icon={<InventoryIcon sx={{ color: '#2E7D32', fontSize: 22 }} />}
+                iconBg={colors.status.successTint}
+                icon={<InventoryIcon sx={{ color: colors.status.success, fontSize: 22 }} />}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -376,8 +377,8 @@ export default function DashboardPage() {
                 label="Vencendo esta Semana"
                 value={expiringCount}
                 caption="etiquetas"
-                iconBg="#FFF3E0"
-                icon={<AccessTimeIcon sx={{ color: '#E65100', fontSize: 22 }} />}
+                iconBg={colors.status.warningTint}
+                icon={<AccessTimeIcon sx={{ color: colors.status.warning, fontSize: 22 }} />}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
@@ -385,8 +386,8 @@ export default function DashboardPage() {
                 label="Precisam Comprar"
                 value={lowStockList.length}
                 caption="produtos"
-                iconBg="#FFEBEE"
-                icon={<ShoppingCartIcon sx={{ color: '#C62828', fontSize: 22 }} />}
+                iconBg={colors.status.dangerTint}
+                icon={<ShoppingCartIcon sx={{ color: colors.status.danger, fontSize: 22 }} />}
               />
             </Grid>
           </Grid>
@@ -395,7 +396,7 @@ export default function DashboardPage() {
             <Grid size={{ xs: 12, md: 6 }}>
               <Card sx={cardSx}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
-                  <ShoppingCartIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+                  <ShoppingCartIcon sx={{ color: colors.brand.navy, fontSize: 20 }} />
                   <Typography variant="h6" fontWeight="bold">
                     Lista de Compras
                   </Typography>
@@ -405,7 +406,7 @@ export default function DashboardPage() {
                     sx={{
                       ml: 'auto',
                       textTransform: 'none',
-                      color: '#1976D2',
+                      color: colors.brand.navy,
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
                       flexShrink: 0,
@@ -451,7 +452,7 @@ export default function DashboardPage() {
             <Grid size={{ xs: 12, md: 6 }}>
               <Card sx={cardSx}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
-                  <InventoryIcon sx={{ color: '#2E7D32', fontSize: 20 }} />
+                  <InventoryIcon sx={{ color: colors.status.success, fontSize: 20 }} />
                   <Typography variant="h6" fontWeight="bold">
                     Lista de Produção
                   </Typography>
@@ -461,7 +462,7 @@ export default function DashboardPage() {
                     sx={{
                       ml: 'auto',
                       textTransform: 'none',
-                      color: '#2E7D32',
+                      color: colors.status.success,
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
                       flexShrink: 0,
@@ -514,7 +515,7 @@ export default function DashboardPage() {
             <Grid size={{ xs: 12, md: 6 }}>
               <Card sx={cardSx}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
-                  <EventNoteIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+                  <EventNoteIcon sx={{ color: colors.brand.navy, fontSize: 20 }} />
                   <Typography variant="h6" fontWeight="bold">
                     Agenda
                   </Typography>
@@ -524,7 +525,7 @@ export default function DashboardPage() {
                     sx={{
                       ml: 'auto',
                       textTransform: 'none',
-                      color: '#1976D2',
+                      color: colors.brand.navy,
                       fontWeight: 600,
                     }}
                   >
@@ -533,7 +534,7 @@ export default function DashboardPage() {
                 </Box>
                 <Box sx={{ px: 2.5, pb: 2.5 }}>
                   {agendaAlerts.length === 0 ? (
-                    <Typography variant="body2" sx={{ color: '#666' }}>
+                    <Typography variant="body2" sx={{ color: colors.gray[500] }}>
                       Nenhum item próximo do vencimento
                     </Typography>
                   ) : (
@@ -581,7 +582,7 @@ export default function DashboardPage() {
             <Grid size={{ xs: 12, md: 6 }}>
               <Card sx={cardSx}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
-                  <WarningAmberIcon sx={{ color: '#C62828', fontSize: 20 }} />
+                  <WarningAmberIcon sx={{ color: colors.status.danger, fontSize: 20 }} />
                   <Typography variant="h6" fontWeight="bold">
                     Atenção Urgente
                   </Typography>
@@ -591,7 +592,7 @@ export default function DashboardPage() {
                     sx={{
                       ml: 'auto',
                       textTransform: 'none',
-                      color: '#C62828',
+                      color: colors.status.danger,
                       fontWeight: 600,
                     }}
                   >
@@ -640,14 +641,14 @@ export default function DashboardPage() {
 
           <Card sx={cardSx}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, p: 2.5, pb: 1.5 }}>
-              <Inventory2Icon sx={{ color: '#1976D2', fontSize: 20 }} />
+              <Inventory2Icon sx={{ color: colors.brand.navy, fontSize: 20 }} />
               <Typography variant="h6" fontWeight="bold">
                 Estoque por Produto
               </Typography>
             </Box>
             <Box>
               {groups.length === 0 && (
-                <Typography variant="body2" sx={{ color: '#666', px: 2.5, pb: 2.5 }}>
+                <Typography variant="body2" sx={{ color: colors.gray[500], px: 2.5, pb: 2.5 }}>
                   Nenhum item em estoque
                 </Typography>
               )}
@@ -656,7 +657,7 @@ export default function DashboardPage() {
                 return (
                   <Box
                     key={g.productId}
-                    sx={{ borderBottom: '1px solid #eef1f5' }}
+                    sx={{ borderBottom: `1px solid ${colors.border.subtle}` }}
                   >
                     <Box
                       onClick={() => toggle(g.productId)}
@@ -667,7 +668,7 @@ export default function DashboardPage() {
                         px: 2.5,
                         py: 1.75,
                         cursor: 'pointer',
-                        '&:hover': { bgcolor: '#f9fafb' },
+                        '&:hover': { bgcolor: colors.surface.hover },
                       }}
                     >
                       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -680,7 +681,7 @@ export default function DashboardPage() {
                             <Chip label={`${g.expiringCount} vencendo`} size="small" sx={chipAmber} />
                           )}
                         </Box>
-                        <Typography variant="body2" sx={{ color: '#666', mt: 0.5 }}>
+                        <Typography variant="body2" sx={{ color: colors.gray[500], mt: 0.5 }}>
                           <Box component="span" fontWeight={700}>
                             {g.items.length} etiquetas
                           </Box>
@@ -690,7 +691,7 @@ export default function DashboardPage() {
                           </Box>
                         </Typography>
                       </Box>
-                      <IconButton size="small" sx={{ color: '#666' }}>
+                      <IconButton size="small" sx={{ color: colors.gray[500] }}>
                         {open ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
                       </IconButton>
                     </Box>
@@ -733,7 +734,7 @@ export default function DashboardPage() {
                               cell: (item) => (
                                 <Typography
                                   variant="caption"
-                                  sx={{ fontFamily: 'monospace', fontSize: 11, color: '#495057' }}
+                                  sx={{ fontFamily: 'monospace', fontSize: 11, color: colors.status.neutral }}
                                 >
                                   {item.qrCode}
                                 </Typography>

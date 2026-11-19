@@ -17,6 +17,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useSnackbar } from 'notistack';
 import { useChangePassword } from '@/lib/queries';
+import { colors } from '@/lib/design-system';
 
 export default function ChangePasswordDialog({
   open,
@@ -113,7 +114,7 @@ export default function ChangePasswordDialog({
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
           {error && (
-            <Typography variant="caption" color="#d32f2f">
+            <Typography variant="caption" color={colors.status.dangerStrong}>
               {error}
             </Typography>
           )}

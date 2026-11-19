@@ -49,27 +49,28 @@ import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
 import QrScannerDialog from '../components/QrScannerDialog/QrScannerDialog';
+import { colors } from '@/lib/design-system';
 
 const cardSx = {
-  bgcolor: '#fff',
+  bgcolor: colors.common.white,
   borderRadius: 2,
-  border: '1px solid #e8ecf1',
+  border: `1px solid ${colors.border.subtle}`,
   boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
 };
 
-const thSx = { fontWeight: 700, color: '#333', fontSize: 13 };
+const thSx = { fontWeight: 700, color: colors.gray[800], fontSize: 13 };
 
-const chipGreen = { bgcolor: '#E8F5E9', color: '#2E7D32', fontWeight: 600, fontSize: 12 };
-const chipRed = { bgcolor: '#FFEBEE', color: '#C62828', fontWeight: 600, fontSize: 12 };
-const chipAmber = { bgcolor: '#FFF3E0', color: '#E65100', fontWeight: 600, fontSize: 12 };
-const chipGray = { bgcolor: '#F1F3F5', color: '#495057', fontWeight: 600, fontSize: 12 };
-const chipBlue = { bgcolor: '#E3F2FD', color: '#1976D2', fontWeight: 600, fontSize: 12 };
+const chipGreen = { bgcolor: colors.status.successTint, color: colors.status.success, fontWeight: 600, fontSize: 12 };
+const chipRed = { bgcolor: colors.status.dangerTint, color: colors.status.danger, fontWeight: 600, fontSize: 12 };
+const chipAmber = { bgcolor: colors.status.warningTint, color: colors.status.warning, fontWeight: 600, fontSize: 12 };
+const chipGray = { bgcolor: colors.status.neutralTint, color: colors.status.neutral, fontWeight: 600, fontSize: 12 };
+const chipBlue = { bgcolor: colors.brand.navyTint, color: colors.brand.navy, fontWeight: 600, fontSize: 12 };
 
-const tableSx = { '& td': { borderBottom: '1px solid #eef1f5' } };
+const tableSx = { '& td': { borderBottom: `1px solid ${colors.border.subtle}` } };
 
 /** Célula da tabela da conferência de estoque (impressão). */
 const confTdStyle: React.CSSProperties = {
-  borderBottom: '1px solid #ccc',
+  borderBottom: `1px solid ${colors.gray[250]}`,
   padding: '3px 6px',
   fontSize: 12,
 };
@@ -305,9 +306,9 @@ export default function StockPage() {
       label: 'Total Bruto',
       value: rawItems.length,
       caption: formatKg(rawWeight),
-      bg: '#E3F2FD',
-      accent: '#1976D2',
-      icon: <Inventory2Icon sx={{ color: '#1976D2', fontSize: 22 }} />,
+      bg: colors.brand.navyTint,
+      accent: colors.brand.navy,
+      icon: <Inventory2Icon sx={{ color: colors.brand.navy, fontSize: 22 }} />,
       active: kpiFilter.type === 'raw',
       onToggle: () => toggleTypeFilter('raw'),
     },
@@ -315,9 +316,9 @@ export default function StockPage() {
       label: 'Total Porcionado',
       value: portionedItems.length,
       caption: formatKg(portionedWeight),
-      bg: '#E3F2FD',
-      accent: '#1976D2',
-      icon: <InventoryIcon sx={{ color: '#1976D2', fontSize: 22 }} />,
+      bg: colors.brand.navyTint,
+      accent: colors.brand.navy,
+      icon: <InventoryIcon sx={{ color: colors.brand.navy, fontSize: 22 }} />,
       active: kpiFilter.type === 'portioned',
       onToggle: () => toggleTypeFilter('portioned'),
     },
@@ -325,9 +326,9 @@ export default function StockPage() {
       label: 'Vencendo na Semana',
       value: expiringCount,
       caption: 'itens',
-      bg: '#FFF3E0',
-      accent: '#E65100',
-      icon: <AccessTimeIcon sx={{ color: '#E65100', fontSize: 22 }} />,
+      bg: colors.status.warningTint,
+      accent: colors.status.warning,
+      icon: <AccessTimeIcon sx={{ color: colors.status.warning, fontSize: 22 }} />,
       active: kpiFilter.life === 'expiring',
       onToggle: () => toggleLifeFilter('expiring'),
     },
@@ -335,9 +336,9 @@ export default function StockPage() {
       label: 'Vencidos',
       value: expiredCount,
       caption: 'itens',
-      bg: '#FFEBEE',
-      accent: '#C62828',
-      icon: <WarningAmberIcon sx={{ color: '#C62828', fontSize: 22 }} />,
+      bg: colors.status.dangerTint,
+      accent: colors.status.danger,
+      icon: <WarningAmberIcon sx={{ color: colors.status.danger, fontSize: 22 }} />,
       active: kpiFilter.life === 'expired',
       onToggle: () => toggleLifeFilter('expired'),
     },
@@ -677,19 +678,19 @@ export default function StockPage() {
               width: 40,
               height: 40,
               borderRadius: '50%',
-              bgcolor: '#E3F2FD',
+              bgcolor: colors.brand.navyTint,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Inventory2Icon sx={{ color: '#1976D2', fontSize: 20 }} />
+            <Inventory2Icon sx={{ color: colors.brand.navy, fontSize: 20 }} />
           </Box>
           <Typography variant="h5" fontWeight="bold">
             Estoque
           </Typography>
         </Box>
-        <Typography variant="body2" sx={{ color: '#666', ml: 6.5 }}>
+        <Typography variant="body2" sx={{ color: colors.gray[500], ml: 6.5 }}>
           Visão geral agrupada por produto
         </Typography>
       </Box>
@@ -723,31 +724,31 @@ export default function StockPage() {
                   ...cardSx,
                   cursor: 'pointer',
                   // Card ativo (filtro aplicado): borda e fundo destacados.
-                  bgcolor: k.active ? k.bg : '#fff',
+                  bgcolor: k.active ? k.bg : colors.common.white,
                   border: '2px solid',
-                  borderColor: k.active ? k.accent : '#e8ecf1',
+                  borderColor: k.active ? k.accent : colors.border.subtle,
                   transition: 'border-color .15s ease-in-out, box-shadow .15s ease-in-out',
                   '&:hover': {
                     boxShadow: '0 3px 8px rgba(0,0,0,0.08)',
-                    borderColor: k.active ? k.accent : '#c9d2db',
+                    borderColor: k.active ? k.accent : colors.border.input,
                   },
                 }}
               >
                 <Box sx={{ p: 2.5, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
                   <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                    <Typography variant="body2" sx={{ color: colors.gray[500], mb: 1 }}>
                       {k.label}
                     </Typography>
                     <Typography variant="h4" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
                       {k.value}
                     </Typography>
-                    <Typography variant="body2" sx={{ color: '#999', mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: colors.gray[300], mt: 0.5 }}>
                       {k.caption}
                     </Typography>
                   </Box>
                   <Box
                     sx={{
-                      bgcolor: k.active ? '#fff' : k.bg,
+                      bgcolor: k.active ? colors.common.white : k.bg,
                       borderRadius: 1.5,
                       p: 1,
                       display: 'flex',
@@ -770,7 +771,7 @@ export default function StockPage() {
             scrollButtons="auto"
             allowScrollButtonsMobile
             sx={{
-              bgcolor: '#f1f3f5',
+              bgcolor: colors.status.neutralTint,
               borderRadius: 2,
               padding: '6px 8px',
               minHeight: 40,
@@ -780,7 +781,7 @@ export default function StockPage() {
               '& .MuiTabs-indicator': { display: 'none' },
               '& .MuiTab-root': {
                 textTransform: 'none',
-                color: '#495057',
+                color: colors.status.neutral,
                 minHeight: 36,
                 py: 0.75,
                 px: 1.5,
@@ -789,8 +790,8 @@ export default function StockPage() {
                 fontSize: '0.875rem',
                 whiteSpace: 'nowrap',
                 '&.Mui-selected': {
-                  bgcolor: '#fff',
-                  color: '#1976D2',
+                  bgcolor: colors.common.white,
+                  color: colors.brand.navy,
                   fontWeight: 600,
                   boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                 },
@@ -823,7 +824,7 @@ export default function StockPage() {
                       edge="end"
                       size="small"
                       onClick={() => setScanOpen(true)}
-                      sx={{ color: '#1976D2' }}
+                      sx={{ color: colors.brand.navy }}
                     >
                       <QrCodeScannerIcon fontSize="small" />
                     </IconButton>
@@ -831,7 +832,7 @@ export default function StockPage() {
                 ),
               }}
               sx={{
-                bgcolor: '#fff',
+                bgcolor: colors.common.white,
                 borderRadius: 2,
                 flexGrow: 1,
                 minWidth: { xs: 0, sm: 220 },
@@ -842,7 +843,7 @@ export default function StockPage() {
               size="small"
               value={groupFilter}
               onChange={(e) => setGroupFilter(e.target.value)}
-              sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: { xs: 0, sm: 200 } }}
+              sx={{ bgcolor: colors.common.white, borderRadius: 2, minWidth: { xs: 0, sm: 200 } }}
             >
               <MenuItem value="all">Todos os grupos</MenuItem>
               {groupOptions.map((g) => (
@@ -856,7 +857,7 @@ export default function StockPage() {
               size="small"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              sx={{ bgcolor: '#fff', borderRadius: 2, minWidth: { xs: 0, sm: 200 } }}
+              sx={{ bgcolor: colors.common.white, borderRadius: 2, minWidth: { xs: 0, sm: 200 } }}
             >
               <MenuItem value="all">Todos os status</MenuItem>
               <MenuItem value="vencendo">Vencendo</MenuItem>
@@ -874,11 +875,11 @@ export default function StockPage() {
                   onClick={exportAllStock}
                   sx={{
                     textTransform: 'none',
-                    color: '#495057',
-                    borderColor: '#CED4DA',
-                    bgcolor: '#fff',
+                    color: colors.status.neutral,
+                    borderColor: colors.border.input,
+                    bgcolor: colors.common.white,
                     borderRadius: 2,
-                    '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5' },
+                    '&:hover': { borderColor: colors.status.neutral, bgcolor: colors.status.neutralTint },
                   }}
                 >
                   Exportar todos os itens
@@ -894,11 +895,11 @@ export default function StockPage() {
                 }}
                 sx={{
                   textTransform: 'none',
-                  color: '#C62828',
-                  borderColor: '#F0C0C0',
-                  bgcolor: '#fff',
+                  color: colors.status.danger,
+                  borderColor: colors.status.dangerBorder,
+                  bgcolor: colors.common.white,
                   borderRadius: 2,
-                  '&:hover': { borderColor: '#C62828', bgcolor: '#FFEBEE' },
+                  '&:hover': { borderColor: colors.status.danger, bgcolor: colors.status.dangerTint },
                 }}
               >
                 Conferência PDF
@@ -912,15 +913,15 @@ export default function StockPage() {
                 ...cardSx,
                 p: 1.5,
                 mb: 2,
-                bgcolor: '#E3F2FD',
-                borderColor: '#BBDEFB',
+                bgcolor: colors.brand.navyTint,
+                borderColor: colors.info.border,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 1.5,
                 flexWrap: 'wrap',
               }}
             >
-              <Typography variant="body2" fontWeight={700} sx={{ color: '#1565C0' }}>
+              <Typography variant="body2" fontWeight={700} sx={{ color: colors.brand.navyDark }}>
                 {selected.size} etiqueta(s) selecionada(s)
               </Typography>
               <Box sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -931,7 +932,7 @@ export default function StockPage() {
                     setBulkAction('move');
                     setBulkDest('');
                   }}
-                  sx={{ textTransform: 'none', color: '#1976D2', borderColor: '#90CAF9' }}
+                  sx={{ textTransform: 'none', color: colors.brand.navy, borderColor: colors.brand.navyBorder }}
                 >
                   Mover
                 </Button>
@@ -952,7 +953,7 @@ export default function StockPage() {
                 <Button
                   size="small"
                   onClick={() => setSelected(new Set())}
-                  sx={{ textTransform: 'none', color: '#666' }}
+                  sx={{ textTransform: 'none', color: colors.gray[500] }}
                 >
                   Limpar seleção
                 </Button>
@@ -963,7 +964,7 @@ export default function StockPage() {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {filteredRows.length === 0 && (
               <Card sx={{ ...cardSx, p: 3 }}>
-                <Typography variant="body2" sx={{ color: '#666', textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ color: colors.gray[500], textAlign: 'center' }}>
                   Nenhum produto encontrado
                 </Typography>
               </Card>
@@ -980,8 +981,8 @@ export default function StockPage() {
                       gap: 2,
                       p: 2,
                       cursor: 'pointer',
-                      bgcolor: showBuy && r.belowMin ? '#FDECEC' : 'transparent',
-                      '&:hover': { bgcolor: showBuy && r.belowMin ? '#FBE4E4' : '#f9fafb' },
+                      bgcolor: showBuy && r.belowMin ? colors.status.dangerBg : 'transparent',
+                      '&:hover': { bgcolor: showBuy && r.belowMin ? colors.status.dangerHover : colors.surface.hover },
                     }}
                   >
                     <Box sx={{ flexGrow: 1, minWidth: 0 }}>
@@ -993,8 +994,8 @@ export default function StockPage() {
                             size="small"
                             variant="outlined"
                             sx={{
-                              borderColor: '#CED4DA',
-                              color: '#495057',
+                              borderColor: colors.border.input,
+                              color: colors.status.neutral,
                               bgcolor: 'transparent',
                               fontWeight: 500,
                               fontSize: 12,
@@ -1011,7 +1012,7 @@ export default function StockPage() {
                           <Chip
                             label="Comprar"
                             size="small"
-                            sx={{ bgcolor: '#C62828', color: '#fff', fontWeight: 700, fontSize: 12 }}
+                            sx={{ bgcolor: colors.status.danger, color: colors.common.white, fontWeight: 700, fontSize: 12 }}
                           />
                         )}
                       </Box>
@@ -1024,23 +1025,23 @@ export default function StockPage() {
                           mt: 0.75,
                         }}
                       >
-                        <Typography variant="body2" fontWeight={700} sx={{ color: '#333' }}>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: colors.gray[800] }}>
                           {r.items.length} etiquetas
                         </Typography>
-                        <Typography variant="body2" fontWeight={700} sx={{ color: '#333' }}>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: colors.gray[800] }}>
                           {formatUnitTotal(r.totalWeight, r.unit)} total
                         </Typography>
-                        <Typography variant="body2" sx={{ color: '#666' }}>
+                        <Typography variant="body2" sx={{ color: colors.gray[500] }}>
                           {r.rawCount} bruto
                         </Typography>
-                        <Typography variant="body2" sx={{ color: '#666' }}>
+                        <Typography variant="body2" sx={{ color: colors.gray[500] }}>
                           {r.portionedCount} porcionado
                         </Typography>
                         {showBuy && r.minQuantity > 0 && (
                           <Typography
                             variant="body2"
                             fontWeight={700}
-                            sx={{ color: r.totalWeight < r.minQuantity ? '#C62828' : '#2E7D32' }}
+                            sx={{ color: r.totalWeight < r.minQuantity ? colors.status.danger : colors.status.success }}
                           >
                             {`${r.totalWeight}${unitSuffix(r.unit)}/${r.minQuantity}${unitSuffix(r.unit)} min.`}
                           </Typography>
@@ -1051,7 +1052,7 @@ export default function StockPage() {
                             fontWeight={700}
                             sx={{
                               color:
-                                r.portionedCount < r.minPortionedQuantity ? '#C62828' : '#2E7D32',
+                                r.portionedCount < r.minPortionedQuantity ? colors.status.danger : colors.status.success,
                             }}
                           >
                             {r.portionedCount}/{r.minPortionedQuantity} min.
@@ -1071,26 +1072,26 @@ export default function StockPage() {
                           }}
                           sx={{
                             textTransform: 'none',
-                            color: '#495057',
-                            borderColor: '#CED4DA',
+                            color: colors.status.neutral,
+                            borderColor: colors.border.input,
                             borderRadius: 1.5,
                             flexShrink: 0,
-                            '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5', color: '#212529' },
+                            '&:hover': { borderColor: colors.status.neutral, bgcolor: colors.status.neutralTint, color: colors.gray[900] },
                           }}
                         >
                           Exportar itens
                         </Button>
                       )}
-                      <Typography variant="body2" sx={{ color: '#666' }}>
+                      <Typography variant="body2" sx={{ color: colors.gray[500] }}>
                         Ver etiquetas
                       </Typography>
-                      <IconButton size="small" sx={{ color: '#666' }}>
+                      <IconButton size="small" sx={{ color: colors.gray[500] }}>
                         {open ? <ExpandMoreIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
                       </IconButton>
                     </Box>
                   </Box>
                   <Collapse in={open} timeout="auto" unmountOnExit>
-                    <Box sx={{ borderTop: '1px solid #eef1f5', p: 2 }}>
+                    <Box sx={{ borderTop: `1px solid ${colors.border.subtle}`, p: 2 }}>
                       <ResponsiveTable
                         paper={false}
                         size="small"
@@ -1113,7 +1114,7 @@ export default function StockPage() {
                               selected={selected}
                               setSelected={setSelected}
                             />
-                            <Typography variant="caption" sx={{ color: '#666' }}>
+                            <Typography variant="caption" sx={{ color: colors.gray[500] }}>
                               Selecionar todos
                             </Typography>
                           </Box>
@@ -1137,7 +1138,7 @@ export default function StockPage() {
                                     setDeletePartialWeight('');
                                     setDeleteTarget(item._id);
                                   }}
-                                  sx={{ color: '#d32f2f' }}
+                                  sx={{ color: colors.status.dangerStrong }}
                                 >
                                   <DeleteIcon fontSize="small" />
                                 </IconButton>
@@ -1195,7 +1196,7 @@ export default function StockPage() {
                             cell: (item) => (
                               <Typography
                                 variant="caption"
-                                sx={{ fontFamily: 'monospace', fontSize: 11, color: '#495057' }}
+                                sx={{ fontFamily: 'monospace', fontSize: 11, color: colors.status.neutral }}
                               >
                                 {item.qrCode}
                               </Typography>
@@ -1222,7 +1223,7 @@ export default function StockPage() {
           {bulkAction === 'move' ? 'Mover etiquetas' : 'Baixar etiquetas'}
         </DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500], mb: 2 }}>
             {selected.size} etiqueta(s) selecionada(s).{' '}
             {bulkAction === 'move'
               ? 'Os itens permanecem no estoque e apenas mudam de local.'
@@ -1265,9 +1266,9 @@ export default function StockPage() {
             variant="outlined"
             sx={{
               textTransform: 'none',
-              color: '#444',
-              borderColor: '#e0e0e0',
-              bgcolor: '#fff',
+              color: colors.gray[700],
+              borderColor: colors.border.default,
+              bgcolor: colors.common.white,
             }}
           >
             Cancelar
@@ -1294,7 +1295,7 @@ export default function StockPage() {
       >
         <DialogTitle>Excluir Etiqueta</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500], mb: 2 }}>
             A etiqueta será excluída do sistema (ou parcialmente baixada). Informe o
             destino da baixa — ele é obrigatório e fica registrado no histórico.
           </Typography>
@@ -1366,9 +1367,9 @@ export default function StockPage() {
             variant="outlined"
             sx={{
               textTransform: 'none',
-              color: '#444',
-              borderColor: '#e0e0e0',
-              bgcolor: '#fff',
+              color: colors.gray[700],
+              borderColor: colors.border.default,
+              bgcolor: colors.common.white,
             }}
           >
             Cancelar
@@ -1409,13 +1410,13 @@ export default function StockPage() {
             aria-label="fechar"
             onClick={() => setPdfOpen(false)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ color: '#666', mb: 1.5 }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500], mb: 1.5 }}>
             Documento com os itens de cada local, separados por estoque (com uma aba de
             local ativa, apenas os itens daquele local), com data/hora e campo de
             assinatura do funcionário que está recebendo. No diálogo de impressão,
@@ -1433,7 +1434,7 @@ export default function StockPage() {
                 key={g.name}
                 label={`${g.name}: ${g.items.length} etiqueta(s)`}
                 size="small"
-                sx={{ bgcolor: '#F1F3F5', color: '#495057', fontWeight: 600 }}
+                sx={{ bgcolor: colors.status.neutralTint, color: colors.status.neutral, fontWeight: 600 }}
               />
             ))}
           </Box>
@@ -1444,9 +1445,9 @@ export default function StockPage() {
             variant="outlined"
             sx={{
               textTransform: 'none',
-              color: '#444',
-              borderColor: '#e0e0e0',
-              bgcolor: '#fff',
+              color: colors.gray[700],
+              borderColor: colors.border.default,
+              bgcolor: colors.common.white,
             }}
           >
             Fechar
@@ -1466,7 +1467,7 @@ export default function StockPage() {
       {pdfOpen && (
         <Box
           className="conferencia-print-area"
-          sx={{ p: 2, bgcolor: '#fff' }}
+          sx={{ p: 2, bgcolor: colors.common.white }}
         >
           <Typography variant="h6" fontWeight={700} sx={{ mb: 0.5 }}>
             Conferência de Estoque — {me?.company?.name || 'Restaurante'}
@@ -1491,7 +1492,7 @@ export default function StockPage() {
                         <th
                           key={h}
                           style={{
-                            borderBottom: '2px solid #000',
+                            borderBottom: `2px solid ${colors.common.black}`,
                             textAlign: 'left',
                             padding: '4px 6px',
                             fontSize: 12,
@@ -1530,13 +1531,13 @@ export default function StockPage() {
             </Typography>
             <Box
               sx={{
-                borderBottom: '1.5px solid #000',
+                borderBottom: `1.5px solid ${colors.common.black}`,
                 width: { xs: '100%', sm: '60%' },
                 height: 48,
                 mt: 4,
               }}
             />
-            <Typography variant="caption" sx={{ color: '#555' }}>
+            <Typography variant="caption" sx={{ color: colors.gray[600] }}>
               Nome e assinatura
             </Typography>
           </Box>

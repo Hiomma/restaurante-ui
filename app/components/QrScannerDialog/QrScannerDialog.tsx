@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Box, Button, Dialog, DialogContent, DialogTitle, IconButton, Typography } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import { colors } from '@/lib/design-system';
 
 const READER_ID = 'qr-scanner-reader-region';
 
@@ -58,18 +59,18 @@ export default function QrScannerDialog({
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <QrCodeScannerIcon sx={{ color: '#1976D2' }} />
+          <QrCodeScannerIcon sx={{ color: colors.brand.navy }} />
           <Typography variant="subtitle1" fontWeight={700}>
             {title}
           </Typography>
         </Box>
-        <IconButton aria-label="fechar" onClick={onClose} size="small" sx={{ color: '#666', mr: -1 }}>
+        <IconButton aria-label="fechar" onClick={onClose} size="small" sx={{ color: colors.gray[500], mr: -1 }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          <Typography variant="body2" sx={{ color: '#666' }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500] }}>
             {hint}
           </Typography>
           {open && <CameraRegion onScan={onScan} onClose={onClose} />}
@@ -79,8 +80,8 @@ export default function QrScannerDialog({
             sx={{
               textTransform: 'none',
               borderRadius: 1.5,
-              color: '#444',
-              borderColor: '#e0e0e0',
+              color: colors.gray[700],
+              borderColor: colors.border.default,
               alignSelf: 'flex-end',
             }}
           >
@@ -180,17 +181,17 @@ function CameraRegion({ onScan, onClose }: { onScan: (value: string) => void; on
           minHeight: 240,
           borderRadius: 2,
           overflow: 'hidden',
-          bgcolor: '#000',
+          bgcolor: colors.common.black,
           '& video': { width: '100%' },
         }}
       />
       {starting && !error && (
-        <Typography variant="caption" sx={{ color: '#666' }}>
+        <Typography variant="caption" sx={{ color: colors.gray[500] }}>
           Iniciando a câmera…
         </Typography>
       )}
       {error && (
-        <Typography variant="body2" sx={{ color: '#C62828', fontWeight: 600 }}>
+        <Typography variant="body2" sx={{ color: colors.status.danger, fontWeight: 600 }}>
           {error}
         </Typography>
       )}

@@ -37,8 +37,9 @@ import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import BrDateField from '../components/BrDateField/BrDateField';
 import LabelPreview, { type LabelData } from '../components/LabelPreview/LabelPreview';
+import { colors } from '@/lib/design-system';
 
-const thSx = { fontWeight: 700, color: '#333' };
+const thSx = { fontWeight: 700, color: colors.gray[800] };
 
 /** Timestamp da coluna "Data" (cai na criação se a data não for reconhecida). */
 function dateTimestamp(m: StockMovement): number {
@@ -84,9 +85,9 @@ function toLabelData(
 
 function InfoField({ label, value }: { label: string; value: string }) {
   return (
-    <Typography variant="body2" sx={{ color: '#666' }}>
+    <Typography variant="body2" sx={{ color: colors.gray[500] }}>
       {label}:{' '}
-      <Box component="span" sx={{ fontWeight: 700, color: '#000' }}>
+      <Box component="span" sx={{ fontWeight: 700, color: colors.common.black }}>
         {value}
       </Box>
     </Typography>
@@ -115,20 +116,20 @@ function LabelCard({
           : 'Expirado';
   const statusColor =
     item.status === 'in_stock'
-      ? { bgcolor: '#E8F5E9', color: '#2E7D32' }
+      ? { bgcolor: colors.status.successTint, color: colors.status.success }
       : item.status === 'used'
-        ? { bgcolor: '#FFF3E0', color: '#E65100' }
-        : { bgcolor: '#FFEBEE', color: '#C62828' };
+        ? { bgcolor: colors.status.warningTint, color: colors.status.warning }
+        : { bgcolor: colors.status.dangerTint, color: colors.status.danger };
 
   return (
     <Box
       sx={{
-        border: '1px solid #e0e0e0',
+        border: `1px solid ${colors.border.default}`,
         borderRadius: 1.5,
         p: 1.5,
         width: 160,
         flexShrink: 0,
-        bgcolor: '#fff',
+        bgcolor: colors.common.white,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
@@ -141,10 +142,10 @@ function LabelCard({
         {item.weightGrams}
         {unitSuffix(unit)}
       </Typography>
-      <Typography variant="caption" sx={{ color: '#666', display: 'block' }}>
+      <Typography variant="caption" sx={{ color: colors.gray[500], display: 'block' }}>
         Val: {formatDate(item.expiryDate)}
       </Typography>
-      <Typography variant="caption" sx={{ color: '#666', display: 'block', fontFamily: 'monospace' }}>
+      <Typography variant="caption" sx={{ color: colors.gray[500], display: 'block', fontFamily: 'monospace' }}>
         {item.qrCode}
       </Typography>
       <Chip
@@ -299,20 +300,20 @@ export default function HistoryPage() {
             width: 40,
             height: 40,
             borderRadius: '50%',
-            bgcolor: '#E3F2FD',
+            bgcolor: colors.brand.navyTint,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
           }}
         >
-          <SwapHorizIcon sx={{ color: '#1976D2' }} />
+          <SwapHorizIcon sx={{ color: colors.brand.navy }} />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h5" fontWeight="bold">
             Histórico
           </Typography>
-          <Typography variant="body2" sx={{ color: '#666' }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500] }}>
             Histórico de movimentações de estoque
           </Typography>
         </Box>
@@ -332,14 +333,14 @@ export default function HistoryPage() {
               </InputAdornment>
             ),
           }}
-          sx={{ bgcolor: '#fff', borderRadius: 2, flex: '1 1 280px', minWidth: 0 }}
+          sx={{ bgcolor: colors.common.white, borderRadius: 2, flex: '1 1 280px', minWidth: 0 }}
         />
         <TextField
           select
           size="small"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          sx={{ width: 180, flexShrink: 0, bgcolor: '#fff', borderRadius: 2 }}
+          sx={{ width: 180, flexShrink: 0, bgcolor: colors.common.white, borderRadius: 2 }}
         >
           <MenuItem value="">Todos os tipos</MenuItem>
           <MenuItem value="entry">Entrada</MenuItem>
@@ -348,9 +349,9 @@ export default function HistoryPage() {
         </TextField>
         {/* Filtro de PERÍODO da lista (aba Histórico). */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          <CalendarTodayIcon sx={{ color: '#1976D2', fontSize: 18, flexShrink: 0 }} />
+          <CalendarTodayIcon sx={{ color: colors.brand.navy, fontSize: 18, flexShrink: 0 }} />
           <BrDateField label="De" value={histFrom} onChange={setHistFrom} fullWidth={false} />
-          <Typography variant="body2" sx={{ color: '#666' }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500] }}>
             até
           </Typography>
           <BrDateField label="Até" value={histTo} onChange={setHistTo} fullWidth={false} />
@@ -402,8 +403,8 @@ export default function HistoryPage() {
                   label={m.itemType === 'raw' ? 'Bruto' : 'Porcionado'}
                   size="small"
                   sx={{
-                    bgcolor: '#F1F3F5',
-                    color: '#495057',
+                    bgcolor: colors.status.neutralTint,
+                    color: colors.status.neutral,
                     borderRadius: 1.5,
                   }}
                 />
@@ -446,7 +447,7 @@ export default function HistoryPage() {
               setSelectedLabels([]);
               setDetail(m);
             }}
-            sx={{ color: '#666' }}
+            sx={{ color: colors.gray[500] }}
           >
             <VisibilityIcon fontSize="small" />
           </IconButton>
@@ -480,7 +481,7 @@ export default function HistoryPage() {
             aria-label="fechar"
             onClick={() => setDetail(null)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -489,7 +490,7 @@ export default function HistoryPage() {
           <Box sx={{ pt: 1 }}>
             <Box
               sx={{
-                bgcolor: '#f5f7fa',
+                bgcolor: colors.surface.sunken,
                 borderRadius: 2,
                 p: 2,
                 display: 'grid',
@@ -543,7 +544,7 @@ export default function HistoryPage() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                 <Typography
                   variant="body2"
-                  sx={{ color: '#1976D2', cursor: 'pointer', fontWeight: 600 }}
+                  sx={{ color: colors.brand.navy, cursor: 'pointer', fontWeight: 600 }}
                   onClick={toggleAll}
                 >
                   {selectedLabels.length === batchLabels.length && batchLabels.length > 0
@@ -556,7 +557,7 @@ export default function HistoryPage() {
                   startIcon={<PrintIcon />}
                   disabled={selectedLabels.length === 0}
                   onClick={() => void handleReprint()}
-                  sx={{ textTransform: 'none', color: '#555', borderColor: '#ddd' }}
+                  sx={{ textTransform: 'none', color: colors.gray[600], borderColor: colors.gray[200] }}
                 >
                   Reimprimir ({selectedLabels.length})
                 </Button>
@@ -575,7 +576,7 @@ export default function HistoryPage() {
             </Box>
 
             {batchLabels.length === 0 ? (
-              <Typography variant="body2" sx={{ color: '#888' }}>
+              <Typography variant="body2" sx={{ color: colors.gray[400] }}>
                 Nenhuma etiqueta encontrada para este lote.
               </Typography>
             ) : (
@@ -599,12 +600,12 @@ export default function HistoryPage() {
             variant="outlined"
             sx={{
               textTransform: 'none',
-              color: '#444',
-              borderColor: '#e0e0e0',
-              bgcolor: '#fff',
+              color: colors.gray[700],
+              borderColor: colors.border.default,
+              bgcolor: colors.common.white,
               borderRadius: 1.5,
               px: 2.5,
-              '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+              '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
             }}
           >
             Fechar

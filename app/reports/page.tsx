@@ -55,11 +55,12 @@ import BrDateField from '../components/BrDateField/BrDateField';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
+import { colors } from '@/lib/design-system';
 
 const cardSx = {
-  bgcolor: '#fff',
+  bgcolor: colors.common.white,
   borderRadius: 2,
-  border: '1px solid #e8ecf1',
+  border: `1px solid ${colors.border.subtle}`,
 } as const;
 
 const toolbarSx = {
@@ -73,12 +74,12 @@ const toolbarSx = {
 } as const;
 
 const thSx = {
-  bgcolor: '#f5f7fa',
+  bgcolor: colors.surface.sunken,
   fontWeight: 700,
   whiteSpace: 'nowrap',
 } as const;
 
-const rowRedSx = { bgcolor: '#FFF5F5' } as const;
+const rowRedSx = { bgcolor: colors.status.dangerBg } as const;
 
 const kpiGrid4 = {
   display: 'grid',
@@ -88,11 +89,11 @@ const kpiGrid4 = {
 } as const;
 
 const chipTones = {
-  green: { bgcolor: '#E8F5E9', color: '#2E7D32' },
-  red: { bgcolor: '#FFEBEE', color: '#C62828' },
-  amber: { bgcolor: '#FFF3E0', color: '#E65100' },
-  gray: { bgcolor: '#F1F3F5', color: '#495057' },
-  blue: { bgcolor: '#E3F2FD', color: '#1565C0' },
+  green: { bgcolor: colors.status.successTint, color: colors.status.success },
+  red: { bgcolor: colors.status.dangerTint, color: colors.status.danger },
+  amber: { bgcolor: colors.status.warningTint, color: colors.status.warning },
+  gray: { bgcolor: colors.status.neutralTint, color: colors.status.neutral },
+  blue: { bgcolor: colors.brand.navyTint, color: colors.brand.navyDark },
 } as const;
 
 type ChipTone = keyof typeof chipTones;
@@ -302,11 +303,11 @@ function SolidRedChip({
       size="small"
       icon={withWarning ? <WarningAmberIcon /> : undefined}
       sx={{
-        bgcolor: '#E53935',
-        color: '#fff',
+        bgcolor: colors.status.dangerStrong,
+        color: colors.common.white,
         fontWeight: 600,
         borderRadius: 1,
-        '& .MuiChip-icon': { color: '#fff' },
+        '& .MuiChip-icon': { color: colors.common.white },
       }}
     />
   );
@@ -369,11 +370,11 @@ function ExportButtons({
   onPdf?: () => void;
 }) {
   const neutralSx = {
-    color: '#495057',
-    borderColor: '#CED4DA',
+    color: colors.status.neutral,
+    borderColor: colors.border.input,
     textTransform: 'none',
     borderRadius: 1.5,
-    '&:hover': { borderColor: '#495057', bgcolor: '#F1F3F5', color: '#212529' },
+    '&:hover': { borderColor: colors.status.neutral, bgcolor: colors.status.neutralTint, color: colors.gray[900] },
   } as const;
   return (
     <Box sx={{ display: 'flex', gap: 1 }} className="no-print">
@@ -418,7 +419,7 @@ function WeightPair({
     <Typography component="span" variant="body2" sx={{ whiteSpace: 'nowrap' }}>
       <Box
         component="span"
-        sx={{ fontWeight: 700, color: tone === 'amber' ? '#E65100' : 'inherit' }}
+        sx={{ fontWeight: 700, color: tone === 'amber' ? colors.status.warning : 'inherit' }}
       >
         {grams}
         {unitSuffix(unit)}
@@ -510,7 +511,7 @@ function DateRangeField({
         minWidth: 0,
       }}
     >
-      <CalendarTodayIcon sx={{ color: '#1976D2', fontSize: 18, flexShrink: 0 }} />
+      <CalendarTodayIcon sx={{ color: colors.brand.navy, fontSize: 18, flexShrink: 0 }} />
       <Box
         sx={{
           minWidth: 0,
@@ -1101,7 +1102,7 @@ function ReportsContent() {
       cell: (r) => (
         <Typography
           variant="body2"
-          sx={{ fontFamily: 'monospace', fontSize: 13, color: '#1565C0' }}
+          sx={{ fontFamily: 'monospace', fontSize: 13, color: colors.brand.navyDark }}
         >
           {r.lote}
         </Typography>
@@ -1113,7 +1114,7 @@ function ReportsContent() {
       cell: (r) => (
         <Typography
           variant="body2"
-          sx={{ fontFamily: 'monospace', fontSize: 13, color: '#888' }}
+          sx={{ fontFamily: 'monospace', fontSize: 13, color: colors.gray[400] }}
         >
           {r.loteOrigem}
         </Typography>
@@ -1450,13 +1451,13 @@ function ReportsContent() {
             height: 40,
             flexShrink: 0,
             borderRadius: '50%',
-            bgcolor: '#E3F2FD',
+            bgcolor: colors.brand.navyTint,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <BarChartIcon sx={{ color: '#1976D2' }} />
+          <BarChartIcon sx={{ color: colors.brand.navy }} />
         </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="h5" fontWeight="bold">
@@ -1484,7 +1485,7 @@ function ReportsContent() {
         allowScrollButtonsMobile
         className="no-print"
         sx={{
-          bgcolor: '#f1f3f5',
+          bgcolor: colors.status.neutralTint,
           borderRadius: 2,
           padding: '6px 8px',
           minHeight: 40,
@@ -1497,7 +1498,7 @@ function ReportsContent() {
           '& .MuiTabs-indicator': { display: 'none' },
           '& .MuiTab-root': {
             textTransform: 'none',
-            color: '#495057',
+            color: colors.status.neutral,
             minHeight: 36,
             py: 0.75,
             px: 1.5,
@@ -1507,8 +1508,8 @@ function ReportsContent() {
             whiteSpace: 'nowrap',
             maxWidth: '100%',
             '&.Mui-selected': {
-              bgcolor: '#fff',
-              color: '#1976D2',
+              bgcolor: colors.common.white,
+              color: colors.brand.navy,
               fontWeight: 600,
               boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
             },
@@ -1552,7 +1553,7 @@ function ReportsContent() {
             <Box>
               <Box sx={toolbarSx} className="no-print">
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <FilterListIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+                  <FilterListIcon sx={{ color: colors.brand.navy, fontSize: 20 }} />
                   <Typography variant="subtitle2" fontWeight={700}>
                     Filtros:
                   </Typography>
@@ -1591,29 +1592,29 @@ function ReportsContent() {
                   label="Total Bruto"
                   value={formatKg(rawSum)}
                   icon={<ScaleIcon />}
-                  iconBg="#E3F2FD"
-                  iconColor="#1976D2"
+                  iconBg={colors.brand.navyTint}
+                  iconColor={colors.brand.navy}
                 />
                 <KpiCard
                   label="Total Limpo"
                   value={formatKg(cleanSum)}
                   icon={<ScaleIcon />}
-                  iconBg="#E3F2FD"
-                  iconColor="#1976D2"
+                  iconBg={colors.brand.navyTint}
+                  iconColor={colors.brand.navy}
                 />
                 <KpiCard
                   label="Total Perdido"
                   value={formatKg(lossSum)}
                   icon={<TrendingDownIcon />}
-                  iconBg="#FFEBEE"
-                  iconColor="#C62828"
+                  iconBg={colors.status.dangerTint}
+                  iconColor={colors.status.danger}
                 />
                 <KpiCard
                   label="% Perda Geral"
                   value={`${generalLossPct.toFixed(1)}%`}
                   icon={<PercentIcon />}
-                  iconBg="#FFF3E0"
-                  iconColor="#E65100"
+                  iconBg={colors.status.warningTint}
+                  iconColor={colors.status.warning}
                 />
               </Box>
 
@@ -1634,7 +1635,7 @@ function ReportsContent() {
                       id: 'perda',
                       header: 'Perda',
                       cell: (r) => (
-                        <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                        <Typography fontWeight={700} sx={{ color: colors.status.danger }}>
                           {fmtG(r.loss, r.unit)}
                         </Typography>
                       ),
@@ -1651,11 +1652,11 @@ function ReportsContent() {
                       header: 'Ganho',
                       cell: (r) =>
                         r.gain > 0 ? (
-                          <Typography fontWeight={700} sx={{ color: '#1565C0' }}>
+                          <Typography fontWeight={700} sx={{ color: colors.brand.navyDark }}>
                             {`+${fmtG(r.gain, r.unit)}`}
                           </Typography>
                         ) : r.loss > 0 ? (
-                          <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                          <Typography fontWeight={700} sx={{ color: colors.status.danger }}>
                             {`-${fmtG(r.loss, r.unit)}`}
                           </Typography>
                         ) : (
@@ -1721,7 +1722,7 @@ function ReportsContent() {
                       id: 'perda',
                       header: 'Perda',
                       cell: (p) => (
-                        <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                        <Typography fontWeight={700} sx={{ color: colors.status.danger }}>
                           {fmtG(p.lossGrams, p.unit)}
                         </Typography>
                       ),
@@ -1777,7 +1778,7 @@ function ReportsContent() {
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <FilterListIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+                    <FilterListIcon sx={{ color: colors.brand.navy, fontSize: 20 }} />
                     <Typography variant="subtitle2" fontWeight={700}>
                       Filtros:
                     </Typography>
@@ -2169,7 +2170,7 @@ function ReportsContent() {
                           <Chip
                             label={m.itemType === 'raw' ? 'Bruto' : 'Porcionado'}
                             size="small"
-                            sx={{ bgcolor: '#F1F3F5', color: '#495057', borderRadius: 1.5 }}
+                            sx={{ bgcolor: colors.status.neutralTint, color: colors.status.neutral, borderRadius: 1.5 }}
                           />
                         ) : (
                           '—'
@@ -2204,29 +2205,29 @@ function ReportsContent() {
                   label="Produtos"
                   value={products.length}
                   icon={<InventoryIcon />}
-                  iconBg="#E3F2FD"
-                  iconColor="#1976D2"
+                  iconBg={colors.brand.navyTint}
+                  iconColor={colors.brand.navy}
                 />
                 <KpiCard
                   label="Abaixo do Mínimo"
                   value={belowCount}
                   icon={<WarningAmberIcon />}
-                  iconBg="#FFEBEE"
-                  iconColor="#C62828"
+                  iconBg={colors.status.dangerTint}
+                  iconColor={colors.status.danger}
                 />
                 <KpiCard
                   label="Porcionadas em Estoque"
                   value={portionedInStock.length}
                   icon={<ContentCutIcon />}
-                  iconBg="#E8F5E9"
-                  iconColor="#2E7D32"
+                  iconBg={colors.status.successTint}
+                  iconColor={colors.status.success}
                 />
                 <KpiCard
                   label="Bruto Estimado a Retirar"
                   value={formatKg(estimatedRawTotal)}
                   icon={<ScaleIcon />}
-                  iconBg="#FFF3E0"
-                  iconColor="#E65100"
+                  iconBg={colors.status.warningTint}
+                  iconColor={colors.status.warning}
                 />
               </Box>
 
@@ -2282,7 +2283,7 @@ function ReportsContent() {
                       header: 'Déficit',
                       cell: (r) =>
                         r.below ? (
-                          <Typography fontWeight={700} sx={{ color: '#C62828' }}>
+                          <Typography fontWeight={700} sx={{ color: colors.status.danger }}>
                             {r.deficit}
                           </Typography>
                         ) : (

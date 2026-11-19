@@ -43,10 +43,11 @@ import type { Employee } from '@/types';
 import ConfirmDialog from '@/app/components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '@/app/components/ResponsiveTabs/ResponsiveTabs';
+import { colors } from '@/lib/design-system';
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
-const thSx = { fontWeight: 700, color: '#333' };
+const thSx = { fontWeight: 700, color: colors.gray[800] };
 
 /**
  * Permissões da matriz por perfil — mesma chave da API (`/permission-profiles`)
@@ -85,20 +86,20 @@ const PERMISSION_DEFS: { key: string; label: string; hint: string }[] = [
 const containedSx = {
   textTransform: 'none',
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
   boxShadow: 'none',
-  '&:hover': { bgcolor: '#1565C0', boxShadow: 'none' },
+  '&:hover': { bgcolor: colors.brand.navyDark, boxShadow: 'none' },
 } as const;
 
 const outlinedCancelSx = {
   textTransform: 'none',
-  color: '#444',
-  borderColor: '#e0e0e0',
-  bgcolor: '#fff',
+  color: colors.gray[700],
+  borderColor: colors.border.default,
+  bgcolor: colors.common.white,
   borderRadius: 1.5,
   px: 2.5,
-  '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+  '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
 } as const;
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -244,8 +245,8 @@ export default function EmployeesRegistry() {
     return (
       <Box
         sx={{
-          bgcolor: '#FFF3E0',
-          border: '1px solid #FFCC80',
+          bgcolor: colors.status.warningTint,
+          border: `1px solid ${colors.status.warningBorder}`,
           borderRadius: 2,
           p: 2.5,
         }}
@@ -253,7 +254,7 @@ export default function EmployeesRegistry() {
         <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
           Acesso restrito
         </Typography>
-        <Typography variant="body2" sx={{ color: '#555' }}>
+        <Typography variant="body2" sx={{ color: colors.gray[600] }}>
           Seu perfil não tem permissão para gerenciar funcionários. Peça ao administrador para
           liberar a permissão &quot;Funcionários&quot; na aba Cadastros → Funcionários →
           Permissões.
@@ -280,20 +281,20 @@ export default function EmployeesRegistry() {
               width: 40,
               height: 40,
               borderRadius: '50%',
-              bgcolor: '#E3F2FD',
+              bgcolor: colors.brand.navyTint,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            <PeopleIcon sx={{ color: '#1976D2', fontSize: 22 }} />
+            <PeopleIcon sx={{ color: colors.brand.navy, fontSize: 22 }} />
           </Box>
           <Box>
             <Typography variant="h5" fontWeight="bold">
               Funcionários
             </Typography>
-            <Typography variant="body2" sx={{ color: '#666' }}>
+            <Typography variant="body2" sx={{ color: colors.gray[500] }}>
               Gerencie os usuários do sistema e as permissões por perfil
             </Typography>
           </Box>
@@ -312,7 +313,7 @@ export default function EmployeesRegistry() {
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{
-          bgcolor: '#f1f3f5',
+          bgcolor: colors.status.neutralTint,
           borderRadius: 2,
           p: 0.5,
           mb: 2,
@@ -326,10 +327,10 @@ export default function EmployeesRegistry() {
             minHeight: 40,
             minWidth: 120,
             fontWeight: 600,
-            color: '#555',
+            color: colors.gray[600],
             whiteSpace: 'nowrap',
             justifyContent: 'center',
-            '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
+            '&.Mui-selected': { bgcolor: colors.common.white, color: colors.brand.navy },
           },
         }}
       >
@@ -341,14 +342,14 @@ export default function EmployeesRegistry() {
         <Box>
           <Box
             sx={{
-              bgcolor: '#E8F4FD',
-              border: '1px solid #B3DDF2',
+              bgcolor: colors.info.tint,
+              border: `1px solid ${colors.info.border}`,
               borderRadius: 2,
               p: 2,
               mb: 2,
             }}
           >
-            <Typography variant="body2" sx={{ color: '#333', lineHeight: 1.6 }}>
+            <Typography variant="body2" sx={{ color: colors.gray[800], lineHeight: 1.6 }}>
               <Box component="span" sx={{ fontWeight: 700 }}>
                 Permissões por perfil:{' '}
               </Box>
@@ -359,7 +360,7 @@ export default function EmployeesRegistry() {
           </Box>
 
           <ResponsiveTable
-            containerSx={{ border: '1px solid #e8ecf1' }}
+            containerSx={{ border: `1px solid ${colors.border.subtle}` }}
             headerCellSx={thSx}
             rows={PERMISSION_DEFS}
             rowKey={(p) => p.key}
@@ -375,7 +376,7 @@ export default function EmployeesRegistry() {
                     <Typography variant="body2" fontWeight={600}>
                       {p.label}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: '#888' }}>
+                    <Typography variant="caption" sx={{ color: colors.gray[400] }}>
                       {p.hint}
                     </Typography>
                   </Box>
@@ -414,9 +415,9 @@ export default function EmployeesRegistry() {
               onClick={() => setMatrix(null)}
               sx={{
                 textTransform: 'none',
-                color: '#444',
-                borderColor: '#e0e0e0',
-                bgcolor: '#fff',
+                color: colors.gray[700],
+                borderColor: colors.border.default,
+                bgcolor: colors.common.white,
                 borderRadius: 1.5,
                 px: 2.5,
               }}
@@ -439,14 +440,14 @@ export default function EmployeesRegistry() {
         <>
       <Box
         sx={{
-          bgcolor: '#E8F4FD',
-          border: '1px solid #B3DDF2',
+          bgcolor: colors.info.tint,
+          border: `1px solid ${colors.info.border}`,
           borderRadius: 2,
           p: 2,
           mb: 3,
         }}
       >
-        <Typography variant="body2" sx={{ color: '#333', lineHeight: 1.6 }}>
+        <Typography variant="body2" sx={{ color: colors.gray[800], lineHeight: 1.6 }}>
           <Box component="span" sx={{ fontWeight: 700 }}>
             Como funciona:{' '}
           </Box>
@@ -472,7 +473,7 @@ export default function EmployeesRegistry() {
             id: 'usuario',
             header: 'Usuário',
             cell: (emp) => (
-              <Typography variant="body2" sx={{ color: '#666' }}>
+              <Typography variant="body2" sx={{ color: colors.gray[500] }}>
                 {emp.username}
               </Typography>
             ),
@@ -486,8 +487,8 @@ export default function EmployeesRegistry() {
                   label="Admin"
                   size="small"
                   sx={{
-                    bgcolor: '#EDE7F6',
-                    color: '#5E35B1',
+                    bgcolor: colors.movement.portioningTint,
+                    color: colors.movement.portioning,
                     fontWeight: 600,
                     borderRadius: 1,
                   }}
@@ -497,8 +498,8 @@ export default function EmployeesRegistry() {
                   label="Funcionário"
                   size="small"
                   sx={{
-                    bgcolor: '#E3F2FD',
-                    color: '#1565C0',
+                    bgcolor: colors.brand.navyTint,
+                    color: colors.brand.navyDark,
                     fontWeight: 600,
                     borderRadius: 1,
                   }}
@@ -520,13 +521,13 @@ export default function EmployeesRegistry() {
         ]}
         actions={(emp) => (
           <>
-            <IconButton size="small" onClick={() => openEdit(emp)} sx={{ color: '#666' }}>
+            <IconButton size="small" onClick={() => openEdit(emp)} sx={{ color: colors.gray[500] }}>
               <EditIcon fontSize="small" />
             </IconButton>
             <IconButton
               size="small"
               onClick={() => setDeleteTarget(emp._id)}
-              sx={{ color: '#d32f2f' }}
+              sx={{ color: colors.status.dangerStrong }}
             >
               <DeleteIcon fontSize="small" />
             </IconButton>
@@ -550,7 +551,7 @@ export default function EmployeesRegistry() {
             aria-label="fechar"
             onClick={() => setDialogOpen(false)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>

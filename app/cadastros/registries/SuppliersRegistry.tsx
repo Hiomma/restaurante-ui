@@ -24,24 +24,25 @@ import { useSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier }
 import type { Supplier } from '@/types';
 import ConfirmDialog from '@/app/components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
+import { colors } from '@/lib/design-system';
 
 const containedSx = {
   textTransform: 'none',
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
   boxShadow: 'none',
-  '&:hover': { bgcolor: '#1565C0', boxShadow: 'none' },
+  '&:hover': { bgcolor: colors.brand.navyDark, boxShadow: 'none' },
 } as const;
 
 const outlinedCancelSx = {
   textTransform: 'none',
-  color: '#444',
-  borderColor: '#e0e0e0',
-  bgcolor: '#fff',
+  color: colors.gray[700],
+  borderColor: colors.border.default,
+  bgcolor: colors.common.white,
   borderRadius: 1.5,
   px: 2.5,
-  '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+  '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
 } as const;
 
 const fieldSx = {
@@ -124,20 +125,20 @@ export default function SuppliersRegistry() {
               width: 40,
               height: 40,
               borderRadius: '50%',
-              bgcolor: '#E3F2FD',
+              bgcolor: colors.brand.navyTint,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            <LocalShippingIcon sx={{ color: '#1976D2', fontSize: 22 }} />
+            <LocalShippingIcon sx={{ color: colors.brand.navy, fontSize: 22 }} />
           </Box>
           <Box>
             <Typography variant="h5" fontWeight="bold">
               Fornecedores
             </Typography>
-            <Typography variant="body2" sx={{ color: '#666' }}>
+            <Typography variant="body2" sx={{ color: colors.gray[500] }}>
               Gerencie os fornecedores de matérias-primas
             </Typography>
           </Box>
@@ -149,14 +150,14 @@ export default function SuppliersRegistry() {
 
       <Box
         sx={{
-          bgcolor: '#E8F4FD',
-          border: '1px solid #B3DDF2',
+          bgcolor: colors.info.tint,
+          border: `1px solid ${colors.info.border}`,
           borderRadius: 2,
           p: 2,
           mb: 3,
         }}
       >
-        <Typography variant="body2" sx={{ color: '#333', lineHeight: 1.6 }}>
+        <Typography variant="body2" sx={{ color: colors.gray[800], lineHeight: 1.6 }}>
           <Box component="span" sx={{ fontWeight: 700 }}>
             Como funciona:{' '}
           </Box>
@@ -180,13 +181,13 @@ export default function SuppliersRegistry() {
         ]}
         actions={(supplier) => (
           <>
-            <IconButton size="small" onClick={() => openEdit(supplier)} sx={{ color: '#666' }}>
+            <IconButton size="small" onClick={() => openEdit(supplier)} sx={{ color: colors.gray[500] }}>
               <EditIcon fontSize="small" />
             </IconButton>
             <IconButton
               size="small"
               onClick={() => setDeleteTarget(supplier._id)}
-              sx={{ color: '#d32f2f' }}
+              sx={{ color: colors.status.dangerStrong }}
             >
               <DeleteIcon fontSize="small" />
             </IconButton>
@@ -208,7 +209,7 @@ export default function SuppliersRegistry() {
             aria-label="fechar"
             onClick={() => setDialogOpen(false)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>

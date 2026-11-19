@@ -28,6 +28,7 @@ import { formatQuantity } from '@/lib/utils';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, useGroups } from '@/lib/queries';
 import ConfirmDialog from '@/app/components/ConfirmDialog/ConfirmDialog';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
+import { colors } from '@/lib/design-system';
 
 /**
  * Mensagem de erro vinda da API (Nest devolve string ou array `message`).
@@ -50,8 +51,8 @@ const categories = [
 ];
 
 const categoryColors: Record<string, { bg: string; color: string }> = {
-  'Materia Prima': { bg: '#fff3e0', color: '#e65100' },
-  'Porcionado': { bg: '#e8f5e9', color: '#2e7d32' },
+  'Materia Prima': { bg: colors.status.warningTint, color: colors.status.warning },
+  'Porcionado': { bg: colors.status.successTint, color: colors.status.success },
 };
 
 const normalize = (value: string) =>
@@ -61,17 +62,17 @@ const normalize = (value: string) =>
     .replace(/[\u0300-\u036f]/g, '');
 
 const storageColors: Record<string, string> = {
-  'Refrigerado': '#00897b',
-  'Congelado': '#1565c0',
-  'Temperatura Ambiente': '#f9a825',
-  'Camara Fria': '#5c6bc0',
+  'Refrigerado': colors.storage.chilled,
+  'Congelado': colors.brand.navyDark,
+  'Temperatura Ambiente': colors.storage.ambient,
+  'Camara Fria': colors.storage.chamber,
 };
 
 const storageBg: Record<string, string> = {
-  'Refrigerado': '#e0f2f1',
-  'Congelado': '#e3f2fd',
-  'Temperatura Ambiente': '#fffde7',
-  'Camara Fria': '#e8eaf6',
+  'Refrigerado': colors.storage.chilledTint,
+  'Congelado': colors.brand.navyTint,
+  'Temperatura Ambiente': colors.storage.ambientTint,
+  'Camara Fria': colors.storage.chamberTint,
 };
 
 const fieldSx = {
@@ -241,8 +242,8 @@ export default function ProductsRegistry() {
           startIcon={<AddIcon />}
           onClick={openCreate}
           sx={{
-            bgcolor: '#2196F3',
-            '&:hover': { bgcolor: '#1e88e5' },
+            bgcolor: colors.brand.navy,
+            '&:hover': { bgcolor: colors.brand.navyDark },
             borderRadius: 2,
             textTransform: 'none',
           }}
@@ -264,7 +265,7 @@ export default function ProductsRegistry() {
             </InputAdornment>
           ),
         }}
-        sx={{ mb: 3, bgcolor: '#fff', borderRadius: 2 }}
+        sx={{ mb: 3, bgcolor: colors.common.white, borderRadius: 2 }}
       />
 
       <ResponsiveTable
@@ -291,8 +292,8 @@ export default function ProductsRegistry() {
                 }
                 size="small"
                 sx={{
-                  bgcolor: categoryColors[p.category || 'Materia Prima']?.bg || '#f5f5f5',
-                  color: categoryColors[p.category || 'Materia Prima']?.color || '#333',
+                  bgcolor: categoryColors[p.category || 'Materia Prima']?.bg || colors.surface.muted,
+                  color: categoryColors[p.category || 'Materia Prima']?.color || colors.gray[800],
                   fontWeight: 500,
                   borderRadius: 1,
                 }}
@@ -307,8 +308,8 @@ export default function ProductsRegistry() {
                 label={p.storageMethod}
                 size="small"
                 sx={{
-                  bgcolor: storageBg[p.storageMethod] || '#f5f5f5',
-                  color: storageColors[p.storageMethod] || '#333',
+                  bgcolor: storageBg[p.storageMethod] || colors.surface.muted,
+                  color: storageColors[p.storageMethod] || colors.gray[800],
                   fontWeight: 500,
                   borderRadius: 1,
                 }}
@@ -336,13 +337,13 @@ export default function ProductsRegistry() {
         ]}
         actions={(p) => (
           <>
-            <IconButton size="small" onClick={() => openEdit(p)} sx={{ color: '#666' }}>
+            <IconButton size="small" onClick={() => openEdit(p)} sx={{ color: colors.gray[500] }}>
               <EditIcon fontSize="small" />
             </IconButton>
             <IconButton
               size="small"
               onClick={() => setDeleteTarget(p._id)}
-              sx={{ color: '#d32f2f' }}
+              sx={{ color: colors.status.dangerStrong }}
             >
               <DeleteIcon fontSize="small" />
             </IconButton>
@@ -364,7 +365,7 @@ export default function ProductsRegistry() {
             aria-label="fechar"
             onClick={() => setDialogOpen(false)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -417,7 +418,7 @@ export default function ProductsRegistry() {
                 ))}
               </TextField>
               {groups?.length === 0 && (
-                <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+                <Typography variant="caption" sx={{ color: colors.gray[400], mt: 0.5, display: 'block' }}>
                   Nenhum grupo cadastrado. Cadastre em Cadastros → Grupos.
                 </Typography>
               )}
@@ -574,7 +575,7 @@ export default function ProductsRegistry() {
                 alignItems: 'center',
                 gap: 1,
                 pt: 1,
-                borderTop: '1px solid #eef1f5',
+                borderTop: `1px solid ${colors.border.subtle}`,
               }}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -600,12 +601,12 @@ export default function ProductsRegistry() {
             variant="outlined"
             sx={{
               textTransform: 'none',
-              color: '#444',
-              borderColor: '#e0e0e0',
-              bgcolor: '#fff',
+              color: colors.gray[700],
+              borderColor: colors.border.default,
+              bgcolor: colors.common.white,
               borderRadius: 1.5,
               px: 2.5,
-              '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+              '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
             }}
           >
             Cancelar
@@ -615,10 +616,10 @@ export default function ProductsRegistry() {
             variant="contained"
             sx={{
               textTransform: 'none',
-              bgcolor: '#2196F3',
+              bgcolor: colors.brand.navy,
               borderRadius: 1.5,
               px: 2.5,
-              '&:hover': { bgcolor: '#1e88e5' },
+              '&:hover': { bgcolor: colors.brand.navyDark },
             }}
           >
             {editing ? 'Salvar' : 'Cadastrar'}

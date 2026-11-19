@@ -43,28 +43,29 @@ import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '../components/ResponsiveTabs/ResponsiveTabs';
 import QrScannerDialog from '../components/QrScannerDialog/QrScannerDialog';
+import { colors } from '@/lib/design-system';
 
 const cardSx = {
-  bgcolor: '#fff',
+  bgcolor: colors.common.white,
   borderRadius: 2,
-  border: '1px solid #e8ecf1',
+  border: `1px solid ${colors.border.subtle}`,
   boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
 };
 
-const thSx = { fontWeight: 700, color: '#333' };
+const thSx = { fontWeight: 700, color: colors.gray[800] };
 
 const grayChipSx = {
-  bgcolor: '#F1F3F5',
-  color: '#495057',
+  bgcolor: colors.status.neutralTint,
+  color: colors.status.neutral,
   borderRadius: 1.5,
 };
 
 const primaryBtnSx = {
   textTransform: 'none' as const,
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
-  '&:hover': { bgcolor: '#1565C0' },
+  '&:hover': { bgcolor: colors.brand.navyDark },
 };
 
 const fixedMoveDestinations = ['Salão', 'Bar', 'Cozinha'];
@@ -116,16 +117,16 @@ function toggleSx(active: boolean) {
     fontWeight: 600,
     ...(active
       ? {
-          bgcolor: '#1976D2',
-          color: '#fff',
-          borderColor: '#1976D2',
-          '&:hover': { bgcolor: '#1565C0', borderColor: '#1565C0' },
+          bgcolor: colors.brand.navy,
+          color: colors.common.white,
+          borderColor: colors.brand.navy,
+          '&:hover': { bgcolor: colors.brand.navyDark, borderColor: colors.brand.navyDark },
         }
       : {
-          color: '#444',
-          borderColor: '#e0e0e0',
-          bgcolor: '#fff',
-          '&:hover': { borderColor: '#1976D2', color: '#1976D2', bgcolor: '#fff' },
+          color: colors.gray[700],
+          borderColor: colors.border.default,
+          bgcolor: colors.common.white,
+          '&:hover': { borderColor: colors.brand.navy, color: colors.brand.navy, bgcolor: colors.common.white },
         }),
   };
 }
@@ -600,19 +601,19 @@ export default function MovementsPage() {
             width: 40,
             height: 40,
             borderRadius: '50%',
-            bgcolor: '#E3F2FD',
+            bgcolor: colors.brand.navyTint,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <SwapHorizIcon sx={{ color: '#1976D2' }} />
+          <SwapHorizIcon sx={{ color: colors.brand.navy }} />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h5" fontWeight="bold">
             Movimentações
           </Typography>
-          <Typography variant="body2" sx={{ color: '#666' }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500] }}>
             Escaneie etiquetas para movimentar ou realizar contagem de estoque
           </Typography>
         </Box>
@@ -625,7 +626,7 @@ export default function MovementsPage() {
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{
-          bgcolor: '#f1f3f5',
+          bgcolor: colors.status.neutralTint,
           borderRadius: 2,
           p: 0.5,
           mb: 3,
@@ -636,12 +637,12 @@ export default function MovementsPage() {
             borderRadius: 1.5,
             minHeight: 40,
             fontWeight: 600,
-            color: '#555',
+            color: colors.gray[600],
             whiteSpace: 'nowrap',
             alignItems: 'center',
             flexDirection: 'row',
             gap: 1,
-            '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
+            '&.Mui-selected': { bgcolor: colors.common.white, color: colors.brand.navy },
           },
         }}
       >
@@ -654,7 +655,7 @@ export default function MovementsPage() {
         <Box sx={{ maxWidth: 560, mx: 'auto' }}>
           <Box sx={{ ...cardSx, p: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              <QrCodeScannerIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+              <QrCodeScannerIcon sx={{ color: colors.brand.navy, fontSize: 20 }} />
               <Typography variant="subtitle1" fontWeight={700}>
                 Escanear Etiquetas
               </Typography>
@@ -682,10 +683,10 @@ export default function MovementsPage() {
                   width: 44,
                   height: 44,
                   flexShrink: 0,
-                  border: '1px solid #90CAF9',
+                  border: `1px solid ${colors.brand.navyBorder}`,
                   borderRadius: 1.5,
-                  color: '#1976D2',
-                  '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                  color: colors.brand.navy,
+                  '&:hover': { borderColor: colors.brand.navy, bgcolor: colors.brand.navyTint },
                 }}
               >
                 <QrCodeScannerIcon fontSize="small" />
@@ -697,18 +698,18 @@ export default function MovementsPage() {
                 sx={{
                   textTransform: 'none' as const,
                   borderRadius: 1.5,
-                  color: '#1976D2',
-                  borderColor: '#90CAF9',
+                  color: colors.brand.navy,
+                  borderColor: colors.brand.navyBorder,
                   px: 2.5,
                   minWidth: 110,
                   flexShrink: 0,
-                  '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                  '&:hover': { borderColor: colors.brand.navy, bgcolor: colors.brand.navyTint },
                 }}
               >
                 {scanning ? <CircularProgress size={18} /> : 'Adicionar'}
               </Button>
             </Box>
-            <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 1 }}>
+            <Typography variant="caption" sx={{ color: colors.gray[500], display: 'block', mt: 1 }}>
               Escaneie quantas etiquetas quiser — depois escolha a opção Mover ou Baixar.
             </Typography>
           </Box>
@@ -733,8 +734,8 @@ export default function MovementsPage() {
                   onClick={clearScanned}
                   sx={{
                     textTransform: 'none',
-                    color: '#666',
-                    '&:hover': { bgcolor: '#f5f5f5' },
+                    color: colors.gray[500],
+                    '&:hover': { bgcolor: colors.surface.muted },
                   }}
                 >
                   Limpar
@@ -751,8 +752,8 @@ export default function MovementsPage() {
                       gap: 1,
                       p: 1.25,
                       borderRadius: 2,
-                      border: '1px solid #e8ecf1',
-                      bgcolor: '#f9fafc',
+                      border: `1px solid ${colors.border.subtle}`,
+                      bgcolor: colors.surface.hover,
                     }}
                   >
                     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -764,8 +765,8 @@ export default function MovementsPage() {
                           label={item.type === 'raw' ? 'Bruto' : 'Porcionado'}
                           size="small"
                           sx={{
-                            bgcolor: '#E3F2FD',
-                            color: '#1565C0',
+                            bgcolor: colors.brand.navyTint,
+                            color: colors.brand.navyDark,
                             fontWeight: 600,
                             borderRadius: 1.5,
                             height: 20,
@@ -799,7 +800,7 @@ export default function MovementsPage() {
                       size="small"
                       aria-label="remover etiqueta"
                       onClick={() => removeScanned(item._id)}
-                      sx={{ color: '#C62828' }}
+                      sx={{ color: colors.status.danger }}
                     >
                       <CloseIcon fontSize="small" />
                     </IconButton>
@@ -827,7 +828,7 @@ export default function MovementsPage() {
 
               {action && (
                 <>
-                  <Typography variant="caption" sx={{ color: '#666', display: 'block', mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ color: colors.gray[500], display: 'block', mb: 1.5 }}>
                     {action === 'move'
                       ? 'O item permanece no estoque e apenas muda de local.'
                       : 'A etiqueta será excluída do sistema.'}
@@ -893,9 +894,9 @@ export default function MovementsPage() {
                           ? {
                               textTransform: 'none' as const,
                               borderRadius: 1.5,
-                              bgcolor: '#C62828',
+                              bgcolor: colors.status.danger,
                               px: 2.5,
-                              '&:hover': { bgcolor: '#B71C1C' },
+                              '&:hover': { bgcolor: colors.status.dangerDeep },
                             }
                           : primaryBtnSx
                       }
@@ -987,7 +988,7 @@ export default function MovementsPage() {
               <CircularProgress />
             ) : (
               <>
-                <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+                <Typography variant="body2" sx={{ color: colors.gray[500], mb: 2 }}>
                   {countItems?.length ?? 0} etiqueta(s) em estoque
                   {countMode === 'product' && countProductId ? ' para este produto' : ''}.
                 </Typography>
@@ -1015,10 +1016,10 @@ export default function MovementsPage() {
                       width: 44,
                       height: 44,
                       flexShrink: 0,
-                      border: '1px solid #90CAF9',
+                      border: `1px solid ${colors.brand.navyBorder}`,
                       borderRadius: 1.5,
-                      color: '#1976D2',
-                      '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                      color: colors.brand.navy,
+                      '&:hover': { borderColor: colors.brand.navy, bgcolor: colors.brand.navyTint },
                     }}
                   >
                     <QrCodeScannerIcon fontSize="small" />
@@ -1045,7 +1046,7 @@ export default function MovementsPage() {
                     ))}
                   </Box>
                 )}
-                <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 1 }}>
+                <Typography variant="caption" sx={{ color: colors.gray[500], display: 'block', mt: 1 }}>
                   {countScanned.length} código(s) escaneado(s). Clique no código para remover.
                 </Typography>
 
@@ -1065,8 +1066,8 @@ export default function MovementsPage() {
                     sx={{
                       textTransform: 'none',
                       borderRadius: 1.5,
-                      color: '#444',
-                      borderColor: '#e0e0e0',
+                      color: colors.gray[700],
+                      borderColor: colors.border.default,
                     }}
                   >
                     Limpar
@@ -1090,20 +1091,20 @@ export default function MovementsPage() {
                         {
                           value: countResult.expected,
                           label: 'No sistema',
-                          bg: '#E3F2FD',
-                          color: '#1565C0',
+                          bg: colors.brand.navyTint,
+                          color: colors.brand.navyDark,
                         },
                         {
                           value: countResult.found,
                           label: 'Encontradas',
-                          bg: '#E8F5E9',
-                          color: '#2E7D32',
+                          bg: colors.status.successTint,
+                          color: colors.status.success,
                         },
                         {
                           value: countResult.missing.length,
                           label: 'Faltando',
-                          bg: '#FFEBEE',
-                          color: '#C62828',
+                          bg: colors.status.dangerTint,
+                          color: colors.status.danger,
                         },
                       ].map((k) => (
                         <Box
@@ -1121,16 +1122,16 @@ export default function MovementsPage() {
                     </Box>
 
                     {countResult.missing.length === 0 ? (
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: '#E8F5E9', textAlign: 'center' }}>
-                        <Typography variant="body2" sx={{ color: '#2E7D32', fontWeight: 600 }}>
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: colors.status.successTint, textAlign: 'center' }}>
+                        <Typography variant="body2" sx={{ color: colors.status.success, fontWeight: 600 }}>
                           Todas as {countResult.expected} etiquetas foram encontradas.
                         </Typography>
                       </Box>
                     ) : (
-                      <Box sx={{ border: '1px solid #FFCDD2', borderRadius: 2, overflow: 'hidden' }}>
+                      <Box sx={{ border: `1px solid ${colors.status.dangerBorder}`, borderRadius: 2, overflow: 'hidden' }}>
                         <Typography
                           variant="body2"
-                          sx={{ color: '#C62828', fontWeight: 600, px: 1.5, pt: 1.5, mb: 1 }}
+                          sx={{ color: colors.status.danger, fontWeight: 600, px: 1.5, pt: 1.5, mb: 1 }}
                         >
                           Etiquetas não encontradas na contagem — identifique o destino ou exclua:
                         </Typography>
@@ -1141,9 +1142,9 @@ export default function MovementsPage() {
                             gap: 1,
                             px: 1.5,
                             py: 0.75,
-                            bgcolor: '#FFF5F5',
-                            borderTop: '1px solid #FFCDD2',
-                            borderBottom: '1px solid #FFCDD2',
+                            bgcolor: colors.status.dangerBg,
+                            borderTop: `1px solid ${colors.status.dangerBorder}`,
+                            borderBottom: `1px solid ${colors.status.dangerBorder}`,
                             flexWrap: 'wrap',
                           }}
                         >
@@ -1158,7 +1159,7 @@ export default function MovementsPage() {
                               selectedMissing.length < countResult.missing.length
                             }
                             onChange={toggleAllMissing}
-                            sx={{ color: '#C62828', '&.Mui-checked': { color: '#C62828' } }}
+                            sx={{ color: colors.status.danger, '&.Mui-checked': { color: colors.status.danger } }}
                           />
                           <Typography variant="body2" fontWeight={600}>
                             Selecionar tudo
@@ -1232,15 +1233,15 @@ export default function MovementsPage() {
                           headerCellSx={thSx}
                           rows={countResult.missing}
                           rowKey={(item) => item._id}
-                          rowSx={() => ({ bgcolor: '#FFF5F5' })}
+                          rowSx={() => ({ bgcolor: colors.status.dangerBg })}
                           actionsLabel="Ações"
                           leading={(item) => (
                             <Checkbox
                               checked={!!missingSelected[item._id]}
                               onChange={(e) => toggleMissing(item._id, e.target.checked)}
                               sx={{
-                                color: '#C62828',
-                                '&.Mui-checked': { color: '#C62828' },
+                                color: colors.status.danger,
+                                '&.Mui-checked': { color: colors.status.danger },
                               }}
                             />
                           )}
@@ -1252,7 +1253,7 @@ export default function MovementsPage() {
                                 aria-label="mover etiqueta"
                                 disabled={!bulkDest || moving}
                                 onClick={() => void handleMoveMissing(item)}
-                                sx={{ color: '#1976D2' }}
+                                sx={{ color: colors.brand.navy }}
                               >
                                 <SwapHorizIcon fontSize="small" />
                               </IconButton>
@@ -1261,7 +1262,7 @@ export default function MovementsPage() {
                                 aria-label="baixar etiqueta"
                                 disabled={moving}
                                 onClick={() => askMotivoSingle(item)}
-                                sx={{ color: '#C62828' }}
+                                sx={{ color: colors.status.danger }}
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
@@ -1310,12 +1311,12 @@ export default function MovementsPage() {
         <Box>
           <Box sx={{ ...cardSx, p: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <UndoIcon sx={{ color: '#1976D2', fontSize: 20 }} />
+              <UndoIcon sx={{ color: colors.brand.navy, fontSize: 20 }} />
               <Typography variant="subtitle1" fontWeight={700}>
                 Devolver etiquetas ao estoque
               </Typography>
             </Box>
-            <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+            <Typography variant="body2" sx={{ color: colors.gray[500], mb: 2 }}>
               Todas as etiquetas baixadas. Ao devolver, a etiqueta volta ao estoque e uma
               movimentação de Entrada é registrada.
             </Typography>
@@ -1392,9 +1393,9 @@ export default function MovementsPage() {
                   onClick={() => void handleRestore(r)}
                   sx={{
                     textTransform: 'none',
-                    color: '#1976D2',
-                    borderColor: '#90CAF9',
-                    '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                    color: colors.brand.navy,
+                    borderColor: colors.brand.navyBorder,
+                    '&:hover': { borderColor: colors.brand.navy, bgcolor: colors.brand.navyTint },
                   }}
                 >
                   Devolver
@@ -1419,7 +1420,7 @@ export default function MovementsPage() {
             aria-label="fechar"
             onClick={closeMotivoDialog}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -1427,7 +1428,7 @@ export default function MovementsPage() {
         <DialogContent>
           <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
             {motivoDialog?.mode === 'bulk' && (
-              <Typography variant="body2" sx={{ color: '#666' }}>
+              <Typography variant="body2" sx={{ color: colors.gray[500] }}>
                 Informe o motivo para baixar as {motivoDialog.items.length} etiqueta(s)
                 selecionada(s).
               </Typography>
@@ -1471,12 +1472,12 @@ export default function MovementsPage() {
             variant="outlined"
             sx={{
               textTransform: 'none',
-              color: '#444',
-              borderColor: '#e0e0e0',
-              bgcolor: '#fff',
+              color: colors.gray[700],
+              borderColor: colors.border.default,
+              bgcolor: colors.common.white,
               borderRadius: 1.5,
               px: 2.5,
-              '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+              '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
             }}
           >
             Cancelar
@@ -1489,9 +1490,9 @@ export default function MovementsPage() {
             sx={{
               textTransform: 'none' as const,
               borderRadius: 1.5,
-              bgcolor: '#C62828',
+              bgcolor: colors.status.danger,
               px: 2.5,
-              '&:hover': { bgcolor: '#B71C1C' },
+              '&:hover': { bgcolor: colors.status.dangerDeep },
             }}
           >
             Confirmar baixa

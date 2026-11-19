@@ -18,6 +18,7 @@ import {
   useTheme,
 } from '@mui/material';
 import type { SxProps, TableCellProps, Theme } from '@mui/material';
+import { colors } from '@/lib/design-system';
 
 /**
  * One column of a `ResponsiveTable`.
@@ -124,7 +125,7 @@ export interface ResponsiveTableProps<T> {
   headerCellSx?: SxProps<Theme>;
 }
 
-const headerDefaults: SxProps<Theme> = { fontWeight: 700, color: '#333' };
+const headerDefaults: SxProps<Theme> = { fontWeight: 700, color: colors.gray[800] };
 
 function mergeSx(...parts: (SxProps<Theme> | undefined)[]): SxProps<Theme> | undefined {
   const defined = parts.filter((p): p is SxProps<Theme> => Boolean(p));
@@ -197,7 +198,7 @@ export default function ResponsiveTable<T>({
                 sx={{
                   width: '100%',
                   boxSizing: 'border-box',
-                  border: '1px solid #e8ecf1',
+                  border: `1px solid ${colors.border.subtle}`,
                   borderRadius: 2,
                   p: 1.5,
                   overflow: 'hidden',
@@ -248,7 +249,7 @@ export default function ResponsiveTable<T>({
                       gap: 1,
                       mt: 1.25,
                       pt: 1.25,
-                      borderTop: '1px solid #f1f3f5',
+                      borderTop: `1px solid ${colors.status.neutralTint}`,
                     }}
                   >
                     {cardColumns.map((column) => (
@@ -262,7 +263,7 @@ export default function ResponsiveTable<T>({
                         {!column.hideMobileLabel && column.mobileLabel !== null && (
                           <Typography
                             variant="caption"
-                            sx={{ display: 'block', color: '#666', fontWeight: 600 }}
+                            sx={{ display: 'block', color: colors.gray[500], fontWeight: 600 }}
                           >
                             {column.mobileLabel ?? column.header}
                           </Typography>
@@ -280,8 +281,8 @@ export default function ResponsiveTable<T>({
                     sx={{
                       mt: 1.25,
                       pt: 1.25,
-                      borderTop: '1px solid #f1f3f5',
-                      bgcolor: '#F8F9FA',
+                      borderTop: `1px solid ${colors.status.neutralTint}`,
+                      bgcolor: colors.surface.subtle,
                       mx: -1.5,
                       px: 1.5,
                       pb: 1.5,
@@ -303,7 +304,7 @@ export default function ResponsiveTable<T>({
               sx={{
                 width: '100%',
                 boxSizing: 'border-box',
-                border: '1px solid #e8ecf1',
+                border: `1px solid ${colors.border.subtle}`,
                 borderRadius: 2,
                 py: 4,
                 px: 2,
@@ -322,7 +323,7 @@ export default function ResponsiveTable<T>({
               sx={{
                 width: '100%',
                 boxSizing: 'border-box',
-                border: '1px solid #e8ecf1',
+                border: `1px solid ${colors.border.subtle}`,
                 borderRadius: 2,
                 py: 2,
                 px: 2,
@@ -344,7 +345,7 @@ export default function ResponsiveTable<T>({
     >
       <Table size={size} sx={tableSx}>
         <TableHead>
-          <TableRow sx={{ bgcolor: '#f5f7fa' }}>
+          <TableRow sx={{ bgcolor: colors.surface.sunken }}>
             {(leadingHeader !== undefined || leading) && (
               <TableCell
                 sx={mergeSx(headerSx, leadingSx)}
@@ -395,7 +396,7 @@ export default function ResponsiveTable<T>({
                 </TableRow>
                 {expandedContent && (
                   <TableRow>
-                    <TableCell colSpan={colSpan} sx={{ py: 2, bgcolor: '#F8F9FA', borderTop: 'none' }}>
+                    <TableCell colSpan={colSpan} sx={{ py: 2, bgcolor: colors.surface.subtle, borderTop: 'none' }}>
                       {expandedContent}
                     </TableCell>
                   </TableRow>

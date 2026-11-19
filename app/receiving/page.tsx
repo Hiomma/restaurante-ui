@@ -28,6 +28,7 @@ import { todayISODate } from '@/lib/utils';
 import LoggedLayout from '../components/LoggedLayout/LoggedLayout';
 import BrDateField from '../components/BrDateField/BrDateField';
 import LabelPreview, { type LabelData } from '../components/LabelPreview/LabelPreview';
+import { colors } from '@/lib/design-system';
 
 interface ReceiveRow {
   productId: string;
@@ -72,9 +73,9 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
 }
 
 const cardSx = {
-  bgcolor: '#fff',
+  bgcolor: colors.common.white,
   borderRadius: 2,
-  border: '1px solid #e8ecf1',
+  border: `1px solid ${colors.border.subtle}`,
   boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
 };
 
@@ -87,9 +88,9 @@ const fieldSx = {
 const primaryBtnSx = {
   textTransform: 'none' as const,
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
-  '&:hover': { bgcolor: '#1565C0' },
+  '&:hover': { bgcolor: colors.brand.navyDark },
 };
 
 interface PendingItem {
@@ -311,19 +312,19 @@ export default function ReceivingPage() {
             width: 40,
             height: 40,
             borderRadius: '50%',
-            bgcolor: '#E3F2FD',
+            bgcolor: colors.brand.navyTint,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <LocalOfferIcon sx={{ color: '#1976D2' }} />
+          <LocalOfferIcon sx={{ color: colors.brand.navy }} />
         </Box>
         <Box>
           <Typography variant="h5" fontWeight="bold">
             Recebimento
           </Typography>
-          <Typography variant="body2" sx={{ color: '#666' }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500] }}>
             Gere etiquetas de recebimento com QR Code
           </Typography>
         </Box>
@@ -370,14 +371,14 @@ export default function ReceivingPage() {
               onChange={() => undefined}
               InputProps={{
                 sx: me
-                  ? { color: '#333', WebkitTextFillColor: '#333' }
+                  ? { color: colors.gray[800], WebkitTextFillColor: colors.gray[800] }
                   : {
                       fontStyle: 'italic',
-                      color: '#999',
-                      WebkitTextFillColor: '#999',
+                      color: colors.gray[300],
+                      WebkitTextFillColor: colors.gray[300],
                       '&::placeholder': {
                         fontStyle: 'italic',
-                        color: '#999',
+                        color: colors.gray[300],
                         opacity: 1,
                       },
                     },
@@ -413,7 +414,7 @@ export default function ReceivingPage() {
               ))}
             </TextField>
             {supplierOptions.length === 0 && (
-              <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: colors.gray[400], mt: 0.5, display: 'block' }}>
                 Nenhum fornecedor cadastrado. Cadastre em Cadastros → Fornecedores.
               </Typography>
             )}
@@ -441,10 +442,10 @@ export default function ReceivingPage() {
             sx={{
               textTransform: 'none' as const,
               borderRadius: 1.5,
-              color: '#1976D2',
-              borderColor: '#90CAF9',
+              color: colors.brand.navy,
+              borderColor: colors.brand.navyBorder,
               px: 2.5,
-              '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+              '&:hover': { borderColor: colors.brand.navy, bgcolor: colors.brand.navyTint },
             }}
           >
             Adicionar Produto
@@ -458,17 +459,17 @@ export default function ReceivingPage() {
               key={index}
               sx={{
                 position: 'relative',
-                bgcolor: '#f8f9fa',
+                bgcolor: colors.surface.subtle,
                 borderRadius: 1.5,
                 p: 2,
                 mb: 2,
-                border: '1px solid #eef1f4',
+                border: `1px solid ${colors.border.subtle}`,
               }}
             >
               <Typography
                 variant="body2"
                 fontWeight={700}
-                sx={{ color: '#666', mb: 1.5, pr: 5 }}
+                sx={{ color: colors.gray[500], mb: 1.5, pr: 5 }}
               >
                 Produto #{index + 1}
               </Typography>
@@ -477,7 +478,7 @@ export default function ReceivingPage() {
                   size="small"
                   aria-label="remover produto"
                   onClick={() => removeRow(index)}
-                  sx={{ position: 'absolute', top: 8, right: 8, color: '#C62828' }}
+                  sx={{ position: 'absolute', top: 8, right: 8, color: colors.status.danger }}
                 >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
@@ -612,17 +613,17 @@ export default function ReceivingPage() {
                   <Chip
                     label={selectedProduct.group}
                     size="small"
-                    sx={{ bgcolor: '#E3F2FD', color: '#1565C0', fontWeight: 600 }}
+                    sx={{ bgcolor: colors.brand.navyTint, color: colors.brand.navyDark, fontWeight: 600 }}
                   />
                   <Chip
                     label={selectedProduct.storageMethod}
                     size="small"
-                    sx={{ bgcolor: '#E8F5E9', color: '#2E7D32', fontWeight: 600 }}
+                    sx={{ bgcolor: colors.status.successTint, color: colors.status.success, fontWeight: 600 }}
                   />
                   <Chip
                     label={`Validade: ${selectedProduct.shelfLifeDays} dias`}
                     size="small"
-                    sx={{ bgcolor: '#FFF3E0', color: '#E65100', fontWeight: 600 }}
+                    sx={{ bgcolor: colors.status.warningTint, color: colors.status.warning, fontWeight: 600 }}
                   />
                 </Box>
               )}
@@ -656,7 +657,7 @@ export default function ReceivingPage() {
               mb: 2,
             }}
           >
-            <Typography variant="body1" sx={{ color: '#666' }}>
+            <Typography variant="body1" sx={{ color: colors.gray[500] }}>
               {pending.length} etiqueta(s) gerada(s)
             </Typography>
             <Button

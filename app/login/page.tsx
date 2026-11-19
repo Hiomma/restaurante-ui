@@ -17,6 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { loginSchema } from '@/lib/validation';
 import { useLogin } from '@/lib/queries';
 import { storeToken, resetSessionCache } from '@/lib/session';
+import { colors } from '@/lib/design-system';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -51,17 +52,39 @@ export default function LoginPage() {
       sx={{
         minHeight: '100vh',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        bgcolor: '#f5f5f5',
+        gap: 3,
+        // Fundo Azul Petróleo Escuro da identidade visual SIETIMA
+        bgcolor: colors.brand.navy,
         px: 1.5,
+        py: 4,
       }}
     >
+      {/* Logotipo completo na variante para fundo escuro + slogan (Montserrat SemiBold) */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+        <Box
+          component="img"
+          src="/logo-sietima-light.svg"
+          alt="Sietima"
+          sx={{ width: 'min(280px, 78vw)', height: 'auto' }}
+        />
+        <Typography
+          sx={{
+            color: colors.common.white,
+            fontSize: { xs: 11, sm: 13 },
+            fontWeight: 600,
+            letterSpacing: { xs: 1, sm: 1.5 },
+            textTransform: 'uppercase',
+          }}
+        >
+          Gestão precisa do estoque ao prato
+        </Typography>
+      </Box>
+
       <Card sx={{ width: '100%', maxWidth: 400, p: 2 }}>
         <CardContent>
-          <Typography variant="h4" align="center" fontWeight="bold" gutterBottom>
-            Restaurante
-          </Typography>
           <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
             Faca login para continuar
           </Typography>

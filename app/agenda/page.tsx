@@ -47,30 +47,31 @@ import ConfirmDialog from '../components/ConfirmDialog/ConfirmDialog';
 import BrDateField from '../components/BrDateField/BrDateField';
 import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
+import { colors } from '@/lib/design-system';
 
 type AgendaFormValues = z.infer<typeof agendaItemSchema>;
 
 const containedSx = {
   textTransform: 'none',
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
   boxShadow: 'none',
-  '&:hover': { bgcolor: '#1565C0', boxShadow: 'none' },
+  '&:hover': { bgcolor: colors.brand.navyDark, boxShadow: 'none' },
 } as const;
 
 const outlinedCancelSx = {
   textTransform: 'none',
-  color: '#444',
-  borderColor: '#e0e0e0',
-  bgcolor: '#fff',
+  color: colors.gray[700],
+  borderColor: colors.border.default,
+  bgcolor: colors.common.white,
   borderRadius: 1.5,
   px: 2.5,
-  '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+  '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
 } as const;
 
 const detailLabelSx = {
-  color: '#888',
+  color: colors.gray[400],
   textTransform: 'uppercase',
   fontSize: 11,
   fontWeight: 700,
@@ -89,11 +90,11 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
 }
 
 const agendaChipTones = {
-  red: { bgcolor: '#FFEBEE', color: '#C62828' },
-  green: { bgcolor: '#E8F5E9', color: '#2E7D32' },
-  blue: { bgcolor: '#E3F2FD', color: '#1976D2' },
-  amber: { bgcolor: '#FFF3E0', color: '#E65100' },
-  gray: { bgcolor: '#F1F3F5', color: '#495057' },
+  red: { bgcolor: colors.status.dangerTint, color: colors.status.danger },
+  green: { bgcolor: colors.status.successTint, color: colors.status.success },
+  blue: { bgcolor: colors.brand.navyTint, color: colors.brand.navy },
+  amber: { bgcolor: colors.status.warningTint, color: colors.status.warning },
+  gray: { bgcolor: colors.status.neutralTint, color: colors.status.neutral },
 } as const;
 
 /** Chip de status derivado de agendaStatusView (finalizado nunca aparece vencido). */
@@ -119,15 +120,15 @@ function StatusChip({ item }: { item: AgendaItem }) {
  * com o tom vermelho.
  */
 function agendaBandColor(item: AgendaItem): string {
-  if (agendaStatusView(item).overdue) return '#FFF5F5';
+  if (agendaStatusView(item).overdue) return colors.status.dangerBg;
   switch (item.status) {
     case 'em_andamento':
-      return '#E3F2FD';
+      return colors.brand.navyTint;
     case 'finalizado':
-      return '#F5F5F5';
+      return colors.surface.muted;
     case 'pendente':
     default:
-      return '#FFF8E1';
+      return colors.status.warningBg;
   }
 }
 
@@ -156,7 +157,7 @@ function StatusSelect({
         bgcolor: 'transparent',
         '& .MuiOutlinedInput-root': {
           bgcolor: 'transparent',
-          '& fieldset': { borderColor: '#e0e0e0' },
+          '& fieldset': { borderColor: colors.border.default },
         },
       }}
     >
@@ -175,7 +176,7 @@ function DetailValue({ label, value, color }: { label: string; value: string; co
       <Typography variant="caption" sx={detailLabelSx}>
         {label}
       </Typography>
-      <Typography variant="body2" fontWeight={600} sx={{ color: color || '#333' }}>
+      <Typography variant="body2" fontWeight={600} sx={{ color: color || colors.gray[800] }}>
         {value}
       </Typography>
     </Box>
@@ -341,20 +342,20 @@ export default function AgendaPage() {
               width: 40,
               height: 40,
               borderRadius: '50%',
-              bgcolor: '#E3F2FD',
+              bgcolor: colors.brand.navyTint,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            <EventNoteIcon sx={{ color: '#1976D2', fontSize: 22 }} />
+            <EventNoteIcon sx={{ color: colors.brand.navy, fontSize: 22 }} />
           </Box>
           <Box>
             <Typography variant="h5" fontWeight="bold">
               Agenda
             </Typography>
-            <Typography variant="body2" sx={{ color: '#666' }}>
+            <Typography variant="body2" sx={{ color: colors.gray[500] }}>
               Controle de itens com data de realização e validade
             </Typography>
           </Box>
@@ -381,7 +382,7 @@ export default function AgendaPage() {
             ),
           },
         }}
-        sx={{ mb: 3, bgcolor: '#fff', borderRadius: 2 }}
+        sx={{ mb: 3, bgcolor: colors.common.white, borderRadius: 2 }}
       />
 
       <ResponsiveTable
@@ -399,7 +400,7 @@ export default function AgendaPage() {
               size="small"
               onClick={() => setExpandedId(expanded ? null : item._id)}
               sx={{
-                color: '#666',
+                color: colors.gray[500],
                 transform: expanded ? 'rotate(180deg)' : 'none',
                 transition: 'transform 0.2s',
               }}
@@ -455,7 +456,7 @@ export default function AgendaPage() {
               <DetailValue
                 label="Dias até o vencimento"
                 value={days !== null ? `${days} dia(s)` : '—'}
-                color={days !== null && days >= 0 ? '#2E7D32' : '#C62828'}
+                color={days !== null && days >= 0 ? colors.status.success : colors.status.danger}
               />
               <Box sx={{ gridColumn: { xs: 'auto', md: '1 / -1' } }}>
                 <Typography variant="caption" sx={detailLabelSx}>
@@ -468,7 +469,7 @@ export default function AgendaPage() {
                   minRows={2}
                   value={item.observations || ''}
                   slotProps={{ htmlInput: { readOnly: true } }}
-                  sx={{ mt: 0.5, bgcolor: '#fff' }}
+                  sx={{ mt: 0.5, bgcolor: colors.common.white }}
                 />
               </Box>
             </Box>
@@ -482,14 +483,14 @@ export default function AgendaPage() {
                   <IconButton
                     size="small"
                     onClick={() => openEdit(item)}
-                    sx={{ color: '#666' }}
+                    sx={{ color: colors.gray[500] }}
                   >
                     <EditIcon fontSize="small" />
                   </IconButton>
                   <IconButton
                     size="small"
                     onClick={() => setDeleteTarget(item._id)}
-                    sx={{ color: '#d32f2f' }}
+                    sx={{ color: colors.status.dangerStrong }}
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
@@ -512,7 +513,7 @@ export default function AgendaPage() {
             aria-label="fechar"
             onClick={() => setDialogOpen(false)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -580,7 +581,7 @@ export default function AgendaPage() {
                     size="small"
                     value={dialogStatus}
                     onChange={(e) => setDialogStatus(e.target.value as AgendaStatus)}
-                    sx={{ minWidth: 180, bgcolor: '#fff' }}
+                    sx={{ minWidth: 180, bgcolor: colors.common.white }}
                   >
                     {AGENDA_STATUS_OPTIONS.map((o) => (
                       <MenuItem key={o.value} value={o.value}>

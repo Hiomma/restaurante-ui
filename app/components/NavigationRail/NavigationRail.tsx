@@ -10,7 +10,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Avatar,
   Typography,
   Divider,
 } from '@mui/material';
@@ -28,10 +27,10 @@ import LogoutIcon from '@mui/icons-material/Logout';
 // que é atualizado junto com a tag no release (v2.4.0, v2.4.1, ...).
 import packageJson from '@/package.json';
 import ReceiptIcon from '@mui/icons-material/Receipt';
-import Inventory2Icon from '@mui/icons-material/Inventory2';
 import ChangePasswordDialog from '@/app/components/ChangePasswordDialog/ChangePasswordDialog';
 import { clearToken, resetSessionCache } from '@/lib/session';
 import { useAccess } from '@/lib/permissions';
+import { colors } from '@/lib/design-system';
 
 const navItems = [
   { icon: <DashboardIcon />, label: 'Dashboard', path: '/' },
@@ -101,25 +100,34 @@ export default function NavigationRail({
         position: inDrawer ? 'static' : 'fixed',
         left: inDrawer ? undefined : 0,
         top: inDrawer ? undefined : 0,
-        bgcolor: '#1a2332',
+        bgcolor: colors.brand.navy,
         display: 'flex',
         flexDirection: 'column',
         zIndex: inDrawer ? 'auto' : 1200,
         overflow: 'auto',
       }}
     >
-      <Box sx={{ px: 2, py: 2.5, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-        <Avatar sx={{ bgcolor: '#2196F3', width: 40, height: 40, fontSize: 18 }}>
-          <Inventory2Icon />
-        </Avatar>
-        <Box>
-          <Typography variant="subtitle1" fontWeight="bold" color="#fff" lineHeight={1.2}>
-            Controle de Estoque
-          </Typography>
-          <Typography variant="caption" color="#8899aa">
-            Modoletto
-          </Typography>
-        </Box>
+      <Box sx={{ px: 2, py: 2.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+        {/* Logotipo completo SIETIMA na variante para fundo escuro */}
+        <Box
+          component="img"
+          src="/logo-sietima-light.svg"
+          alt="Sietima"
+          sx={{ width: 168, height: 'auto', display: 'block' }}
+        />
+        <Typography
+          variant="caption"
+          sx={{
+            color: colors.onNavy.muted,
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: 0.6,
+            textTransform: 'uppercase',
+            lineHeight: 1.3,
+          }}
+        >
+          Gestão precisa do estoque ao prato
+        </Typography>
       </Box>
 
       <List sx={{ flex: 1, px: 1 }}>
@@ -131,10 +139,11 @@ export default function NavigationRail({
                 onClick={() => navigate(item.path)}
                 sx={{
                   borderRadius: 2,
-                  color: isActive ? '#fff' : '#8899aa',
-                  bgcolor: isActive ? '#2196F3' : 'transparent',
+                  color: isActive ? colors.common.white : colors.onNavy.text,
+                  // Item ativo em Verde Esmeralda (destaque da identidade)
+                  bgcolor: isActive ? colors.brand.emerald : 'transparent',
                   '&:hover': {
-                    bgcolor: isActive ? '#1976D2' : '#243447',
+                    bgcolor: isActive ? colors.brand.emeraldDark : colors.brand.navyHover,
                   },
                   px: 2,
                   py: 1,
@@ -156,7 +165,7 @@ export default function NavigationRail({
         })}
       </List>
 
-      <Divider sx={{ borderColor: '#243447' }} />
+      <Divider sx={{ borderColor: colors.brand.navyLight }} />
 
       <List sx={{ px: 1 }}>
         {access.changePassword && (
@@ -168,8 +177,8 @@ export default function NavigationRail({
               }}
               sx={{
                 borderRadius: 2,
-                color: '#8899aa',
-                '&:hover': { bgcolor: '#243447' },
+                color: colors.onNavy.text,
+                '&:hover': { bgcolor: colors.brand.navyHover },
                 px: 2,
                 py: 1,
               }}
@@ -186,8 +195,8 @@ export default function NavigationRail({
             onClick={handleLogout}
             sx={{
               borderRadius: 2,
-              color: '#8899aa',
-              '&:hover': { bgcolor: '#243447' },
+              color: colors.onNavy.text,
+              '&:hover': { bgcolor: colors.brand.navyHover },
               px: 2,
               py: 1,
             }}
@@ -200,8 +209,8 @@ export default function NavigationRail({
         </ListItem>
       </List>
 
-      <Typography variant="caption" color="#556677" sx={{ textAlign: 'center', py: 1 }}>
-        v{packageJson.version} — EstoqueApp
+      <Typography variant="caption" color={colors.onNavy.faint} sx={{ textAlign: 'center', py: 1 }}>
+        v{packageJson.version} — Sietima
       </Typography>
 
       <ChangePasswordDialog

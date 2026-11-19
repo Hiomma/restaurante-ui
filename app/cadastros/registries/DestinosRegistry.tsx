@@ -29,41 +29,42 @@ import {
 } from '@/lib/queries';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
 import ResponsiveTabs from '@/app/components/ResponsiveTabs/ResponsiveTabs';
+import { colors } from '@/lib/design-system';
 
-const thSx = { fontWeight: 700, color: '#333' };
+const thSx = { fontWeight: 700, color: colors.gray[800] };
 
 const grayChipSx = {
-  bgcolor: '#F1F3F5',
-  color: '#495057',
+  bgcolor: colors.status.neutralTint,
+  color: colors.status.neutral,
   borderRadius: 1.5,
 };
 
 const primaryBtnSx = {
   textTransform: 'none' as const,
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
   boxShadow: 'none',
-  '&:hover': { bgcolor: '#1565C0' },
+  '&:hover': { bgcolor: colors.brand.navyDark },
 };
 
 const containedSx = {
   textTransform: 'none',
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
   boxShadow: 'none',
-  '&:hover': { bgcolor: '#1565C0', boxShadow: 'none' },
+  '&:hover': { bgcolor: colors.brand.navyDark, boxShadow: 'none' },
 } as const;
 
 const outlinedCancelSx = {
   textTransform: 'none',
-  color: '#444',
-  borderColor: '#e0e0e0',
-  bgcolor: '#fff',
+  color: colors.gray[700],
+  borderColor: colors.border.default,
+  bgcolor: colors.common.white,
   borderRadius: 1.5,
   px: 2.5,
-  '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+  '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
 } as const;
 
 const fixedMoveDestinations = ['Salão', 'Bar', 'Cozinha'];
@@ -204,20 +205,20 @@ export default function DestinosRegistry() {
               width: 40,
               height: 40,
               borderRadius: '50%',
-              bgcolor: '#E3F2FD',
+              bgcolor: colors.brand.navyTint,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            <PlaceIcon sx={{ color: '#1976D2', fontSize: 22 }} />
+            <PlaceIcon sx={{ color: colors.brand.navy, fontSize: 22 }} />
           </Box>
           <Box>
             <Typography variant="h5" fontWeight="bold">
               Destinos
             </Typography>
-            <Typography variant="body2" sx={{ color: '#666' }}>
+            <Typography variant="body2" sx={{ color: colors.gray[500] }}>
               Gerencie os destinos disponíveis para as ações Mover e Baixar
             </Typography>
           </Box>
@@ -233,7 +234,7 @@ export default function DestinosRegistry() {
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{
-          bgcolor: '#f1f3f5',
+          bgcolor: colors.status.neutralTint,
           borderRadius: 2,
           p: 0.5,
           mb: 2,
@@ -248,10 +249,10 @@ export default function DestinosRegistry() {
             minHeight: 40,
             minWidth: 96,
             fontWeight: 600,
-            color: '#555',
+            color: colors.gray[600],
             whiteSpace: 'nowrap',
             justifyContent: 'center',
-            '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
+            '&.Mui-selected': { bgcolor: colors.common.white, color: colors.brand.navy },
           },
         }}
       >
@@ -260,7 +261,7 @@ export default function DestinosRegistry() {
       </ResponsiveTabs>
 
       <ResponsiveTable
-        containerSx={{ border: '1px solid #e8ecf1' }}
+        containerSx={{ border: `1px solid ${colors.border.subtle}` }}
         headerCellSx={thSx}
         rows={destRows}
         rowKey={(row) => row.key}
@@ -277,7 +278,7 @@ export default function DestinosRegistry() {
         }
         actions={(row) =>
           row.fixed ? (
-            <Typography variant="body2" sx={{ color: '#999' }}>
+            <Typography variant="body2" sx={{ color: colors.gray[300] }}>
               Fixo
             </Typography>
           ) : (
@@ -286,7 +287,7 @@ export default function DestinosRegistry() {
                 size="small"
                 aria-label="editar destino"
                 onClick={() => openEdit(row)}
-                sx={{ color: '#666' }}
+                sx={{ color: colors.gray[500] }}
               >
                 <EditIcon fontSize="small" />
               </IconButton>
@@ -294,7 +295,7 @@ export default function DestinosRegistry() {
                 size="small"
                 aria-label="excluir destino"
                 onClick={() => handleDeleteDestination(row.key)}
-                sx={{ color: '#C62828' }}
+                sx={{ color: colors.status.danger }}
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -323,8 +324,8 @@ export default function DestinosRegistry() {
                   label={row.type === 'writeoff' ? 'Baixar' : 'Mover'}
                   size="small"
                   sx={{
-                    bgcolor: row.type === 'writeoff' ? '#FFEBEE' : '#E3F2FD',
-                    color: row.type === 'writeoff' ? '#C62828' : '#1565C0',
+                    bgcolor: row.type === 'writeoff' ? colors.status.dangerTint : colors.brand.navyTint,
+                    color: row.type === 'writeoff' ? colors.status.danger : colors.brand.navyDark,
                     fontWeight: 600,
                     borderRadius: 1.5,
                   }}
@@ -348,7 +349,7 @@ export default function DestinosRegistry() {
             aria-label="fechar"
             onClick={closeDialog}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>

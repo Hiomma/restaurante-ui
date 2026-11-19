@@ -53,6 +53,7 @@ import ResponsiveTable from '../components/ResponsiveTable/ResponsiveTable';
 import type { ResponsiveTableColumn } from '../components/ResponsiveTable/ResponsiveTable';
 import QrScannerDialog from '../components/QrScannerDialog/QrScannerDialog';
 import LabelPreview, { type LabelData } from '../components/LabelPreview/LabelPreview';
+import { colors } from '@/lib/design-system';
 
 const fieldSx = {
   '& .MuiOutlinedInput-root': {
@@ -63,20 +64,20 @@ const fieldSx = {
 const containedSx = {
   textTransform: 'none',
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
   boxShadow: 'none',
-  '&:hover': { bgcolor: '#1565C0', boxShadow: 'none' },
+  '&:hover': { bgcolor: colors.brand.navyDark, boxShadow: 'none' },
 } as const;
 
 const outlinedCancelSx = {
   textTransform: 'none',
-  color: '#444',
-  borderColor: '#e0e0e0',
-  bgcolor: '#fff',
+  color: colors.gray[700],
+  borderColor: colors.border.default,
+  bgcolor: colors.common.white,
   borderRadius: 1.5,
   px: 2.5,
-  '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+  '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
 } as const;
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -96,10 +97,10 @@ function DetailRow({ label, value }: { label: string; value: string }) {
         justifyContent: 'space-between',
         gap: 2,
         py: 1,
-        borderBottom: '1px solid #f0f0f0',
+        borderBottom: `1px solid ${colors.border.hairline}`,
       }}
     >
-      <Typography variant="body2" sx={{ color: '#666' }}>
+      <Typography variant="body2" sx={{ color: colors.gray[500] }}>
         {label}
       </Typography>
       <Typography variant="body2" fontWeight={600} sx={{ textAlign: 'right' }}>
@@ -144,7 +145,7 @@ function buildPortioningColumns(
     cell: (p) => (
       <Typography
         variant="body2"
-        sx={{ fontFamily: 'monospace', fontSize: 13, color: '#1565C0' }}
+        sx={{ fontFamily: 'monospace', fontSize: 13, color: colors.brand.navyDark }}
       >
         {p.lote || '—'}
       </Typography>
@@ -156,7 +157,7 @@ function buildPortioningColumns(
     cell: (p) => (
       <Typography
         variant="body2"
-        sx={{ fontFamily: 'monospace', fontSize: 13, color: '#888' }}
+        sx={{ fontFamily: 'monospace', fontSize: 13, color: colors.gray[400] }}
       >
         {p.rawLote || '—'}
       </Typography>
@@ -182,8 +183,8 @@ function buildPortioningColumns(
         label={`${p.lossPercentage?.toFixed(1) ?? '0.0'}%`}
         size="small"
         sx={{
-          bgcolor: '#E8F5E9',
-          color: '#2E7D32',
+          bgcolor: colors.status.successTint,
+          color: colors.status.success,
           fontWeight: 600,
           borderRadius: 1,
         }}
@@ -877,20 +878,20 @@ export default function PortioningsPage() {
               width: 40,
               height: 40,
               borderRadius: '50%',
-              bgcolor: '#E3F2FD',
+              bgcolor: colors.brand.navyTint,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            <ContentCutIcon sx={{ color: '#1976D2', fontSize: 22 }} />
+            <ContentCutIcon sx={{ color: colors.brand.navy, fontSize: 22 }} />
           </Box>
           <Box>
             <Typography variant="h5" fontWeight="bold">
               Porcionamento
             </Typography>
-            <Typography variant="body2" sx={{ color: '#666' }}>
+            <Typography variant="body2" sx={{ color: colors.gray[500] }}>
               Converta produto bruto em porcionado com controle de perdas
             </Typography>
           </Box>
@@ -925,7 +926,7 @@ export default function PortioningsPage() {
               </InputAdornment>
             ),
           }}
-          sx={{ bgcolor: '#fff', borderRadius: 2, flexGrow: 1, minWidth: { xs: 0, sm: 260 } }}
+          sx={{ bgcolor: colors.common.white, borderRadius: 2, flexGrow: 1, minWidth: { xs: 0, sm: 260 } }}
         />
       </Box>
 
@@ -940,7 +941,7 @@ export default function PortioningsPage() {
             <IconButton
               size="small"
               onClick={() => setViewTarget(p)}
-              sx={{ color: '#666' }}
+              sx={{ color: colors.gray[500] }}
             >
               <VisibilityIcon fontSize="small" />
             </IconButton>
@@ -948,7 +949,7 @@ export default function PortioningsPage() {
               <IconButton
                 size="small"
                 onClick={() => setDeleteTarget(p._id)}
-                sx={{ color: '#d32f2f' }}
+                sx={{ color: colors.status.dangerStrong }}
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>
@@ -971,7 +972,7 @@ export default function PortioningsPage() {
             aria-label="fechar"
             onClick={() => setDialogOpen(false)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -1007,11 +1008,11 @@ export default function PortioningsPage() {
                   sx={{
                     textTransform: 'none',
                     borderRadius: 1.5,
-                    color: '#1976D2',
-                    borderColor: '#1976D2',
+                    color: colors.brand.navy,
+                    borderColor: colors.brand.navy,
                     px: 2.5,
                     height: 40,
-                    '&:hover': { borderColor: '#1565C0', bgcolor: '#E3F2FD' },
+                    '&:hover': { borderColor: colors.brand.navyDark, bgcolor: colors.brand.navyTint },
                   }}
                 >
                   Add
@@ -1024,15 +1025,15 @@ export default function PortioningsPage() {
                     width: 40,
                     height: 40,
                     borderRadius: 1.5,
-                    border: '1px solid #1976D2',
-                    color: '#1976D2',
-                    '&:hover': { bgcolor: '#E3F2FD' },
+                    border: `1px solid ${colors.brand.navy}`,
+                    color: colors.brand.navy,
+                    '&:hover': { bgcolor: colors.brand.navyTint },
                   }}
                 >
                   <QrCodeScannerIcon fontSize="small" />
                 </IconButton>
               </Box>
-              <Typography variant="caption" sx={{ color: '#666', mt: 0.75, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: colors.gray[500], mt: 0.75, display: 'block' }}>
                 Pressione Enter após cada leitura.
               </Typography>
             </Box>
@@ -1047,18 +1048,18 @@ export default function PortioningsPage() {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       gap: 2,
-                      border: '1px solid #E0E0E0',
+                      border: `1px solid ${colors.border.default}`,
                       borderRadius: 1.5,
                       px: 1.5,
                       py: 1,
-                      bgcolor: '#FAFAFA',
+                      bgcolor: colors.surface.row,
                     }}
                   >
                     <Box>
                       <Typography variant="body2" fontWeight={600}>
                         {item.product.productName}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: '#666' }}>
+                      <Typography variant="caption" sx={{ color: colors.gray[500] }}>
                         {item.weightGrams}
                         {unitSuffix(unitOf(item.product.productId))} — QR {item.qrCode}
                         {item.lote ? ` — Lote ${item.lote}` : ''}
@@ -1067,13 +1068,13 @@ export default function PortioningsPage() {
                     <IconButton
                       size="small"
                       onClick={() => removeScanned(item._id)}
-                      sx={{ color: '#d32f2f' }}
+                      sx={{ color: colors.status.dangerStrong }}
                     >
                       <CloseIcon fontSize="small" />
                     </IconButton>
                   </Box>
                 ))}
-                <Typography variant="body2" sx={{ color: '#666', fontWeight: 600 }}>
+                <Typography variant="body2" sx={{ color: colors.gray[500], fontWeight: 600 }}>
                   {scanned.length} etiquetas — {totalGrams}g
                 </Typography>
               </Box>
@@ -1174,7 +1175,7 @@ export default function PortioningsPage() {
                       ))}
                     </TextField>
                     {supplierOptions.length === 0 && (
-                      <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+                      <Typography variant="caption" sx={{ color: colors.gray[400], mt: 0.5, display: 'block' }}>
                         Nenhum fornecedor cadastrado. Cadastre em Cadastros → Fornecedores.
                       </Typography>
                     )}
@@ -1188,10 +1189,10 @@ export default function PortioningsPage() {
                   </Box>
                 </Box>
                 <Box sx={{ mt: 1.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-                  <Typography variant="body2" sx={{ color: '#888' }}>
+                  <Typography variant="body2" sx={{ color: colors.gray[400] }}>
                     Peso bruto: {totalGrams}g
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#888' }}>
+                  <Typography variant="body2" sx={{ color: colors.gray[400] }}>
                     Perda: {perda}g ({perdaPct.toFixed(1)}%)
                   </Typography>
                   {gainGrams > 0 && (
@@ -1201,8 +1202,8 @@ export default function PortioningsPage() {
                       sx={{
                         alignSelf: 'flex-start',
                         mt: 0.5,
-                        bgcolor: '#E8F5E9',
-                        color: '#2E7D32',
+                        bgcolor: colors.status.successTint,
+                        color: colors.status.success,
                         fontWeight: 600,
                       }}
                     />
@@ -1281,7 +1282,7 @@ export default function PortioningsPage() {
                             size="small"
                             onClick={() => removeOutput(index)}
                             disabled={outputs.length <= 1}
-                            sx={{ color: '#d32f2f' }}
+                            sx={{ color: colors.status.dangerStrong }}
                           >
                             <DeleteOutlineIcon fontSize="small" />
                           </IconButton>
@@ -1289,7 +1290,7 @@ export default function PortioningsPage() {
                         {ppg > 0 && (
                           <Typography
                             variant="caption"
-                            sx={{ color: '#1565C0', display: 'block', ml: 0.5, mt: -0.5 }}
+                            sx={{ color: colors.brand.navyDark, display: 'block', ml: 0.5, mt: -0.5 }}
                           >
                             {Number(row.weight) || 0}g ÷ {row.count} porções = {ppg}g por porção
                           </Typography>
@@ -1305,10 +1306,10 @@ export default function PortioningsPage() {
                     sx={{
                       textTransform: 'none',
                       borderRadius: 1.5,
-                      color: '#1976D2',
-                      borderColor: '#90CAF9',
+                      color: colors.brand.navy,
+                      borderColor: colors.brand.navyBorder,
                       alignSelf: 'flex-start',
-                      '&:hover': { borderColor: '#1976D2', bgcolor: '#E3F2FD' },
+                      '&:hover': { borderColor: colors.brand.navy, bgcolor: colors.brand.navyTint },
                     }}
                   >
                     Adicionar tipo de produto
@@ -1321,27 +1322,27 @@ export default function PortioningsPage() {
                     p: 1.5,
                     borderRadius: 2,
                     bgcolor: overAllocated
-                      ? '#FFEBEE'
+                      ? colors.status.dangerTint
                       : totalPortions > 0 && allocatedWeight > 0
-                        ? '#E3F2FD'
-                        : '#f5f7fa',
+                        ? colors.brand.navyTint
+                        : colors.surface.sunken,
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 0.25,
                   }}
                 >
-                  <Typography variant="body2" sx={{ color: '#555' }}>
+                  <Typography variant="body2" sx={{ color: colors.gray[600] }}>
                     Total de porções: <b>{totalPortions}</b> — Peso alocado:{' '}
                     <b>{allocatedWeight}g</b>
                     {limpo > 0 ? ` de ${limpo}g (Peso Limpo)` : ''}
                   </Typography>
                   {overAllocated && (
-                    <Typography variant="body2" sx={{ color: '#d32f2f', fontWeight: 600 }}>
+                    <Typography variant="body2" sx={{ color: colors.status.dangerStrong, fontWeight: 600 }}>
                       A soma dos pesos excede o Peso Limpo em {allocatedWeight - limpo}g.
                     </Typography>
                   )}
                   {!overAllocated && unallocatedWeight > 0 && limpo > 0 && (
-                    <Typography variant="body2" sx={{ color: '#E65100' }}>
+                    <Typography variant="body2" sx={{ color: colors.status.warning }}>
                       Peso ainda não alocado: {unallocatedWeight}g
                     </Typography>
                   )}
@@ -1357,13 +1358,13 @@ export default function PortioningsPage() {
                               key={i}
                               variant="body1"
                               fontWeight={700}
-                              sx={{ color: '#1565C0' }}
+                              sx={{ color: colors.brand.navyDark }}
                             >
                               {name}: {rowPortionWeight(r)}g por porção
                               <Typography
                                 component="span"
                                 variant="caption"
-                                sx={{ color: '#555', fontWeight: 400, ml: 1 }}
+                                sx={{ color: colors.gray[600], fontWeight: 400, ml: 1 }}
                               >
                                 ({Number(r.weight) || 0}g ÷ {r.count || 0} porções)
                               </Typography>
@@ -1372,7 +1373,7 @@ export default function PortioningsPage() {
                         })}
                     </Box>
                   ) : (
-                    <Typography variant="body2" sx={{ color: '#999', mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ color: colors.gray[300], mt: 0.5 }}>
                       Informe o peso de cada produto gerado para ver o peso da porção de cada item.
                     </Typography>
                   )}
@@ -1432,7 +1433,7 @@ export default function PortioningsPage() {
             aria-label="fechar"
             onClick={() => setLooseLabelOpen(false)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -1469,7 +1470,7 @@ export default function PortioningsPage() {
                 ))}
               </TextField>
               {looseProducts.length === 0 && (
-                <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+                <Typography variant="caption" sx={{ color: colors.gray[400], mt: 0.5, display: 'block' }}>
                   Nenhum produto com permissão de etiqueta avulsa. Marque
                   &quot;Permitir etiqueta avulsa&quot; no cadastro do produto (Cadastros →
                   Produtos).
@@ -1499,7 +1500,7 @@ export default function PortioningsPage() {
                   slotProps={{ htmlInput: { min: 1, max: 100 } }}
                   sx={fieldSx}
                 />
-                <Typography variant="caption" sx={{ color: '#888', mt: 0.5, display: 'block' }}>
+                <Typography variant="caption" sx={{ color: colors.gray[400], mt: 0.5, display: 'block' }}>
                   Cada etiqueta sai com um lote (até 6 dígitos) e um QR Code diferentes.
                 </Typography>
               </Box>
@@ -1568,7 +1569,7 @@ export default function PortioningsPage() {
               flexWrap: 'wrap',
             }}
           >
-            <Typography variant="body1" sx={{ color: '#666' }}>
+            <Typography variant="body1" sx={{ color: colors.gray[500] }}>
               {looseItems.length} etiqueta(s) avulsa(s) gerada(s) —{' '}
               {looseItems[0].product.productName}
             </Typography>
@@ -1616,11 +1617,11 @@ export default function PortioningsPage() {
                   justifyContent: 'space-between',
                   gap: 1.5,
                   flexWrap: 'wrap',
-                  border: '1px solid #E0E0E0',
+                  border: `1px solid ${colors.border.default}`,
                   borderRadius: 1.5,
                   px: 1.5,
                   py: 1,
-                  bgcolor: '#FAFAFA',
+                  bgcolor: colors.surface.row,
                 }}
               >
                 <Box sx={{ minWidth: 0 }}>
@@ -1628,7 +1629,7 @@ export default function PortioningsPage() {
                     {item.product.productName} — {item.weightGrams}
                     {unitSuffix(unitOf(item.product.productId))}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#666' }}>
+                  <Typography variant="caption" sx={{ color: colors.gray[500] }}>
                     Lote {item.lote || '—'} — QR {item.qrCode} — Destino {item.destination || '—'}
                   </Typography>
                 </Box>
@@ -1639,8 +1640,8 @@ export default function PortioningsPage() {
                     onClick={() => openLooseAction(item, 'devolucao')}
                     sx={{
                       textTransform: 'none',
-                      color: '#1565C0',
-                      borderColor: '#90CAF9',
+                      color: colors.brand.navyDark,
+                      borderColor: colors.brand.navyBorder,
                       borderRadius: 1.5,
                     }}
                   >
@@ -1653,10 +1654,10 @@ export default function PortioningsPage() {
                     onClick={() => openLooseAction(item, 'descarte')}
                     sx={{
                       textTransform: 'none',
-                      color: '#C62828',
-                      borderColor: '#F0C0C0',
+                      color: colors.status.danger,
+                      borderColor: colors.status.dangerBorder,
                       borderRadius: 1.5,
-                      '&:hover': { borderColor: '#C62828', bgcolor: '#FFEBEE' },
+                      '&:hover': { borderColor: colors.status.danger, bgcolor: colors.status.dangerTint },
                     }}
                   >
                     Descartar
@@ -1683,7 +1684,7 @@ export default function PortioningsPage() {
         <DialogContent>
           {looseAction && (
             <>
-              <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+              <Typography variant="body2" sx={{ color: colors.gray[500], mb: 2 }}>
                 {looseAction.item.product.productName} — lote{' '}
                 <b>{looseAction.item.lote || '—'}</b> — etiqueta de{' '}
                 <b>
@@ -1771,9 +1772,9 @@ export default function PortioningsPage() {
             variant="outlined"
             sx={{
               textTransform: 'none',
-              color: '#444',
-              borderColor: '#e0e0e0',
-              bgcolor: '#fff',
+              color: colors.gray[700],
+              borderColor: colors.border.default,
+              bgcolor: colors.common.white,
             }}
           >
             Cancelar
@@ -1818,7 +1819,7 @@ export default function PortioningsPage() {
             aria-label="fechar"
             onClick={() => setViewTarget(null)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
@@ -1923,7 +1924,7 @@ export default function PortioningsPage() {
               gap: 1.5,
             }}
           >
-            <Typography variant="body1" sx={{ color: '#666' }}>
+            <Typography variant="body1" sx={{ color: colors.gray[500] }}>
               {printingLabels.length} etiqueta(s) do porcionamento
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>

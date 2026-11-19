@@ -26,26 +26,27 @@ import {
   useUpdateGroup,
 } from '@/lib/queries';
 import ResponsiveTable from '@/app/components/ResponsiveTable/ResponsiveTable';
+import { colors } from '@/lib/design-system';
 
-const thSx = { fontWeight: 700, color: '#333' };
+const thSx = { fontWeight: 700, color: colors.gray[800] };
 
 const primaryBtnSx = {
   textTransform: 'none' as const,
   borderRadius: 1.5,
-  bgcolor: '#1976D2',
+  bgcolor: colors.brand.navy,
   px: 2.5,
   boxShadow: 'none',
-  '&:hover': { bgcolor: '#1565C0' },
+  '&:hover': { bgcolor: colors.brand.navyDark },
 };
 
 const outlinedCancelSx = {
   textTransform: 'none',
-  color: '#444',
-  borderColor: '#e0e0e0',
-  bgcolor: '#fff',
+  color: colors.gray[700],
+  borderColor: colors.border.default,
+  bgcolor: colors.common.white,
   borderRadius: 1.5,
   px: 2.5,
-  '&:hover': { borderColor: '#bdbdbd', bgcolor: '#f5f5f5' },
+  '&:hover': { borderColor: colors.border.strong, bgcolor: colors.surface.muted },
 };
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -133,20 +134,20 @@ export default function GroupsRegistry() {
               width: 40,
               height: 40,
               borderRadius: '50%',
-              bgcolor: '#E3F2FD',
+              bgcolor: colors.brand.navyTint,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
             }}
           >
-            <LabelIcon sx={{ color: '#1976D2', fontSize: 22 }} />
+            <LabelIcon sx={{ color: colors.brand.navy, fontSize: 22 }} />
           </Box>
           <Box>
             <Typography variant="h5" fontWeight="bold">
               Grupos
             </Typography>
-            <Typography variant="body2" sx={{ color: '#666' }}>
+            <Typography variant="body2" sx={{ color: colors.gray[500] }}>
               Cadastre os grupos usados para classificar os produtos
             </Typography>
           </Box>
@@ -157,7 +158,7 @@ export default function GroupsRegistry() {
       </Box>
 
       <ResponsiveTable
-        containerSx={{ border: '1px solid #e8ecf1' }}
+        containerSx={{ border: `1px solid ${colors.border.subtle}` }}
         headerCellSx={thSx}
         rows={sortedGroups}
         rowKey={(g) => g._id}
@@ -168,14 +169,14 @@ export default function GroupsRegistry() {
             <IconButton
               size="small"
               onClick={() => openEdit(g)}
-              sx={{ color: '#666' }}
+              sx={{ color: colors.gray[500] }}
             >
               <EditIcon fontSize="small" />
             </IconButton>
             <IconButton
               size="small"
               onClick={() => handleDelete(g._id)}
-              sx={{ color: '#C62828' }}
+              sx={{ color: colors.status.danger }}
             >
               <DeleteIcon fontSize="small" />
             </IconButton>
@@ -218,7 +219,7 @@ export default function GroupsRegistry() {
             aria-label="fechar"
             onClick={() => setDialogOpen(false)}
             size="small"
-            sx={{ color: '#666', mr: -1 }}
+            sx={{ color: colors.gray[500], mr: -1 }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>

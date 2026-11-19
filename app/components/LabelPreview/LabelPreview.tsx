@@ -3,6 +3,7 @@
 import { Box, Typography } from '@mui/material';
 import { QRCodeSVG } from 'qrcode.react';
 import { formatDate, unitSuffix } from '@/lib/utils';
+import { colors } from '@/lib/design-system';
 
 export interface LabelData {
   key: string;
@@ -28,14 +29,14 @@ export default function LabelPreview({ data }: { data: LabelData }) {
       className="etiqueta-print"
       sx={{
         width: 220,
-        bgcolor: '#fff',
-        border: '1px solid #000',
+        bgcolor: colors.common.white,
+        border: `1px solid ${colors.common.black}`,
         p: 1,
         display: 'flex',
         flexDirection: 'column',
         gap: 0.5,
         fontFamily: 'Arial, sans-serif',
-        color: '#000',
+        color: colors.common.black,
         flexShrink: 0,
       }}
     >
@@ -54,8 +55,8 @@ export default function LabelPreview({ data }: { data: LabelData }) {
       <Box sx={{ display: 'flex', flexDirection: 'column' }}>
         <Box
           sx={{
-        bgcolor: '#000',
-        color: '#fff',
+        bgcolor: colors.common.black,
+        color: colors.common.white,
         textAlign: 'center',
         py: 0.4,
         px: 0.5,
@@ -81,8 +82,8 @@ export default function LabelPreview({ data }: { data: LabelData }) {
               key={i}
               sx={{
               p: 0.5,
-              borderBottom: '1px solid #000',
-              borderRight: i % 2 === 0 ? '1px solid #000' : 'none',
+              borderBottom: `1px solid ${colors.common.black}`,
+              borderRight: i % 2 === 0 ? `1px solid ${colors.common.black}` : 'none',
               textAlign: cell.align,
               }}
             >
@@ -112,7 +113,7 @@ export default function LabelPreview({ data }: { data: LabelData }) {
           </Typography>
           <Typography sx={{ fontSize: 7, lineHeight: 1.3, mt: 0.5 }}>
             Depois de aberto é retirado do congelamento conforme{' '}
-            <Box component="span" sx={{ fontWeight: 700, borderBottom: '1px solid #000', px: 1 }}>
+            <Box component="span" sx={{ fontWeight: 700, borderBottom: `1px solid ${colors.common.black}`, px: 1 }}>
               {data.consumeAfterOpeningDays ?? '—'}
             </Box>{' '}
             dias

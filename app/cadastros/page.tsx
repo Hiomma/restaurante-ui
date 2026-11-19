@@ -15,6 +15,7 @@ import EmployeesRegistry from './registries/EmployeesRegistry';
 import DestinosRegistry from './registries/DestinosRegistry';
 import SuppliersRegistry from './registries/SuppliersRegistry';
 import GroupsRegistry from './registries/GroupsRegistry';
+import { colors } from '@/lib/design-system';
 
 export default function CadastrosPage() {
   const [tab, setTab] = useState(0);
@@ -27,20 +28,20 @@ export default function CadastrosPage() {
             width: 40,
             height: 40,
             borderRadius: '50%',
-            bgcolor: '#E3F2FD',
+            bgcolor: colors.brand.navyTint,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
           }}
         >
-          <AppRegistrationIcon sx={{ color: '#1976D2' }} />
+          <AppRegistrationIcon sx={{ color: colors.brand.navy }} />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h5" fontWeight="bold">
             Cadastros
           </Typography>
-          <Typography variant="body2" sx={{ color: '#666' }}>
+          <Typography variant="body2" sx={{ color: colors.gray[500] }}>
             Produtos, funcionários, destinos e fornecedores
           </Typography>
         </Box>
@@ -53,7 +54,7 @@ export default function CadastrosPage() {
         scrollButtons="auto"
         allowScrollButtonsMobile
         sx={{
-          bgcolor: '#f1f3f5',
+          bgcolor: colors.status.neutralTint,
           borderRadius: 2,
           p: 0.5,
           mb: 3,
@@ -64,12 +65,12 @@ export default function CadastrosPage() {
             borderRadius: 1.5,
             minHeight: 40,
             fontWeight: 600,
-            color: '#555',
+            color: colors.gray[600],
             whiteSpace: 'nowrap',
             alignItems: 'center',
             flexDirection: 'row',
             gap: 1,
-            '&.Mui-selected': { bgcolor: '#fff', color: '#1976D2' },
+            '&.Mui-selected': { bgcolor: colors.common.white, color: colors.brand.navy },
           },
         }}
       >

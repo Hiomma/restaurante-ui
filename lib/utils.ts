@@ -1,3 +1,5 @@
+import { colors } from '@/lib/design-system';
+
 const BR_TZ = 'America/Sao_Paulo';
 
 function isDateOnly(iso: string): boolean {
@@ -255,15 +257,15 @@ export function movementTypeView(m: {
   color: string;
 } {
   if ((m.reason ?? '').trim().toLowerCase().startsWith('porcionamento')) {
-    return { label: 'Porcionamento', bgcolor: '#EDE7F6', color: '#5E35B1' };
+    return { label: 'Porcionamento', bgcolor: colors.movement.portioningTint, color: colors.movement.portioning };
   }
   switch (m.movementType) {
     case 'entry':
-      return { label: 'Entrada', bgcolor: '#E8F5E9', color: '#2E7D32' };
+      return { label: 'Entrada', bgcolor: colors.status.successTint, color: colors.status.success };
     case 'move':
-      return { label: 'Movimentação', bgcolor: '#E3F2FD', color: '#1565C0' };
+      return { label: 'Movimentação', bgcolor: colors.brand.navyTint, color: colors.brand.navyDark };
     default:
-      return { label: 'Saída', bgcolor: '#FFEBEE', color: '#C62828' };
+      return { label: 'Saída', bgcolor: colors.status.dangerTint, color: colors.status.danger };
   }
 }
 

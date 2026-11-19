@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import NavigationRail from '@/app/components/NavigationRail/NavigationRail';
-import { AppBar, Box, Drawer, IconButton, Toolbar, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { AppBar, Box, Drawer, IconButton, Toolbar, useMediaQuery, useTheme } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import { colors } from '@/lib/design-system';
 
 export default function LoggedLayout({
   children,
@@ -24,15 +25,19 @@ export default function LoggedLayout({
             position="fixed"
             elevation={1}
             className="no-print"
-            sx={{ bgcolor: '#1a2332', zIndex: (theme) => theme.zIndex.appBar }}
+            sx={{ bgcolor: colors.brand.navy, zIndex: (theme) => theme.zIndex.appBar }}
           >
             <Toolbar variant="dense">
               <IconButton edge="start" color="inherit" onClick={() => setDrawerOpen(true)} aria-label="menu">
                 <MenuIcon />
               </IconButton>
-              <Typography variant="subtitle1" fontWeight="bold" sx={{ ml: 1 }}>
-                Controle de Estoque
-              </Typography>
+              {/* Logotipo SIETIMA na variante para fundo escuro */}
+              <Box
+                component="img"
+                src="/logo-sietima-wordmark-light.svg"
+                alt="Sietima"
+                sx={{ height: 20, width: 'auto', ml: 1 }}
+              />
             </Toolbar>
           </AppBar>
           <Drawer
@@ -40,7 +45,7 @@ export default function LoggedLayout({
             onClose={() => setDrawerOpen(false)}
             className="no-print"
             sx={{ zIndex: 1300 }}
-            PaperProps={{ sx: { width: 240, bgcolor: '#1a2332' } }}
+            PaperProps={{ sx: { width: 240, bgcolor: colors.brand.navy } }}
           >
             <NavigationRail inDrawer onNavigate={() => setDrawerOpen(false)} />
           </Drawer>
@@ -55,7 +60,7 @@ export default function LoggedLayout({
           mt: { xs: '48px', md: 0 },
           p: { xs: 1.5, sm: 3 },
           minHeight: '100vh',
-          bgcolor: '#fafafa',
+          bgcolor: colors.surface.row,
         }}
       >
         {children}
