@@ -602,7 +602,11 @@ function ReportsContent() {
   const [relCols, setRelCols] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(OPTIONAL_REL_COLUMNS.map((c) => [c.key, true])),
   );
-  /** "Todas as opções" de baixa: marcada → sem filtro por destino. */
+  /**
+   * "Todas as opções" de baixa: marcada → sem filtro por destino. Clicar
+   * numa caixa individual com ela marcada desmarca "todas" e exclui só o
+   * destino clicado (ver `toggleRelWriteoff`).
+   */
   const [relAllWriteoffs, setRelAllWriteoffs] = useState(true);
   /** Destinos de baixa (Cadastros → Destinos) marcados para filtrar. */
   const [relWriteoffs, setRelWriteoffs] = useState<string[]>([]);
@@ -956,13 +960,19 @@ function ReportsContent() {
         const labels = batchItems.filter((i) => i.product.productId === o.productId);
         const inStock = labels.filter((i) => i.status === 'in_stock');
         const declared = o.portionsCount ?? 0;
-        // Registros antigos sem vínculo de etiquetas: usa o que o próprio
-        // porcionamento declarou (qtd × peso da porção) como produção.
-        const etiquetasProduzidas = labels.length > 0 ? labels.length : declared;
+        const declaredWeight = declared * (o.portionWeightGrams ?? 0);
+        // Produção é FIXA: vem do que o porcionamento declarou (qtd × peso
+        // da porção). Baixa total EXCLUI a etiqueta (tombstone) e baixa
+        // parcial reduz o peso dela — por isso as colunas de estoque
+        // acompanham o estado atual, mas o produzido NUNCA diminui
+        // (produzi 77, baixei 7 → produzido 77, estoque 70).
+        // Registro muito antigo sem produção declarada cai para as
+        // etiquetas vivas.
+        const etiquetasProduzidas = declared > 0 ? declared : labels.length;
         const pesoProduzido =
-          labels.length > 0
-            ? labels.reduce((s, i) => s + i.weightGrams, 0)
-            : declared * (o.portionWeightGrams ?? 0);
+          declared > 0 && declaredWeight > 0
+            ? declaredWeight
+            : labels.reduce((s, i) => s + i.weightGrams, 0);
         const extras =
           extrasByKey.get(`${pt._id}-${o.productId}`) ??
           { vendaPeso: 0, vendaQtd: 0, perdaPeso: 0, perdaQtd: 0 };
@@ -1008,10 +1018,29 @@ function ReportsContent() {
   const toggleRelCol = (key: string) =>
     setRelCols((prev) => ({ ...prev, [key]: !prev[key]}));
 
-  const toggleRelWriteoff = (name: string) =>
-    setRelWriteoffs((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
-    );
+  /**
+   * Caixa de destino de baixa. Com "Todas as opções" marcada as caixas
+   * individuais aparecem marcadas — clicar num delas SAI do modo "todas"
+   * mantendo todos os outros destinos marcados (só aquele é excluído do
+   * filtro). Sem "todas", alterna normalmente; marcar todos os destinos
+   * volta para "Todas as opções".
+   */
+  const toggleRelWriteoff = (name: string) => {
+    if (relAllWriteoffs) {
+      setRelAllWriteoffs(false);
+      setRelWriteoffs(writeoffFilterOptions.filter((n) => n !== name));
+      return;
+    }
+    const next = relWriteoffs.includes(name)
+      ? relWriteoffs.filter((n) => n !== name)
+      : [...relWriteoffs, name];
+    if (next.length === writeoffFilterOptions.length) {
+      setRelAllWriteoffs(true);
+      setRelWriteoffs([]);
+      return;
+    }
+    setRelWriteoffs(next);
+  };
 
   /** Exporta o relatório filtrado para Excel (CSV separado por ";"). */
   const exportProducaoBaixas = () => {
@@ -1784,7 +1813,9 @@ function ReportsContent() {
 
                 {/* Baixas: todos os destinos registrados como "Baixar"
                     (Cadastros → Destinos) + "Todas as opções" — filtram as
-                    colunas de perda do relatório. */}
+                    colunas de perda do relatório. As caixas individuais
+                    sempre aceitam clique: clicar com "Todas as opções"
+                    marcada exclui só aquele destino do filtro. */}
                 <Box
                   className="no-print"
                   sx={{
@@ -1818,7 +1849,6 @@ function ReportsContent() {
                       control={
                         <Checkbox
                           size="small"
-                          disabled={relAllWriteoffs}
                           checked={relAllWriteoffs || relWriteoffs.includes(name)}
                           onChange={() => toggleRelWriteoff(name)}
                         />
